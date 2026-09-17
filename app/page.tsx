@@ -998,7 +998,7 @@ export default function Home() {
     <thead><tr><th>順位</th><th>プレイヤー名</th><th class="r">通算半荘数</th><th class="r">通算pt</th><th>年間CS出場権</th></tr></thead>
     <tbody>${totalRows || '<tr><td colspan="5" class="c">データなし</td></tr>'}</tbody>
   </table>
-  <p class="note">※ 通算${CHAMPIONSHIP_GAMES}半荘以上は年間チャンピオン大会の出場権の「対象」になりますが、自動的に出場権を獲得するわけではありません（別途付与が必要です）。麻雀プロ（名前後ろの⒫）は半荘数に関わらず出場権の対象外です。</p>
+  <p class="note">※ 年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です。麻雀プロ（名前後ろの⒫）は半荘数に関わらず出場権の対象外です。</p>
 </body></html>`;
   };
 
