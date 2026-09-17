@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useSession, signIn, signOut } from 'next-auth/react';
 
 // ==========================================
 // 1. 型定義
@@ -75,7 +76,6 @@ const api = {
   clearCurrentTournament: async () => {
     localStorage.removeItem('mahjong_current_tournament');
   },
-  // --- データ消失対策：ローカルへのエクスポート/インポート ---
   exportBackup: () => {
     const data = {
       players: localStorage.getItem('mahjong_players'),
@@ -94,9 +94,11 @@ const api = {
 // 3. メインコンポーネント
 // ==========================================
 export default function Home() {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const { data: session, status } = useSession();
+  const isAdmin = session?.user?.email === process.env.NEXT_PUBLIC_ADMIN_EMAIL;
 
-  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'players'>('tournament');
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'players'>('tournament');
   const [tournamentPhase, setTournamentPhase] = useState<'entry' | 'playing'>('entry');
   
   const [dbPlayers, setDbPlayers] = useState<Player[]>([]);
@@ -108,14 +110,16 @@ export default function Home() {
   const [isResetting, setIsResetting] = useState(false);
   const [resetCountdown, setResetCountdown] = useState(0);
 
-  // OCRスキャン中のステート
   const [isScanning, setIsScanning] = useState<{rIdx: number, tIdx: number} | null>(null);
 
   const rule = { originPoint: 300, returnPoint: 300, uma: [30, 10, -10, -30] };
 
-  // ----------------------------------------
-  // 初期ロード＆自動バックアップ
-  // ----------------------------------------
+  useEffect(() => {
+    if (isLoaded && !isAdmin && activeTab === 'players') {
+      setActiveTab('tournament');
+    }
+  }, [isAdmin, activeTab, isLoaded]);
+
   useEffect(() => {
     const loadData = async () => {
       setDbPlayers(await api.getPlayers());
@@ -143,12 +147,12 @@ export default function Home() {
   const [newPlayerPoint, setNewPlayerPoint] = useState(0);
   const [newPlayerGames, setNewPlayerGames] = useState(0);
 
-  // プレイヤー編集用ステート
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ name: '', totalPoint: 0, totalGames: 0 });
 
   const handleRegisterPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isAdmin) return;
     if (!newPlayerName.trim()) return;
     const newPlayer: Player = {
       id: crypto.randomUUID(),
@@ -163,12 +167,13 @@ export default function Home() {
   };
 
   const startEditPlayer = (p: Player) => {
+    if (!isAdmin) return;
     setEditingPlayerId(p.id);
     setEditForm({ name: p.name, totalPoint: p.totalPoint, totalGames: p.totalGames });
   };
 
   const saveEditPlayer = async () => {
-    if (!editingPlayerId) return;
+    if (!editingPlayerId || !isAdmin) return;
     const player = dbPlayers.find(p => p.id === editingPlayerId);
     if (player) {
       const updated = { ...player, name: editForm.name, totalPoint: editForm.totalPoint, totalGames: editForm.totalGames };
@@ -179,6 +184,7 @@ export default function Home() {
   };
 
   const toggleEntry = (id: string) => {
+    if (!isAdmin) return;
     if (entryPlayerIds.includes(id)) {
       setEntryPlayerIds(entryPlayerIds.filter(pid => pid !== id));
     } else {
@@ -190,6 +196,7 @@ export default function Home() {
   // B. 卓組生成
   // ----------------------------------------
   const handleGenerateTables = () => {
+    if (!isAdmin) return;
     if (entryPlayerIds.length < 4) {
       alert('参加者は4名以上選択してください。');
       return;
@@ -251,9 +258,10 @@ export default function Home() {
   };
 
   // ----------------------------------------
-  // C. スコア計算 (★同点折半ロジック追加)
+  // C. スコア計算
   // ----------------------------------------
   const handleScoreChange = (rIdx: number, tIdx: number, pIdx: number, val: number) => {
+    if (!isAdmin) return;
     const updated = [...seating];
     if (updated[rIdx].tables[tIdx].isSubmitted) return;
     updated[rIdx].tables[tIdx].players[pIdx].score = val;
@@ -262,6 +270,7 @@ export default function Home() {
   };
 
   const calculateTablePoints = (rIdx: number, tIdx: number) => {
+    if (!isAdmin) return;
     const updated = [...seating];
     const table = updated[rIdx].tables[tIdx];
     const sum = table.players.reduce((acc, p) => acc + (p.score || 0), 0);
@@ -270,27 +279,22 @@ export default function Home() {
     if (diff < 0) { alert('得点の合計が120,000点を超えています。'); return; }
     if (diff % 10 !== 0) { alert('不足分が1,000点単位ではありません。'); return; }
 
-    // まずスコア順に降順ソート
     const sorted = table.players.map((p, index) => ({ score: p.score, index })).sort((a, b) => b.score - a.score);
     
     let i = 0;
     while (i < sorted.length) {
-      // 同じスコアのプレイヤーをグループ化
       let j = i;
       while (j < sorted.length && sorted[j].score === sorted[i].score) {
         j++;
       }
       
       const tieCount = j - i;
-      // 該当する順位のウマを合算する
       let umaSum = 0;
       for (let k = i; k < j; k++) {
         umaSum += rule.uma[k];
       }
-      // ウマを同点人数で等分
       const splitUma = umaSum / tieCount;
 
-      // 素点に等分したウマを足して計算
       for (let k = i; k < j; k++) {
         const item = sorted[k];
         let pt = (item.score - rule.returnPoint) / 10;
@@ -298,24 +302,22 @@ export default function Home() {
         table.players[item.index].point = Math.round(pt * 10) / 10;
       }
       
-      i = j; // 次の順位グループへ
+      i = j;
     }
 
     table.isCalculated = true;
     setSeating(updated);
   };
 
-  // OCRスキャンのモック処理
   const handleFileScan = (e: React.ChangeEvent<HTMLInputElement>, rIdx: number, tIdx: number) => {
+    if (!isAdmin) return;
     const file = e.target.files?.[0];
     if (!file) return;
     
     setIsScanning({rIdx, tIdx});
-    // 画像解析にかかる時間を疑似体験 (2.5秒)
     setTimeout(() => {
       const updated = [...seating];
       const table = updated[rIdx].tables[tIdx];
-      // 120,000点(1200)をランダムに分配するデモスコア
       const mockScores = [450, 310, 240, 200].sort(() => Math.random() - 0.5);
       
       table.players.forEach((p, i) => { p.score = mockScores[i]; });
@@ -324,7 +326,7 @@ export default function Home() {
       setSeating(updated);
       setIsScanning(null);
       alert('【スキャン完了】\n成績シートから点数を自動入力しました。\n※これはカメラOCR機能のデモです。');
-      e.target.value = ''; // inputリセット
+      e.target.value = ''; 
     }, 2500);
   };
 
@@ -332,6 +334,7 @@ export default function Home() {
   // D. 送信と「送信の取り消し(編集)」
   // ----------------------------------------
   const handleSubmitTable = async (rIdx: number, tIdx: number) => {
+    if (!isAdmin) return;
     const table = seating[rIdx].tables[tIdx];
     if (!table.isCalculated) { alert('先にスコアを計算してください。'); return; }
     if (!window.confirm('クラウドに送信しますか？')) return;
@@ -346,10 +349,10 @@ export default function Home() {
   };
 
   const handleRevokeTable = async (rIdx: number, tIdx: number) => {
+    if (!isAdmin) return;
     const table = seating[rIdx].tables[tIdx];
     if (!window.confirm('【警告】\nこの卓の送信を取り消し、成績を編集できるようにしますか？\n※通算成績に加算されたポイントは一旦マイナスされます。')) return;
 
-    // ロールバック（マイナスして元に戻す）
     const reverses = table.players.map(p => ({ id: p.playerId, pointDelta: -p.point, gamesDelta: -1 }));
     await api.updatePlayersScores(reverses);
     setDbPlayers(await api.getPlayers());
@@ -362,12 +365,13 @@ export default function Home() {
   };
 
   // ----------------------------------------
-  // E. 大会全体のリセット (30秒)
+  // E. 大会全体のリセット
   // ----------------------------------------
   const handleResetTournament = async () => {
+    if (!isAdmin) return;
     if (!window.confirm('【警告】現在の大会の進行を全てリセットしますか？')) return;
     setIsResetting(true);
-    let count = 30; // 誤操作防止の30秒
+    let count = 30;
     setResetCountdown(count);
 
     await new Promise<void>(resolve => {
@@ -389,9 +393,9 @@ export default function Home() {
   };
 
   // ----------------------------------------
-  // F. 「黒子」を除外したデータ集計
+  // F. データ集計 (黒子除外フィルターを追加)
   // ----------------------------------------
-  const displayDbPlayers = dbPlayers
+  const displayDbPlayers = [...dbPlayers]
     .filter(p => !p.name.includes('黒子'))
     .sort((a, b) => b.totalPoint - a.totalPoint);
 
@@ -414,9 +418,8 @@ export default function Home() {
   // ==========================================
   // Render (UI構築)
   // ==========================================
-  
-  // JSON復元用ハンドラ
   const handleDataImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isAdmin) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -432,12 +435,11 @@ export default function Home() {
     reader.readAsText(file);
   };
 
-  if (!isLoaded) return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
+  if (!isLoaded || status === 'loading') return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
 
   return (
     <main className="min-h-screen bg-slate-100 text-slate-800 font-sans relative pb-20">
       
-      {/* リセット中のオーバーレイ画面 (30秒) */}
       {isResetting && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center text-white">
           <div className="animate-pulse flex flex-col items-center">
@@ -449,7 +451,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* スキャン中のオーバーレイ画面 */}
       {isScanning && (
         <div className="fixed inset-0 bg-black/70 z-50 flex flex-col items-center justify-center text-white">
           <div className="animate-pulse flex flex-col items-center">
@@ -472,16 +473,32 @@ export default function Home() {
             <div className="flex bg-slate-800 p-1 rounded-lg">
               <button onClick={() => setActiveTab('tournament')} className={`px-4 py-2 rounded-md font-bold text-sm transition ${activeTab === 'tournament' ? 'bg-indigo-600' : 'text-slate-300 hover:text-white'}`}>大会進行</button>
               <button onClick={() => setActiveTab('currentRanking')} className={`px-4 py-2 rounded-md font-bold text-sm transition ${activeTab === 'currentRanking' ? 'bg-teal-600' : 'text-slate-300 hover:text-white'}`}>今大会成績</button>
-              <button onClick={() => setActiveTab('players')} className={`px-4 py-2 rounded-md font-bold text-sm transition ${activeTab === 'players' ? 'bg-indigo-600' : 'text-slate-300 hover:text-white'}`}>マスタ</button>
+              <button onClick={() => setActiveTab('totalRanking')} className={`px-4 py-2 rounded-md font-bold text-sm transition ${activeTab === 'totalRanking' ? 'bg-indigo-600' : 'text-slate-300 hover:text-white'}`}>通算成績</button>
+              {isAdmin && (
+                <button onClick={() => setActiveTab('players')} className={`px-4 py-2 rounded-md font-bold text-sm transition ${activeTab === 'players' ? 'bg-indigo-600' : 'text-slate-300 hover:text-white'}`}>新規登録</button>
+              )}
             </div>
 
-            {/* データ消失対策: バックアップ/復元 */}
-            <div className="flex gap-2 ml-4 border-l border-slate-700 pl-4">
-              <button onClick={api.exportBackup} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-md transition" title="データをファイルとして保存します">💾 バックアップ</button>
-              <label className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-md transition cursor-pointer" title="保存したファイルから復元します">
-                📂 復元
-                <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
-              </label>
+            {isAdmin && (
+              <div className="flex gap-2 ml-2 border-l border-slate-700 pl-4">
+                <button onClick={api.exportBackup} className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-md transition" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-2 rounded-md transition cursor-pointer" title="保存したファイルから復元します">
+                  📂 復元
+                  <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
+                </label>
+              </div>
+            )}
+
+            {/* Auth Area */}
+            <div className="flex gap-2 ml-2 border-l border-slate-700 pl-4 items-center">
+              {session ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-bold text-slate-300">{session.user?.name} {isAdmin && '(管理者)'}</span>
+                  <button onClick={() => signOut()} className="text-xs bg-slate-700 hover:bg-red-600 px-3 py-2 rounded-md transition">ログアウト</button>
+                </div>
+              ) : (
+                <button onClick={() => signIn('google')} className="text-xs bg-indigo-600 hover:bg-indigo-500 px-3 py-2 rounded-md font-bold transition">Googleログイン</button>
+              )}
             </div>
           </div>
         </div>
@@ -490,15 +507,15 @@ export default function Home() {
       <div className="max-w-5xl mx-auto p-6">
         
         {/* ==========================================
-            タブ1: 通算成績 / プレイヤーマスタ
+            タブ: プレイヤー登録 (Adminのみ)
             ========================================== */}
-        {activeTab === 'players' && (
+        {activeTab === 'players' && isAdmin && (
           <div className="space-y-8 animate-in fade-in duration-300">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">新規プレイヤーの登録</h2>
               <form onSubmit={handleRegisterPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-600 mb-1">プレイヤー名 (黒子はランキング除外)</label>
+                  <label className="block text-sm font-bold text-slate-600 mb-1">プレイヤー名</label>
                   <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
                 </div>
                 <div>
@@ -512,61 +529,68 @@ export default function Home() {
                 <button type="submit" className="md:col-span-4 mt-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition">登録して保存</button>
               </form>
             </div>
+          </div>
+        )}
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-              <h2 className="text-xl font-bold mb-4">クラウド全通算成績ランキング (黒子除外)</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse whitespace-nowrap">
-                  <thead>
-                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 text-sm">
-                      <th className="p-4 font-bold">順位</th>
-                      <th className="p-4 font-bold">プレイヤー名</th>
-                      <th className="p-4 font-bold text-right">通算対局数</th>
-                      <th className="p-4 font-bold text-right">通算ポイント</th>
-                      <th className="p-4 font-bold text-center">操作</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {displayDbPlayers.map((p, i) => (
-                      <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
-                        <td className="p-4 font-bold text-slate-400">{i + 1}</td>
-                        {editingPlayerId === p.id ? (
-                          <>
-                            <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
-                            <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
-                            <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
-                            <td className="p-2 text-center">
-                              <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
-                              <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-slate-400 text-sm">取消</button>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="p-4 font-bold text-lg">{p.name}</td>
-                            <td className="p-4 text-right text-slate-500">{p.totalGames} 半荘</td>
-                            <td className={`p-4 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                              {p.totalPoint > 0 ? `+${p.totalPoint.toFixed(1)}` : p.totalPoint.toFixed(1)}
-                            </td>
+        {/* ==========================================
+            タブ: 通算成績 (全員閲覧可能 / 編集はAdminのみ)
+            ========================================== */}
+        {activeTab === 'totalRanking' && (
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
+            <h2 className="text-xl font-bold mb-4">今年度通算成績ランキング</h2>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse whitespace-nowrap">
+                <thead>
+                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 text-sm">
+                    <th className="p-4 font-bold">順位</th>
+                    <th className="p-4 font-bold">プレイヤー名</th>
+                    <th className="p-4 font-bold text-right">通算対局数</th>
+                    <th className="p-4 font-bold text-right">通算ポイント</th>
+                    {isAdmin && <th className="p-4 font-bold text-center">操作</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayDbPlayers.map((p, i) => (
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="p-4 font-bold text-slate-400">{i + 1}</td>
+                      {editingPlayerId === p.id && isAdmin ? (
+                        <>
+                          <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
+                          <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
+                          <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
+                          <td className="p-2 text-center">
+                            <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
+                            <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-slate-400 text-sm">取消</button>
+                          </td>
+                        </>
+                      ) : (
+                        <>
+                          <td className="p-4 font-bold text-lg">{p.name}</td>
+                          <td className="p-4 text-right text-slate-500">{p.totalGames} 半荘</td>
+                          <td className={`p-4 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                            {p.totalPoint > 0 ? `+${p.totalPoint.toFixed(1)}` : p.totalPoint.toFixed(1)}
+                          </td>
+                          {isAdmin && (
                             <td className="p-4 text-center">
                               <button onClick={() => startEditPlayer(p)} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-bold transition">編集</button>
                             </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                          )}
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         )}
 
         {/* ==========================================
-            タブ2: 今大会の成績
+            タブ: 今大会の成績 (全員閲覧可能)
             ========================================== */}
         {activeTab === 'currentRanking' && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
-            <h2 className="text-2xl font-black mb-6 text-teal-800 border-b pb-2">🏆 今大会のポイントランキング (黒子除外)</h2>
+            <h2 className="text-2xl font-black mb-6 text-teal-800 border-b pb-2">🏆 今大会の成績</h2>
             {tournamentPhase === 'entry' ? (
               <p className="text-slate-500">大会が始まっていません。</p>
             ) : (
@@ -599,7 +623,7 @@ export default function Home() {
         )}
 
         {/* ==========================================
-            タブ3: 大会の進行 (エントリー / スコア入力)
+            タブ: 大会の進行 (エントリー / スコア入力)
             ========================================== */}
         {activeTab === 'tournament' && (
           <div className="space-y-6 animate-in fade-in duration-300">
@@ -607,35 +631,42 @@ export default function Home() {
             {tournamentPhase === 'entry' && (
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-2xl font-black text-indigo-900 mb-6">今大会のエントリー</h2>
-                <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                  <h3 className="font-bold text-slate-700 mb-3">参加者を選択 (クリックで追加)</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {dbPlayers.map(p => {
-                      const isEntry = entryPlayerIds.includes(p.id);
-                      return (
-                        <button key={p.id} onClick={() => toggleEntry(p.id)}
-                          className={`px-4 py-2 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>
-                          {p.name} {isEntry && '✓'}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                
+                {!isAdmin ? (
+                   <p className="text-slate-600 font-bold">管理者が大会を開始するのをお待ちください...</p>
+                ) : (
+                  <>
+                    <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
+                      <h3 className="font-bold text-slate-700 mb-3">参加者を選択 (クリックで追加)</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {dbPlayers.map(p => {
+                          const isEntry = entryPlayerIds.includes(p.id);
+                          return (
+                            <button key={p.id} onClick={() => toggleEntry(p.id)}
+                              className={`px-4 py-2 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>
+                              {p.name} {isEntry && '✓'}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                <div className="flex flex-col md:flex-row gap-6 items-end border-t pt-6">
-                  <div className="w-full md:w-auto">
-                    <label className="block text-sm font-bold text-slate-600 mb-2">参加予定</label>
-                    <div className="text-2xl font-black text-indigo-600">{entryPlayerIds.length} <span className="text-base text-slate-500 font-normal">名</span></div>
-                  </div>
-                  <div className="w-full md:w-auto">
-                    <label className="block text-sm font-bold text-slate-600 mb-2">回戦数</label>
-                    <input type="number" min="1" value={roundsCount} onChange={e => setRoundsCount(Number(e.target.value))} className="w-24 p-3 border rounded-lg text-lg font-bold text-center"/>
-                  </div>
-                  <div className="flex-1"></div>
-                  <button onClick={handleGenerateTables} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition">
-                    自動卓組を生成して大会開始 ➡️
-                  </button>
-                </div>
+                    <div className="flex flex-col md:flex-row gap-6 items-end border-t pt-6">
+                      <div className="w-full md:w-auto">
+                        <label className="block text-sm font-bold text-slate-600 mb-2">参加予定</label>
+                        <div className="text-2xl font-black text-indigo-600">{entryPlayerIds.length} <span className="text-base text-slate-500 font-normal">名</span></div>
+                      </div>
+                      <div className="w-full md:w-auto">
+                        <label className="block text-sm font-bold text-slate-600 mb-2">回戦数</label>
+                        <input type="number" min="1" value={roundsCount} onChange={e => setRoundsCount(Number(e.target.value))} className="w-24 p-3 border rounded-lg text-lg font-bold text-center"/>
+                      </div>
+                      <div className="flex-1"></div>
+                      <button onClick={handleGenerateTables} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition">
+                        自動卓組を生成して大会開始 ➡️
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             )}
 
@@ -646,9 +677,11 @@ export default function Home() {
                     <h2 className="text-lg font-black text-indigo-900">大会進行中</h2>
                     <p className="text-sm text-indigo-700 font-medium">参加者: {entryPlayerIds.length}名 / 全{roundsCount}回戦</p>
                   </div>
-                  <button onClick={handleResetTournament} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-bold text-sm transition">
-                    大会をリセット
-                  </button>
+                  {isAdmin && (
+                    <button onClick={handleResetTournament} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-bold text-sm transition">
+                      大会をリセット
+                    </button>
+                  )}
                 </div>
 
                 {seating.map((r, rIdx) => (
@@ -664,8 +697,7 @@ export default function Home() {
                         return (
                           <div key={table.tableNumber} className={`border-2 p-5 rounded-xl transition relative ${table.isSubmitted ? 'bg-slate-100 border-slate-300' : table.isCalculated ? 'bg-slate-50 border-indigo-200' : 'bg-white border-indigo-100'}`}>
                             
-                            {/* OCRカメラスキャンボタン */}
-                            {!table.isSubmitted && (
+                            {!table.isSubmitted && isAdmin && (
                               <label className="absolute -top-3 -right-3 bg-teal-500 hover:bg-teal-600 text-white p-2 rounded-full shadow-lg cursor-pointer transition transform hover:scale-110 z-10" title="成績シートをカメラで読み込む">
                                 📷
                                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileScan(e, rIdx, tIdx)} />
@@ -690,11 +722,11 @@ export default function Home() {
                                 <div key={pIdx} className={`flex justify-between items-center gap-3 p-2 rounded-lg ${table.isSubmitted ? 'opacity-70' : 'bg-slate-50'}`}>
                                   <span className="w-24 font-bold text-slate-700 truncate">{p.wind}: <span className="text-indigo-900">{p.name}</span></span>
                                   
-                                  <div className={`flex items-center border-2 rounded-lg px-2 py-1.5 transition ${table.isSubmitted ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
+                                  <div className={`flex items-center border-2 rounded-lg px-2 py-1.5 transition ${table.isSubmitted || !isAdmin ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
                                     <input
-                                      type="number" value={p.score} disabled={table.isSubmitted}
+                                      type="number" value={p.score} disabled={table.isSubmitted || !isAdmin}
                                       onChange={(e) => handleScoreChange(rIdx, tIdx, pIdx, Number(e.target.value))}
-                                      className={`w-16 text-right font-mono font-bold text-lg outline-none ${table.isSubmitted ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
+                                      className={`w-16 text-right font-mono font-bold text-lg outline-none ${table.isSubmitted || !isAdmin ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
                                     />
                                     <span className="text-slate-400 font-bold text-sm ml-1 select-none">00</span>
                                   </div>
@@ -706,22 +738,24 @@ export default function Home() {
                               ))}
                             </div>
 
-                            <div className="mt-6 flex gap-2">
-                              {!table.isSubmitted ? (
-                                <>
-                                  <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
-                                    {table.isCalculated ? '再計算' : '計算・確定'}
+                            {isAdmin && (
+                              <div className="mt-6 flex gap-2">
+                                {!table.isSubmitted ? (
+                                  <>
+                                    <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
+                                      {table.isCalculated ? '再計算' : '計算・確定'}
+                                    </button>
+                                    <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                                      クラウドへ送信
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button onClick={() => handleRevokeTable(rIdx, tIdx)} className="flex-1 py-3 rounded-lg font-bold text-sm transition bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300">
+                                    送信を取り消して編集する
                                   </button>
-                                  <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
-                                    クラウドへ送信
-                                  </button>
-                                </>
-                              ) : (
-                                <button onClick={() => handleRevokeTable(rIdx, tIdx)} className="flex-1 py-3 rounded-lg font-bold text-sm transition bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300">
-                                  送信を取り消して編集する
-                                </button>
-                              )}
-                            </div>
+                                )}
+                              </div>
+                            )}
 
                           </div>
                         );
