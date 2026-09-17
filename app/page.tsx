@@ -159,7 +159,6 @@ export default function Home() {
   
   const [isResetting, setIsResetting] = useState(false);
   const [resetCountdown, setResetCountdown] = useState(0);
-  const [isScanning, setIsScanning] = useState<{rIdx: number, tIdx: number} | null>(null);
 
   // 今大会成績まわりの表示状態
   const [showKuroko, setShowKuroko] = useState(false); // デフォルトは非表示
@@ -229,7 +228,7 @@ export default function Home() {
       name: newPlayerName.trim(),
       totalPoint: newPlayerPoint,
       totalGames: newPlayerGames,
-      championshipRight: newPlayerRight,
+      championshipRight: isPro(newPlayerName) ? false : newPlayerRight,
     };
     await api.savePlayer(newPlayer);
     setDbPlayers(await api.getPlayers());
@@ -252,7 +251,7 @@ export default function Home() {
         name: editForm.name,
         totalPoint: editForm.totalPoint,
         totalGames: editForm.totalGames,
-        championshipRight: editForm.championshipRight,
+        championshipRight: isPro(editForm.name) ? false : editForm.championshipRight,
       };
       await api.updatePlayer(updated);
       setDbPlayers(await api.getPlayers());
@@ -553,27 +552,6 @@ export default function Home() {
     setSeating(updated);
   };
 
-  const handleFileScan = (e: React.ChangeEvent<HTMLInputElement>, rIdx: number, tIdx: number) => {
-    if (!isAdmin) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-    
-    setIsScanning({rIdx, tIdx});
-    setTimeout(() => {
-      const updated = [...seating];
-      const table = updated[rIdx].tables[tIdx];
-      const mockScores = [450, 310, 240, 200].sort(() => Math.random() - 0.5);
-      
-      table.players.forEach((p, i) => { p.score = mockScores[i]; });
-      table.isCalculated = false;
-      
-      setSeating(updated);
-      setIsScanning(null);
-      alert('【スキャン完了】\n成績シートから点数を自動入力しました。\n※これはカメラOCR機能のデモです。');
-      e.target.value = ''; 
-    }, 2500);
-  };
-
   // ----------------------------------------
   // D. 送信と「送信の取り消し(編集)」
   // ----------------------------------------
@@ -743,7 +721,11 @@ export default function Home() {
     .filter(p => !isKuroko(p.name))
     .sort((a, b) => b.totalPoint - a.totalPoint);
 
-  const hasChampionshipRight = (p: Player) => !!p.championshipRight || p.totalGames >= CHAMPIONSHIP_GAMES;
+  // 出場権が実際にあるのは「手動で付与されている」場合のみ。
+  // 麻雀プロ(末尾がP)は半荘数や付与フラグに関わらず出場権を持たない。
+  const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
+  // 通算11半荘以上は「出場権の対象」になるだけで、自動的に出場権が得られるわけではない。
+  const isChampionshipCandidate = (p: Player) => !isPro(p.name) && p.totalGames >= CHAMPIONSHIP_GAMES;
 
   // 今大会成績: 黒子の表示/非表示を選択可能 (デフォルト非表示)
   const currentRankingAll = entryPlayerIds
@@ -853,14 +835,21 @@ export default function Home() {
         <td class="r ${p.point > 0 ? 'plus' : p.point < 0 ? 'minus' : ''}">${fmtPt(p.point)}</td>
       </tr>`).join('');
 
-    const totalRows = displayDbPlayers.map((p, i) => `
-      <tr class="${hasChampionshipRight(p) ? 'qualified' : ''}">
+    const totalRows = displayDbPlayers.map((p, i) => {
+      const granted = hasChampionshipRight(p);
+      const candidate = isChampionshipCandidate(p);
+      const pro = isPro(p.name);
+      const rowClass = granted ? 'granted' : candidate ? 'candidate' : '';
+      const csLabel = pro ? '対象外(プロ)' : granted ? '🏆 出場権' : candidate ? '○ 対象' : '-';
+      return `
+      <tr class="${rowClass}">
         <td class="c">${i + 1}</td>
         <td>${nameForDoc(p.name)}</td>
         <td class="r">${p.totalGames}</td>
         <td class="r ${p.totalPoint > 0 ? 'plus' : p.totalPoint < 0 ? 'minus' : ''}">${fmtPt(p.totalPoint)}</td>
-        <td class="c">${p.championshipRight ? '🏆 出場権' : p.totalGames >= CHAMPIONSHIP_GAMES ? '○ 条件達成' : '-'}</td>
-      </tr>`).join('');
+        <td class="c">${csLabel}</td>
+      </tr>`;
+    }).join('');
 
     const resultBlocks = seating.map(r => {
       const timeNote = roundStartTime(r.round) ? `<span class="time">開始目安 ${roundStartTime(r.round)}</span>` : '';
@@ -918,7 +907,8 @@ export default function Home() {
   th { background:#f1f5f9; font-size:11px; }
   .r { text-align:right; } .c { text-align:center; }
   .plus { color:#1d4ed8; font-weight:bold; } .minus { color:#dc2626; font-weight:bold; }
-  .qualified { background:#ecfdf5; }
+  .granted { background:#fffbeb; }
+  .candidate { background:#ecfdf5; }
   .tables { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:8px; page-break-inside: avoid; }
   .tbl.final { border:2px solid #f59e0b; background:#fffbeb; }
@@ -949,7 +939,7 @@ export default function Home() {
     <thead><tr><th>順位</th><th>プレイヤー名</th><th class="r">通算半荘数</th><th class="r">通算pt</th><th>年間CS出場権</th></tr></thead>
     <tbody>${totalRows || '<tr><td colspan="5" class="c">データなし</td></tr>'}</tbody>
   </table>
-  <p class="note">※ 通算${CHAMPIONSHIP_GAMES}半荘以上で年間チャンピオン大会の出場権を獲得します。名前の後ろの⒫は麻雀プロを表します。</p>
+  <p class="note">※ 通算${CHAMPIONSHIP_GAMES}半荘以上は年間チャンピオン大会の出場権の「対象」になりますが、自動的に出場権を獲得するわけではありません（別途付与が必要です）。麻雀プロ（名前後ろの⒫）は半荘数に関わらず出場権の対象外です。</p>
 </body></html>`;
   };
 
@@ -1121,16 +1111,6 @@ export default function Home() {
         </div>
       )}
 
-      {isScanning && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex flex-col items-center justify-center text-white">
-          <div className="animate-pulse flex flex-col items-center">
-            <div className="w-16 h-16 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-            <h2 className="text-xl font-bold">成績シートを解析中...</h2>
-            <p className="text-slate-300 mt-2">カメラで読み込んだ数値を認識しています</p>
-          </div>
-        </div>
-      )}
-
       {/* ========== ヘッダー (1行固定・折り返しなし) ========== */}
       <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -1199,9 +1179,18 @@ export default function Home() {
                 </div>
 
                 <div className="md:col-span-4">
-                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition ${newPlayerRight ? 'bg-amber-50 border-amber-300' : 'bg-slate-50 border-slate-200 hover:border-slate-300'}`}>
-                    <input type="checkbox" checked={newPlayerRight} onChange={e => setNewPlayerRight(e.target.checked)} className="w-5 h-5 accent-amber-500" />
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${isPro(newPlayerName) ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-60' : newPlayerRight ? 'bg-amber-50 border-amber-300 cursor-pointer' : 'bg-slate-50 border-slate-200 hover:border-slate-300 cursor-pointer'}`}>
+                    <input
+                      type="checkbox"
+                      checked={isPro(newPlayerName) ? false : newPlayerRight}
+                      disabled={isPro(newPlayerName)}
+                      onChange={e => setNewPlayerRight(e.target.checked)}
+                      className="w-5 h-5 accent-amber-500"
+                    />
                     <span className="font-bold text-sm text-slate-700">🏆 年間チャンピオン大会 出場権あり</span>
+                    {isPro(newPlayerName) && (
+                      <span className="text-[11px] font-bold text-slate-400 ml-auto">麻雀プロは出場権の対象外です</span>
+                    )}
                   </label>
                 </div>
 
@@ -1215,9 +1204,12 @@ export default function Home() {
         {activeTab === 'totalRanking' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
             <h2 className="text-xl font-bold mb-1">今年度通算成績ランキング</h2>
-            <p className="text-[11px] text-slate-500 mb-4">
+            <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 align-middle mr-1"></span>
-              通算{CHAMPIONSHIP_GAMES}半荘以上 = 年間チャンピオン大会 出場権あり ／ 🏆 は個別に出場権が付与されている選手
+              通算{CHAMPIONSHIP_GAMES}半荘以上 = 年間チャンピオン大会 出場権の「対象」（自動付与ではありません）
+              <br />
+              <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 align-middle mr-1"></span>
+              🏆 は出場権が個別に付与されている選手 ／ 麻雀プロ（Ⓟ）は半荘数に関わらず出場権の対象外です
             </p>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -1233,10 +1225,11 @@ export default function Home() {
                 </thead>
                 <tbody>
                   {displayDbPlayers.map((p, i) => {
-                    const qualified = p.totalGames >= CHAMPIONSHIP_GAMES;
-                    const granted = !!p.championshipRight;
+                    const pro = isPro(p.name);
+                    const granted = hasChampionshipRight(p);
+                    const candidate = isChampionshipCandidate(p);
                     return (
-                      <tr key={p.id} className={`border-b border-slate-100 transition ${granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : qualified ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
+                      <tr key={p.id} className={`border-b border-slate-100 transition ${granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
                         <td className="p-3 font-bold text-slate-400">{i + 1}</td>
                         {editingPlayerId === p.id && isAdmin ? (
                           <>
@@ -1244,10 +1237,17 @@ export default function Home() {
                             <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
                             <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
                             <td className="p-2 text-center">
-                              <label className="inline-flex items-center gap-1 text-xs font-bold text-slate-600">
-                                <input type="checkbox" checked={editForm.championshipRight} onChange={e => setEditForm({...editForm, championshipRight: e.target.checked})} className="w-4 h-4 accent-amber-500" />
+                              <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600'}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isPro(editForm.name) ? false : editForm.championshipRight}
+                                  disabled={isPro(editForm.name)}
+                                  onChange={e => setEditForm({...editForm, championshipRight: e.target.checked})}
+                                  className="w-4 h-4 accent-amber-500"
+                                />
                                 出場権
                               </label>
+                              {isPro(editForm.name) && <div className="text-[10px] text-slate-400 mt-0.5">プロは対象外</div>}
                             </td>
                             <td className="p-2 text-center">
                               <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
@@ -1262,10 +1262,12 @@ export default function Home() {
                               {fmtPt(p.totalPoint)}
                             </td>
                             <td className="p-3 text-center">
-                              {granted ? (
+                              {pro ? (
+                                <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 border border-slate-200">対象外（プロ）</span>
+                              ) : granted ? (
                                 <span className="inline-block text-[11px] font-black px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-sm">🏆 出場権</span>
-                              ) : qualified ? (
-                                <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">○ 条件達成</span>
+                              ) : candidate ? (
+                                <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">○ 対象</span>
                               ) : (
                                 <span className="text-[11px] text-slate-400">出場権なし</span>
                               )}
@@ -1691,13 +1693,6 @@ export default function Home() {
                                         <div className="absolute -top-3 left-4 px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white text-[11px] font-black shadow-md tracking-wider">
                                           👑 決勝卓
                                         </div>
-                                      )}
-
-                                      {!table.isSubmitted && isAdmin && isOpen && (
-                                        <label className="absolute -top-3 -right-3 bg-teal-500 hover:bg-teal-600 text-white p-2 rounded-full shadow-lg cursor-pointer transition transform hover:scale-110 z-10" title="成績シートをカメラで読み込む">
-                                          📷
-                                          <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileScan(e, rIdx, tIdx)} />
-                                        </label>
                                       )}
 
                                       {/* 卓ヘッダー（クリックで開閉） */}
