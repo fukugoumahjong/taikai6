@@ -1,6 +1,5 @@
-// app/api/auth/[...nextauth]/route.ts
-import NextAuth from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
+import NextAuth from "next-auth";
+import GoogleProvider from "next-auth/providers/google";
 
 const handler = NextAuth({
   providers: [
@@ -10,6 +9,7 @@ const handler = NextAuth({
     }),
   ],
   secret: process.env.NEXTAUTH_SECRET,
-})
+  debug: true, // 詳細ログを出力
+});
 
-export { handler as GET, handler as POST }
+export { handler as GET, handler as POST };
