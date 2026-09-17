@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { signIn, signOut, useSession } from "next-auth/react";
+import { supabase } from '@/lib/supabase';
 
 // ==========================================
 // 0. 定数
@@ -84,49 +85,107 @@ const PlayerLabel = ({ name, className = '', badgeClass = '' }: { name: string; 
 // ==========================================
 const api = {
   getPlayers: async (): Promise<Player[]> => {
-    const data = localStorage.getItem('mahjong_players');
-    return data ? JSON.parse(data) : [];
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('プレイヤー取得エラー:', error);
+      return [];
+    }
+    
+    return data.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      totalPoint: Number(p.total_point),
+      totalGames: p.total_games,
+      championshipRight: p.championship_right,
+    }));
   },
+
   savePlayer: async (player: Player) => {
-    const players = await api.getPlayers();
-    players.push(player);
-    localStorage.setItem('mahjong_players', JSON.stringify(players));
+    const { error } = await supabase
+      .from('players')
+      .insert([{
+        id: player.id,
+        name: player.name,
+        total_point: player.totalPoint,
+        total_games: player.totalGames,
+        championship_right: player.championshipRight ?? false,
+      }]);
+    if (error) console.error('プレイヤー保存エラー:', error);
   },
+
   updatePlayer: async (updatedPlayer: Player) => {
-    const players = await api.getPlayers();
-    const newPlayers = players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
-    localStorage.setItem('mahjong_players', JSON.stringify(newPlayers));
+    const { error } = await supabase
+      .from('players')
+      .update({
+        name: updatedPlayer.name,
+        total_point: updatedPlayer.totalPoint,
+        total_games: updatedPlayer.totalGames,
+        championship_right: updatedPlayer.championshipRight ?? false,
+      })
+      .eq('id', updatedPlayer.id);
+    if (error) console.error('プレイヤー更新エラー:', error);
   },
+
   updatePlayersScores: async (updates: { id: string; pointDelta: number; gamesDelta: number }[]) => {
-    const players = await api.getPlayers();
-    const updated = players.map(p => {
-      const update = updates.find(u => u.id === p.id);
-      if (update) {
-        return { 
-          ...p, 
-          totalPoint: Math.round((p.totalPoint + update.pointDelta) * 10) / 10, 
-          totalGames: p.totalGames + update.gamesDelta 
-        };
+    for (const u of updates) {
+      const { data: current } = await supabase
+        .from('players')
+        .select('total_point, total_games')
+        .eq('id', u.id)
+        .single();
+      
+      if (current) {
+        const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
+        const newGames = current.total_games + u.gamesDelta;
+        
+        await supabase
+          .from('players')
+          .update({
+            total_point: newPoint,
+            total_games: newGames,
+          })
+          .eq('id', u.id);
       }
-      return p;
-    });
-    localStorage.setItem('mahjong_players', JSON.stringify(updated));
+    }
   },
+
   getCurrentTournament: async (): Promise<any> => {
-    const data = localStorage.getItem('mahjong_current_tournament');
-    return data ? JSON.parse(data) : null;
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('data')
+      .eq('id', 'current')
+      .single();
+    if (error || !data) return null;
+    return data.data;
   },
-  saveCurrentTournament: async (data: any) => {
-    localStorage.setItem('mahjong_current_tournament', JSON.stringify(data));
+
+  saveCurrentTournament: async (tournamentData: any) => {
+    const { error } = await supabase
+      .from('tournaments')
+      .upsert({
+        id: 'current',
+        data: tournamentData,
+        updated_at: new Date().toISOString(),
+      });
+    if (error) console.error('大会状態保存エラー:', error);
   },
+
   clearCurrentTournament: async () => {
-    localStorage.removeItem('mahjong_current_tournament');
+    const { error } = await supabase
+      .from('tournaments')
+      .delete()
+      .eq('id', 'current');
+    if (error) console.error('大会リセットエラー:', error);
   },
-  exportBackup: () => {
-    const data = {
-      players: localStorage.getItem('mahjong_players'),
-      tournament: localStorage.getItem('mahjong_current_tournament')
-    };
+
+  exportBackup: async () => {
+    const players = await api.getPlayers();
+    const tournament = await api.getCurrentTournament();
+    const data = { players, tournament };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
