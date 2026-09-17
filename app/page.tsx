@@ -11,11 +11,19 @@ import { supabase } from '@/lib/supabase';
 const APP_TITLE = '高等学校複合麻雀競技大会';
 const RULE_NAME = '最高位戦ルール';
 const CHONBO_PENALTY = 20.0;
-// 年間チャンピオン大会 出場権の自動条件 (通算半荘数)
+// 年間チャンピオン大会 出場権の「対象」表示に使う通算半荘数のしきい値
 const CHAMPIONSHIP_GAMES = 11;
 // 各回戦の開始時刻（あくまで目安）
 const ROUND_START_TIMES = ['08:40', '10:00', '11:15', '12:30', '13:45', '15:00', '16:20', '17:35', '19:50'];
 const roundStartTime = (roundNo: number) => ROUND_START_TIMES[roundNo - 1] || null;
+
+// 大会規定 (Google ドキュメント)
+const RULES_DOC_URL = 'https://docs.google.com/document/d/1gnUvQFS7stf_LjJg7G2Nb4AglvrBcx1sd3v27xPCVwc/edit?usp=sharing';
+
+// 謝辞（参考にさせていただいたツール）
+const CREDIT_AUTHOR = '園田賢プロ';
+const CREDIT_TOOL_NAME = 'mahjong-manage.com（mmc）';
+const CREDIT_TOOL_URL = 'https://mahjong-manage.com/';
 
 // ==========================================
 // 1. 型定義
@@ -78,6 +86,73 @@ const PlayerLabel = ({ name, className = '', badgeClass = '' }: { name: string; 
       >P</span>
     )}
   </span>
+);
+
+// 大会規定へのリンクカード（大会進行タブの先頭に表示）
+const RulesDocCard = () => (
+  <a
+    href={RULES_DOC_URL}
+    target="_blank"
+    rel="noopener noreferrer"
+    className="group flex items-center gap-4 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl p-4 md:p-5 shadow-sm transition"
+    title="大会規定（Google ドキュメント）を別タブで開きます"
+  >
+    <span className="w-11 h-11 flex-shrink-0 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">📖</span>
+    <span className="flex-1 min-w-0">
+      <span className="block font-black text-slate-800">大会規定</span>
+      <span className="block text-xs text-slate-500 mt-0.5">
+        競技ルール・順位点・チョンボ・出場権などの取り決めはこちらにまとめています。
+      </span>
+    </span>
+    <span className="flex-shrink-0 text-[11px] font-bold text-indigo-600 whitespace-nowrap">別タブで開く ↗</span>
+  </a>
+);
+
+// 謝辞つきフッター（全タブ共通）
+const SiteFooter = () => (
+  <footer className="mt-12 border-t border-slate-200 bg-white">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
+      <h2 className="text-sm font-black text-slate-700">謝辞</h2>
+      <p className="text-xs text-slate-500 leading-relaxed mt-2">
+        本サイトは、{CREDIT_AUTHOR}が制作・公開されている麻雀大会運営ツール{' '}
+        <a
+          href={CREDIT_TOOL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
+        >
+          {CREDIT_TOOL_NAME}
+        </a>
+        {' '}を参考にさせていただき、作成しました。
+        卓組の管理からポイント集計まで、大会運営の流れを分かりやすい形にまとめてくださったおかげで、
+        この大会の運営システムを形にすることができました。素晴らしいツールを公開してくださっていることに、心より感謝申し上げます。
+      </p>
+      <p className="text-xs text-slate-500 leading-relaxed mt-3">
+        また、大会の運営・進行にご協力いただいている全ての皆さま、そしてご参加いただく選手の皆さまに厚く御礼申し上げます。
+      </p>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-4 border-t border-slate-100">
+        <a
+          href={RULES_DOC_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700"
+        >
+          📖 大会規定
+        </a>
+        <a
+          href={CREDIT_TOOL_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[11px] font-bold text-slate-500 hover:text-slate-700"
+        >
+          🀄 {CREDIT_TOOL_NAME}
+        </a>
+        <span className="flex-1" />
+        <span className="text-[11px] text-slate-400">{APP_TITLE} ／ {RULE_NAME}</span>
+      </div>
+    </div>
+  </footer>
 );
 
 // ==========================================
@@ -783,7 +858,8 @@ export default function Home() {
   // 出場権が実際にあるのは「手動で付与されている」場合のみ。
   // 麻雀プロ(末尾がP)は半荘数や付与フラグに関わらず出場権を持たない。
   const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
-  // 通算11半荘以上は「出場権の対象」になるだけで、自動的に出場権が得られるわけではない。
+  // 年間チャンピオン大会の出場権は、各大会優勝を除き今年度に2回以上の参加が必要。
+  // ここでの「対象」表示は目安であり、自動的に出場権が得られるわけではない。
   const isChampionshipCandidate = (p: Player) => !isPro(p.name) && p.totalGames >= CHAMPIONSHIP_GAMES;
 
   // 今大会成績: 黒子の表示/非表示を選択可能 (デフォルト非表示)
@@ -975,6 +1051,7 @@ export default function Home() {
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
   .note { font-size:10px; color:#64748b; margin-top:6px; }
   .round { page-break-inside: avoid; margin-bottom:14px; }
+  .credit { margin-top:18px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:10px; color:#64748b; line-height:1.7; }
   @media print { body { padding:10mm; } @page { size: A4; margin: 10mm; } }
 </style></head>
 <body>
@@ -999,6 +1076,11 @@ export default function Home() {
     <tbody>${totalRows || '<tr><td colspan="5" class="c">データなし</td></tr>'}</tbody>
   </table>
   <p class="note">※ 年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です。麻雀プロ（名前後ろの⒫）は半荘数に関わらず出場権の対象外です。</p>
+  <p class="note">※ 大会規定: ${escapeHtml(RULES_DOC_URL)}</p>
+
+  <div class="credit">
+    本システムは、${escapeHtml(CREDIT_AUTHOR)}が制作・公開されている麻雀大会運営ツール ${escapeHtml(CREDIT_TOOL_NAME)}（${escapeHtml(CREDIT_TOOL_URL)}）を参考にさせていただき、作成しました。素晴らしいツールを公開してくださっていることに心より感謝申し上げます。
+  </div>
 </body></html>`;
   };
 
@@ -1187,6 +1269,17 @@ export default function Home() {
             {isAdmin && tabBtn('players', '新規登録', 'bg-indigo-600')}
           </nav>
 
+          {/* 大会規定 */}
+          <a
+            href={RULES_DOC_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-shrink-0 text-[11px] font-bold bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white px-2.5 py-1.5 rounded-md transition whitespace-nowrap"
+            title="大会規定（Google ドキュメント）を別タブで開きます"
+          >
+            📖 大会規定
+          </a>
+
           <div className="flex-1" />
 
           {/* 管理ツール */}
@@ -1265,7 +1358,7 @@ export default function Home() {
             <h2 className="text-xl font-bold mb-1">今年度通算成績ランキング</h2>
             <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 align-middle mr-1"></span>
-              通算{CHAMPIONSHIP_GAMES}半荘以上 = 年間チャンピオン大会 出場権の「対象」（自動付与ではありません）
+              年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です
               <br />
               <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 align-middle mr-1"></span>
               🏆 は出場権が個別に付与されている選手 ／ 麻雀プロ（Ⓟ）は半荘数に関わらず出場権の対象外です
@@ -1525,7 +1618,10 @@ export default function Home() {
         {/* ========== 大会進行 ========== */}
         {activeTab === 'tournament' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            
+
+            {/* 大会規定 */}
+            <RulesDocCard />
+
             {tournamentPhase === 'entry' && (
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
                 <h2 className="text-2xl font-black text-indigo-900 mb-6">今大会のエントリー</h2>
@@ -1564,8 +1660,8 @@ export default function Home() {
                       </button>
                     </div>
                     <p className="text-xs text-slate-500 mt-4 leading-relaxed">
-                      ※ 最後から2つ目・最後の回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
-                      　 最後から2つ目は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
+                      ※ 8回戦・9回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
+                      　 8回戦は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
                     </p>
                   </>
                 )}
@@ -1882,6 +1978,9 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* ========== フッター（謝辞） ========== */}
+      <SiteFooter />
 
     </main>
   );
