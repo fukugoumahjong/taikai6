@@ -1,6 +1,16 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// ブラウザ上での複数インスタンス生成（GoTrueClient警告）を防ぐ
+declare global {
+  var supabaseClient: SupabaseClient | undefined;
+}
+
+export const supabase =
+  global.supabaseClient || createClient(supabaseUrl, supabaseAnonKey);
+
+if (process.env.NODE_ENV !== 'production') {
+  global.supabaseClient = supabase;
+}
