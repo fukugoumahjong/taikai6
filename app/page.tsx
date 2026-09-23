@@ -63,6 +63,37 @@ type Round = {
   sitOutIds?: string[]; // 抜け番
 };
 
+// ---- 過去大会（アーカイブ）まわりの型 ----
+type ArchiveHanchanResult = {
+  playerId: string;
+  name: string;
+  rank: number;
+  score: number;   // 100点単位（既存のPlayerScore.scoreと同じ単位）
+  point: number;
+  excluded: boolean; // 「順位には含みません」(黒子など)
+};
+type ArchiveHanchan = {
+  no: number;
+  deposit: number;
+  results: ArchiveHanchanResult[];
+};
+type ArchiveStanding = {
+  playerId: string;
+  name: string;
+  totalPoint: number;
+  gameCount: number;
+  rank: number; // その大会での最終順位（黒子除く）
+};
+type TournamentArchive = {
+  id: string;
+  name: string;
+  ruleName?: string;
+  notes?: string;
+  standings: ArchiveStanding[];
+  hanchans: ArchiveHanchan[];
+  createdAt?: string;
+};
+
 // ==========================================
 // 2. 共通ヘルパー
 // ==========================================
@@ -88,7 +119,84 @@ const PlayerLabel = ({ name, className = '', badgeClass = '' }: { name: string; 
   </span>
 );
 
-// 大会規定へのリンクカード（大会進行タブの先頭に表示）
+// 通算成績タブの展開パネル：過去大会成績・着順分布・対戦相性
+const PlayerDetailPanel = ({
+  history,
+  rankDist,
+  headToHead,
+}: {
+  history: { archiveId: string; name: string; point: number; gameCount: number; rank: number; playerCount: number }[];
+  rankDist: { dist: number[]; total: number };
+  headToHead: { id: string; name: string; games: number; diffSum: number; avgDiff: number }[];
+}) => {
+  const rankLabels = ['1着', '2着', '3着', '4着'];
+  const rankColors = ['bg-yellow-400', 'bg-slate-400', 'bg-amber-700', 'bg-slate-300'];
+  return (
+    <div className="px-4 md:px-6 py-5 grid md:grid-cols-3 gap-5">
+      {/* 過去大会成績 */}
+      <div>
+        <h4 className="text-xs font-black text-slate-500 mb-2">📅 大会別の成績</h4>
+        {history.length === 0 ? (
+          <p className="text-xs text-slate-400">記録がありません。</p>
+        ) : (
+          <div className="space-y-1.5">
+            {history.map(h => (
+              <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                <span className="text-slate-600 font-bold truncate flex-1">{h.name}</span>
+                <span className="text-slate-400 whitespace-nowrap">{h.rank}/{h.playerCount}位・{h.gameCount}戦</span>
+                <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* 着順分布 */}
+      <div>
+        <h4 className="text-xs font-black text-slate-500 mb-2">🎯 着順分布（全大会合計 {rankDist.total}戦）</h4>
+        {rankDist.total === 0 ? (
+          <p className="text-xs text-slate-400">記録がありません。</p>
+        ) : (
+          <div className="space-y-1.5">
+            {rankDist.dist.map((count, idx) => {
+              const pct = rankDist.total > 0 ? Math.round((count / rankDist.total) * 1000) / 10 : 0;
+              return (
+                <div key={idx} className="flex items-center gap-2 text-xs">
+                  <span className="w-9 font-bold text-slate-500">{rankLabels[idx]}</span>
+                  <div className="flex-1 h-3 bg-slate-100 rounded-full overflow-hidden">
+                    <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-16 text-right text-slate-500 tabular-nums">{count}回 ({pct}%)</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* 対戦相性 */}
+      <div>
+        <h4 className="text-xs font-black text-slate-500 mb-2">🤝 対戦相性（合計ポイント差）</h4>
+        {headToHead.length === 0 ? (
+          <p className="text-xs text-slate-400">記録がありません。</p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+            {headToHead.map(o => (
+              <div key={o.id} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs">
+                <PlayerLabel name={o.name} className="text-slate-600 font-bold truncate flex-1" />
+                <span className="text-slate-400 whitespace-nowrap">{o.games}戦</span>
+                <span className={`font-black tabular-nums whitespace-nowrap ${o.diffSum > 0 ? 'text-blue-600' : o.diffSum < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(o.diffSum)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-slate-400 mt-2">プラスは「この選手が相手より合計で勝っている」ことを表します。過去大会＋今大会の送信済み結果が対象です。</p>
+      </div>
+    </div>
+  );
+};
+
+
 const RulesDocCard = () => (
   <a
     href={RULES_DOC_URL}
@@ -156,8 +264,67 @@ const SiteFooter = () => (
 );
 
 // ==========================================
-// 3. クラウド通信・データ管理 (モックAPI)
+// 2.5 過去大会テキスト(MMC)パーサー
 // ==========================================
+// MMCの「トータル成績」の各行（例: "1 あおい +200.1 10戦 1.90"）を抽出
+type ParsedLeaderboardRow = { rank: number; name: string; point: number; gameCount: number; avgRank: number };
+const parseMmcLeaderboard = (raw: string): ParsedLeaderboardRow[] => {
+  const rows: ParsedLeaderboardRow[] = [];
+  const re = /(\d+)\s+([^\d\n]+?)\s+([+\-]\d+\.\d)\s+(\d+)\s*戦\s+(\d+\.\d+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(raw))) {
+    rows.push({
+      rank: parseInt(m[1], 10),
+      name: m[2].replace(/\s+/g, ' ').trim(),
+      point: parseFloat(m[3]),
+      gameCount: parseInt(m[4], 10),
+      avgRank: parseFloat(m[5]),
+    });
+  }
+  return rows;
+};
+
+// MMCの「半荘ごと」ログ（例: "51戦目 08/22 18:24 最高位戦ルール 供託 2.0" とその下の各行）を抽出
+// PDF由来のテキストは "供託 0.01 黒子..." のように改行が消えて数字が連結することがあるため、
+// 供託の値は必ず小数点以下1桁という前提で正規表現を組み、それ以降を確実に切り分けている。
+type ParsedHanchanRow = { rank: number; name: string; point: number; score: number; excluded: boolean };
+type ParsedHanchan = { no: number; deposit: number; rows: ParsedHanchanRow[] };
+const parseMmcHanchanLog = (raw: string): ParsedHanchan[] => {
+  const text = raw.replace(/\r\n/g, '\n');
+  const headerRe = /(\d+)\s*戦目[^供\n]*供託\s*(\d+\.\d)/g;
+  const headers: { no: number; deposit: number; index: number; end: number }[] = [];
+  let hm: RegExpExecArray | null;
+  while ((hm = headerRe.exec(text))) {
+    headers.push({ no: parseInt(hm[1], 10), deposit: parseFloat(hm[2]), index: hm.index, end: hm.index + hm[0].length });
+  }
+
+  const rowRe = /([1-4])\s+([^\d()\n]+?)\s*(\(順位には含みません\)\s*)?([+\-]\d+\.\d)\s*\(([-\d,]+)\)/g;
+
+  const hanchans: ParsedHanchan[] = [];
+  for (let i = 0; i < headers.length; i++) {
+    const h = headers[i];
+    const bodyEnd = i + 1 < headers.length ? headers[i + 1].index : text.length;
+    const body = text.slice(h.end, bodyEnd);
+    const rows: ParsedHanchanRow[] = [];
+    rowRe.lastIndex = 0;
+    let rm: RegExpExecArray | null;
+    while ((rm = rowRe.exec(body))) {
+      const rawScore = parseInt(rm[5].replace(/,/g, ''), 10);
+      rows.push({
+        rank: parseInt(rm[1], 10),
+        name: rm[2].replace(/\s+/g, ' ').trim(),
+        excluded: !!rm[3],
+        point: parseFloat(rm[4]),
+        score: rawScore / 100,
+      });
+    }
+    if (rows.length > 0) hanchans.push({ no: h.no, deposit: h.deposit, rows });
+  }
+  hanchans.sort((a, b) => a.no - b.no);
+  return hanchans;
+};
+
+
 const api = {
   getPlayers: async (): Promise<Player[]> => {
     const { data, error } = await supabase
@@ -267,7 +434,49 @@ const api = {
     a.href = url;
     a.download = `mahjong_backup_${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
-  }
+  },
+
+  // ---- 過去大会（アーカイブ） ----
+  getArchives: async (): Promise<TournamentArchive[]> => {
+    const { data, error } = await supabase
+      .from('tournament_archives')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('過去大会取得エラー:', error);
+      return [];
+    }
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      name: a.name,
+      ruleName: a.rule_name,
+      notes: a.notes,
+      standings: a.standings || [],
+      hanchans: a.hanchans || [],
+      createdAt: a.created_at,
+    }));
+  },
+
+  saveArchive: async (archive: { name: string; ruleName?: string; notes?: string; standings: ArchiveStanding[]; hanchans: ArchiveHanchan[] }) => {
+    const { data, error } = await supabase
+      .from('tournament_archives')
+      .insert([{
+        name: archive.name,
+        rule_name: archive.ruleName || null,
+        notes: archive.notes || null,
+        standings: archive.standings,
+        hanchans: archive.hanchans,
+      }])
+      .select()
+      .single();
+    if (error) { console.error('過去大会保存エラー:', error); throw error; }
+    return data;
+  },
+
+  deleteArchive: async (id: string) => {
+    const { error } = await supabase.from('tournament_archives').delete().eq('id', id);
+    if (error) { console.error('過去大会削除エラー:', error); throw error; }
+  },
 };
 
 // ==========================================
@@ -282,7 +491,7 @@ export default function Home() {
   const isAdmin = !!session?.user?.email && adminEmails.includes(session.user.email);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'players'>('tournament');
+  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'archives' | 'players'>('tournament');
   const [tournamentPhase, setTournamentPhase] = useState<'entry' | 'playing'>('entry');
   
   const [dbPlayers, setDbPlayers] = useState<Player[]>([]);
@@ -303,6 +512,11 @@ export default function Home() {
   const [roundOpen, setRoundOpen] = useState<Record<number, boolean>>({});
   const [tableOpen, setTableOpen] = useState<Record<string, boolean>>({});
 
+  // 過去大会（アーカイブ）
+  const [archives, setArchives] = useState<TournamentArchive[]>([]);
+  const [openTotalPlayerId, setOpenTotalPlayerId] = useState<string | null>(null);
+  const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
+
   const rule = { originPoint: 300, returnPoint: 300, uma: [30, 10, -10, -30], name: RULE_NAME };
 
   useEffect(() => {
@@ -314,6 +528,7 @@ export default function Home() {
   useEffect(() => {
     const loadData = async () => {
       setDbPlayers(await api.getPlayers());
+      setArchives(await api.getArchives());
       const current = await api.getCurrentTournament();
       if (current) {
         if (current.tournamentPhase) setTournamentPhase(current.tournamentPhase);
@@ -848,7 +1063,131 @@ export default function Home() {
   };
 
   // ----------------------------------------
-  // G. データ集計
+  // G. 過去大会（アーカイブ）のインポート
+  // ----------------------------------------
+  const [showArchiveImport, setShowArchiveImport] = useState(false);
+  const [archiveName, setArchiveName] = useState('');
+  const [archiveRuleName, setArchiveRuleName] = useState(RULE_NAME);
+  const [archiveNotes, setArchiveNotes] = useState('');
+  const [archiveRawText, setArchiveRawText] = useState('');
+  const [archivePreview, setArchivePreview] = useState<{
+    leaderboard: ParsedLeaderboardRow[];
+    hanchans: ParsedHanchan[];
+    newNames: string[];
+  } | null>(null);
+  const [isImportingArchive, setIsImportingArchive] = useState(false);
+
+  const handlePreviewArchiveText = () => {
+    if (!isAdmin) return;
+    const leaderboard = parseMmcLeaderboard(archiveRawText);
+    const hanchans = parseMmcHanchanLog(archiveRawText);
+    if (leaderboard.length === 0 && hanchans.length === 0) {
+      alert('テキストからデータを読み取れませんでした。MMCの「トータル成績」〜「半荘ごと」の範囲をそのまま貼り付けてください。');
+      setArchivePreview(null);
+      return;
+    }
+    const existingNames = new Set(dbPlayers.map(p => p.name));
+    const allNames = new Set<string>();
+    leaderboard.forEach(r => allNames.add(r.name));
+    hanchans.forEach(h => h.rows.forEach(r => allNames.add(r.name)));
+    const newNames = [...allNames].filter(n => !existingNames.has(n));
+    setArchivePreview({ leaderboard, hanchans, newNames });
+  };
+
+  const handleCommitArchiveImport = async () => {
+    if (!isAdmin || !archivePreview) return;
+    if (!archiveName.trim()) { alert('大会名を入力してください。'); return; }
+    if (archivePreview.leaderboard.length === 0) { alert('最終成績（トータル成績）が読み取れていません。'); return; }
+    if (!window.confirm(`「${archiveName.trim()}」を過去大会として登録しますか？\n\n・最終成績: ${archivePreview.leaderboard.length}名\n・半荘ログ: ${archivePreview.hanchans.length}半荘\n・新規登録される選手: ${archivePreview.newNames.length}名\n\n登録すると、対象選手の通算成績（ポイント・半荘数）にもこの大会の結果が加算されます。`)) return;
+
+    setIsImportingArchive(true);
+    try {
+      // 1. 選手名 → playerId の解決（無ければ新規作成）
+      const nameToId = new Map<string, string>();
+      let workingPlayers = [...dbPlayers];
+      const resolveId = async (name: string): Promise<string> => {
+        if (nameToId.has(name)) return nameToId.get(name)!;
+        const found = workingPlayers.find(p => p.name === name);
+        if (found) { nameToId.set(name, found.id); return found.id; }
+        const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false };
+        await api.savePlayer(newPlayer);
+        workingPlayers = [...workingPlayers, newPlayer];
+        nameToId.set(name, newPlayer.id);
+        return newPlayer.id;
+      };
+
+      for (const name of archivePreview.newNames) {
+        await resolveId(name);
+      }
+      // リーダーボード・半荘ログに出てくる全ての名前を解決
+      for (const row of archivePreview.leaderboard) await resolveId(row.name);
+      for (const h of archivePreview.hanchans) for (const r of h.rows) await resolveId(r.name);
+
+      // 2. standings / hanchans を構築
+      const standings: ArchiveStanding[] = archivePreview.leaderboard.map(row => ({
+        playerId: nameToId.get(row.name)!,
+        name: row.name,
+        totalPoint: row.point,
+        gameCount: row.gameCount,
+        rank: row.rank,
+      }));
+      const hanchans: ArchiveHanchan[] = archivePreview.hanchans.map(h => ({
+        no: h.no,
+        deposit: h.deposit,
+        results: h.rows.map(r => ({
+          playerId: nameToId.get(r.name)!,
+          name: r.name,
+          rank: r.rank,
+          score: r.score,
+          point: r.point,
+          excluded: r.excluded,
+        })),
+      }));
+
+      // 3. アーカイブとして保存
+      await api.saveArchive({
+        name: archiveName.trim(),
+        ruleName: archiveRuleName.trim() || undefined,
+        notes: archiveNotes.trim() || undefined,
+        standings,
+        hanchans,
+      });
+
+      // 4. 通算成績へ反映（standingsの値をそのまま加算）
+      const updates = standings.map(s => ({ id: s.playerId, pointDelta: s.totalPoint, gamesDelta: s.gameCount }));
+      if (updates.length > 0) await api.updatePlayersScores(updates);
+
+      setDbPlayers(await api.getPlayers());
+      setArchives(await api.getArchives());
+      setArchiveName(''); setArchiveNotes(''); setArchiveRawText(''); setArchivePreview(null);
+      setShowArchiveImport(false);
+      alert('過去大会を登録しました。');
+    } catch (err) {
+      console.error(err);
+      alert('登録中にエラーが発生しました。コンソールを確認してください。');
+    } finally {
+      setIsImportingArchive(false);
+    }
+  };
+
+  const handleDeleteArchive = async (archive: TournamentArchive) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`「${archive.name}」を削除しますか？\n\n通算成績に加算されていたポイント・半荘数も取り消されます。`)) return;
+    try {
+      const reverses = archive.standings.map(s => ({ id: s.playerId, pointDelta: -s.totalPoint, gamesDelta: -s.gameCount }));
+      if (reverses.length > 0) await api.updatePlayersScores(reverses);
+      await api.deleteArchive(archive.id);
+      setDbPlayers(await api.getPlayers());
+      setArchives(await api.getArchives());
+      alert('削除しました。');
+    } catch (err) {
+      console.error(err);
+      alert('削除中にエラーが発生しました。コンソールを確認してください。');
+    }
+  };
+
+  // ----------------------------------------
+  // H. データ集計
   // ----------------------------------------
   // 通算成績: 黒子は常に非表示
   const displayDbPlayers = [...dbPlayers]
@@ -893,6 +1232,90 @@ export default function Home() {
   const displayCurrentRanking = showKuroko
     ? currentRankingAll
     : currentRankingAll.filter(p => !isKuroko(p.name));
+
+  // ----------------------------------------
+  // G-2. 過去大会（アーカイブ）まわりの集計
+  // ----------------------------------------
+  // 指定プレイヤーの、過去大会ごとの成績（ポイント・順位・半荘数）
+  const getPlayerArchiveHistory = (playerId: string) => {
+    return archives
+      .map(a => {
+        const standing = a.standings.find(s => s.playerId === playerId);
+        if (!standing) return null;
+        return {
+          archiveId: a.id,
+          name: a.name,
+          point: standing.totalPoint,
+          gameCount: standing.gameCount,
+          rank: standing.rank,
+          playerCount: a.standings.length,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+  };
+
+  // 過去大会(アーカイブ) ＋ 今大会(送信済みの卓) を統合した「全半荘ログ」
+  // 着順分布・対戦相性(相性度)の計算に使う
+  type NormalizedResult = { playerId: string; name: string; rank: number; point: number };
+  type NormalizedHanchan = { source: string; results: NormalizedResult[] };
+  const getAllHanchans = (): NormalizedHanchan[] => {
+    const list: NormalizedHanchan[] = [];
+    archives.forEach(a => {
+      a.hanchans.forEach(h => {
+        list.push({
+          source: a.name,
+          results: h.results
+            .filter(r => !r.excluded && !isKuroko(r.name))
+            .map(r => ({ playerId: r.playerId, name: r.name, rank: r.rank, point: r.point })),
+        });
+      });
+    });
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      const sorted = [...t.players].sort((a, b) => b.score - a.score);
+      list.push({
+        source: `${r.round}回戦`,
+        results: t.players
+          .filter(p => !isKuroko(p.name))
+          .map(p => ({
+            playerId: p.playerId,
+            name: p.name,
+            rank: sorted.findIndex(sp => sp.playerId === p.playerId) + 1,
+            point: p.point,
+          })),
+      });
+    }));
+    return list;
+  };
+
+  // 着順分布（1着〜4着の回数）
+  const getRankDistribution = (playerId: string) => {
+    const dist = [0, 0, 0, 0];
+    let total = 0;
+    getAllHanchans().forEach(h => {
+      const me = h.results.find(r => r.playerId === playerId);
+      if (me && me.rank >= 1 && me.rank <= 4) { dist[me.rank - 1]++; total++; }
+    });
+    return { dist, total };
+  };
+
+  // 対戦相性（相手ごとの合計ポイント差・平均ポイント差・対戦数）
+  const getHeadToHead = (playerId: string) => {
+    const map: Record<string, { name: string; games: number; diffSum: number }> = {};
+    getAllHanchans().forEach(h => {
+      const me = h.results.find(r => r.playerId === playerId);
+      if (!me) return;
+      h.results.forEach(o => {
+        if (o.playerId === playerId) return;
+        if (!map[o.playerId]) map[o.playerId] = { name: o.name, games: 0, diffSum: 0 };
+        map[o.playerId].games += 1;
+        map[o.playerId].diffSum += me.point - o.point;
+      });
+    });
+    return Object.entries(map)
+      .map(([id, v]) => ({ id, name: v.name, games: v.games, diffSum: Math.round(v.diffSum * 10) / 10, avgDiff: Math.round((v.diffSum / v.games) * 10) / 10 }))
+      .sort((a, b) => b.diffSum - a.diffSum);
+  };
 
   // 個人の今大会スケジュール（済・予定・未定・抜け番）
   type ScheduleItem = {
@@ -1266,6 +1689,7 @@ export default function Home() {
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '通算成績', 'bg-indigo-600')}
+            {tabBtn('archives', '過去大会', 'bg-amber-600')}
             {isAdmin && tabBtn('players', '新規登録', 'bg-indigo-600')}
           </nav>
 
@@ -1363,6 +1787,7 @@ export default function Home() {
               <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 align-middle mr-1"></span>
               🏆 は出場権が個別に付与されている選手 ／ 麻雀プロ（Ⓟ）は半荘数に関わらず出場権の対象外です
             </p>
+            <p className="text-[11px] text-slate-400 mb-3">プレイヤー名をクリックすると、大会別の成績・着順分布・対戦相性が表示されます。</p>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
@@ -1380,62 +1805,234 @@ export default function Home() {
                     const pro = isPro(p.name);
                     const granted = hasChampionshipRight(p);
                     const candidate = isChampionshipCandidate(p);
+                    const isOpen = openTotalPlayerId === p.id;
+                    const colSpan = isAdmin ? 6 : 5;
                     return (
-                      <tr key={p.id} className={`border-b border-slate-100 transition ${granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
-                        <td className="p-3 font-bold text-slate-400">{i + 1}</td>
-                        {editingPlayerId === p.id && isAdmin ? (
-                          <>
-                            <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
-                            <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
-                            <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
-                            <td className="p-2 text-center">
-                              <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600'}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={isPro(editForm.name) ? false : editForm.championshipRight}
-                                  disabled={isPro(editForm.name)}
-                                  onChange={e => setEditForm({...editForm, championshipRight: e.target.checked})}
-                                  className="w-4 h-4 accent-amber-500"
-                                />
-                                出場権
-                              </label>
-                              {isPro(editForm.name) && <div className="text-[10px] text-slate-400 mt-0.5">プロは対象外</div>}
-                            </td>
-                            <td className="p-2 text-center">
-                              <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
-                              <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-slate-400 text-sm">取消</button>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="p-3 font-bold text-lg"><PlayerLabel name={p.name} /></td>
-                            <td className="p-3 text-right text-slate-500">{p.totalGames} 半荘</td>
-                            <td className={`p-3 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
-                              {fmtPt(p.totalPoint)}
-                            </td>
-                            <td className="p-3 text-center">
-                              {pro ? (
-                                <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 border border-slate-200">対象外（プロ）</span>
-                              ) : granted ? (
-                                <span className="inline-block text-[11px] font-black px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-sm">🏆 出場権</span>
-                              ) : candidate ? (
-                                <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">○ 対象</span>
-                              ) : (
-                                <span className="text-[11px] text-slate-400">出場権なし</span>
-                              )}
-                            </td>
-                            {isAdmin && (
-                              <td className="p-3 text-center">
-                                <button onClick={() => startEditPlayer(p)} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-bold transition">編集</button>
+                      <React.Fragment key={p.id}>
+                        <tr className={`border-b border-slate-100 transition ${isOpen ? 'bg-indigo-50/60' : granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
+                          <td className="p-3 font-bold text-slate-400">{i + 1}</td>
+                          {editingPlayerId === p.id && isAdmin ? (
+                            <>
+                              <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
+                              <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
+                              <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
+                              <td className="p-2 text-center">
+                                <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600'}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isPro(editForm.name) ? false : editForm.championshipRight}
+                                    disabled={isPro(editForm.name)}
+                                    onChange={e => setEditForm({...editForm, championshipRight: e.target.checked})}
+                                    className="w-4 h-4 accent-amber-500"
+                                  />
+                                  出場権
+                                </label>
+                                {isPro(editForm.name) && <div className="text-[10px] text-slate-400 mt-0.5">プロは対象外</div>}
                               </td>
-                            )}
-                          </>
+                              <td className="p-2 text-center">
+                                <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
+                                <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-slate-400 text-sm">取消</button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              <td className="p-3 font-bold text-lg cursor-pointer" onClick={() => setOpenTotalPlayerId(isOpen ? null : p.id)}>
+                                <span className="inline-flex items-center gap-1.5">
+                                  <span className={`text-[10px] text-slate-400 transition ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                                  <PlayerLabel name={p.name} />
+                                </span>
+                              </td>
+                              <td className="p-3 text-right text-slate-500">{p.totalGames} 半荘</td>
+                              <td className={`p-3 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                {fmtPt(p.totalPoint)}
+                              </td>
+                              <td className="p-3 text-center">
+                                {pro ? (
+                                  <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 border border-slate-200">対象外（プロ）</span>
+                                ) : granted ? (
+                                  <span className="inline-block text-[11px] font-black px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-sm">🏆 出場権</span>
+                                ) : candidate ? (
+                                  <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">○ 対象</span>
+                                ) : (
+                                  <span className="text-[11px] text-slate-400">出場権なし</span>
+                                )}
+                              </td>
+                              {isAdmin && (
+                                <td className="p-3 text-center">
+                                  <button onClick={() => startEditPlayer(p)} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-bold transition">編集</button>
+                                </td>
+                              )}
+                            </>
+                          )}
+                        </tr>
+
+                        {isOpen && (
+                          <tr>
+                            <td colSpan={colSpan} className="p-0 bg-slate-50/60 border-b border-slate-200">
+                              <PlayerDetailPanel
+                                history={getPlayerArchiveHistory(p.id)}
+                                rankDist={getRankDistribution(p.id)}
+                                headToHead={getHeadToHead(p.id)}
+                              />
+                            </td>
+                          </tr>
                         )}
-                      </tr>
+                      </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* ========== 過去大会 ========== */}
+        {activeTab === 'archives' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            {isAdmin && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <button
+                  onClick={() => setShowArchiveImport(!showArchiveImport)}
+                  className="w-full flex items-center justify-between gap-3 p-4 md:p-5 text-left"
+                >
+                  <span className="font-black text-slate-800">📥 過去大会をインポート（MMCのテキストを貼り付け）</span>
+                  <span className="text-slate-400 text-xs font-bold">{showArchiveImport ? '閉じる ▲' : '開く ▼'}</span>
+                </button>
+
+                {showArchiveImport && (
+                  <div className="px-4 md:px-5 pb-5 pt-1 border-t border-slate-100 space-y-4">
+                    <p className="text-xs text-slate-500 leading-relaxed">
+                      MMC（mahjong-manage.com）の大会ページで「トータル成績」の一覧から「半荘ごと」のログまでをまとめて選択・コピーし、下のテキスト欄にそのまま貼り付けてください。
+                      最終成績（ポイント・半荘数・順位）と、各半荘の結果を自動で読み取ります。
+                    </p>
+                    <div className="grid md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">大会名</label>
+                        <input value={archiveName} onChange={e => setArchiveName(e.target.value)} placeholder="例: 第4回高等学校複合麻雀競技大会" className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">ルール名（任意）</label>
+                        <input value={archiveRuleName} onChange={e => setArchiveRuleName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm" />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">備考（任意・ペナルティの説明など）</label>
+                        <input value={archiveNotes} onChange={e => setArchiveNotes(e.target.value)} placeholder="例: 井上財閥 遅刻ペナルティ-20pt / 偏屈な向日葵 チョンボ-20pt" className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">MMCのページテキスト（トータル成績〜半荘ごとのログ）</label>
+                      <textarea
+                        value={archiveRawText}
+                        onChange={e => { setArchiveRawText(e.target.value); setArchivePreview(null); }}
+                        rows={10}
+                        placeholder={"1 あおい +200.1 10戦 1.90\n2 尾崎太郎 +171.9 10戦 2.10\n...\n51戦目 08/22 18:24 最高位戦ルール 供託 2.0\n1 あおい +71.6 (71,600)\n2 Toku +10.9 (30,900)\n..."}
+                        className="w-full p-3 border rounded-lg bg-slate-50 text-xs font-mono"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button onClick={handlePreviewArchiveText} disabled={!archiveRawText.trim()} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                        🔍 解析してプレビュー
+                      </button>
+                      {archivePreview && (
+                        <button onClick={handleCommitArchiveImport} disabled={isImportingArchive} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                          {isImportingArchive ? '登録中...' : '✅ この内容で登録する'}
+                        </button>
+                      )}
+                    </div>
+
+                    {archivePreview && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-slate-600">
+                          解析結果: 最終成績 {archivePreview.leaderboard.length}名 ／ 半荘ログ {archivePreview.hanchans.length}半荘
+                          {archivePreview.newNames.length > 0 && <span className="text-amber-600"> ／ 新規登録される選手 {archivePreview.newNames.length}名</span>}
+                        </p>
+                        {archivePreview.newNames.length > 0 && (
+                          <p className="text-[11px] text-slate-500">新規: {archivePreview.newNames.join('、')}</p>
+                        )}
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-slate-400 border-b border-slate-200">
+                                <th className="text-left py-1 pr-2">順位</th>
+                                <th className="text-left py-1 pr-2">名前</th>
+                                <th className="text-right py-1 pr-2">半荘数</th>
+                                <th className="text-right py-1">ポイント</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {archivePreview.leaderboard.map(row => (
+                                <tr key={row.rank} className="border-b border-slate-100">
+                                  <td className="py-1 pr-2 text-slate-400">{row.rank}</td>
+                                  <td className="py-1 pr-2 font-bold text-slate-700">{row.name}</td>
+                                  <td className="py-1 pr-2 text-right text-slate-500">{row.gameCount}</td>
+                                  <td className={`py-1 text-right font-bold ${row.point > 0 ? 'text-blue-600' : row.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(row.point)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+              <h2 className="text-xl font-bold mb-4">過去大会一覧</h2>
+              {archives.length === 0 ? (
+                <p className="text-sm text-slate-400">登録されている過去大会はまだありません。</p>
+              ) : (
+                <div className="space-y-3">
+                  {archives.map(a => {
+                    const isOpen = openArchiveId === a.id;
+                    return (
+                      <div key={a.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                        <button onClick={() => setOpenArchiveId(isOpen ? null : a.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition text-left">
+                          <span className="font-black text-slate-800">{a.name}</span>
+                          <span className="text-xs text-slate-400 flex items-center gap-3">
+                            {a.standings.length}名 ／ {a.hanchans.length}半荘
+                            {isAdmin && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleDeleteArchive(a); }}
+                                className="text-red-500 hover:text-red-700 font-bold"
+                              >削除</button>
+                            )}
+                          </span>
+                        </button>
+                        {isOpen && (
+                          <div className="p-4">
+                            {a.notes && <p className="text-xs text-slate-500 mb-3">📝 {a.notes}</p>}
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-xs">
+                                <thead>
+                                  <tr className="text-slate-400 border-b border-slate-200">
+                                    <th className="text-left py-1 pr-2">順位</th>
+                                    <th className="text-left py-1 pr-2">名前</th>
+                                    <th className="text-right py-1 pr-2">半荘数</th>
+                                    <th className="text-right py-1">ポイント</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {[...a.standings].sort((x, y) => x.rank - y.rank).map(s => (
+                                    <tr key={s.playerId} className="border-b border-slate-100">
+                                      <td className="py-1 pr-2 text-slate-400">{s.rank}</td>
+                                      <td className="py-1 pr-2 font-bold text-slate-700"><PlayerLabel name={s.name} /></td>
+                                      <td className="py-1 pr-2 text-right text-slate-500">{s.gameCount}</td>
+                                      <td className={`py-1 text-right font-bold ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -1661,7 +2258,7 @@ export default function Home() {
                     </div>
                     <p className="text-xs text-slate-500 mt-4 leading-relaxed">
                       ※ 8回戦・9回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
-                      　 8回戦は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
+                      　 最後から2つ目は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
                     </p>
                   </>
                 )}
