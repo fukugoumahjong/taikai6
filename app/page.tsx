@@ -126,6 +126,34 @@ const PlayerLabel = ({ name, className = '', badgeClass = '' }: { name: string; 
   </span>
 );
 
+// 大会別成績などで1〜3位をいい感じに見せる小さなバッジ
+const RankPill = ({ rank, playerCount }: { rank: number; playerCount?: number }) => {
+  if (rank === 1) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-black bg-gradient-to-r from-yellow-400 to-amber-500 shadow-sm whitespace-nowrap">
+        🏆 1位
+      </span>
+    );
+  }
+  if (rank === 2) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-black bg-gradient-to-r from-slate-300 to-slate-400 shadow-sm whitespace-nowrap">
+        🥈 2位
+      </span>
+    );
+  }
+  if (rank === 3) {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-black bg-gradient-to-r from-amber-600 to-amber-700 shadow-sm whitespace-nowrap">
+        🥉 3位
+      </span>
+    );
+  }
+  return (
+    <span className="text-slate-400 text-xs whitespace-nowrap">{rank}{playerCount ? `/${playerCount}` : ''}位</span>
+  );
+};
+
 // 通算成績タブの行の下に出す、大会別成績のみのコンパクト表示（2列）
 const ArchiveHistoryMini = ({
   history,
@@ -137,12 +165,12 @@ const ArchiveHistoryMini = ({
   return (
     <div className="px-4 md:px-6 py-4">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-xs font-black text-slate-500">📅 大会別の成績</h4>
+        <h4 className="text-xs font-black text-slate-500">大会別成績</h4>
         <button
           onClick={onOpenDetail}
           className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition inline-flex items-center gap-1"
         >
-          個人ページを見る →
+          個人成績 →
         </button>
       </div>
       {history.length === 0 ? (
@@ -152,7 +180,8 @@ const ArchiveHistoryMini = ({
           {history.map(h => (
             <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
               <span className="text-slate-600 font-bold truncate">{h.name}</span>
-              <span className="text-slate-400 whitespace-nowrap">{h.rank}/{h.playerCount}位・{h.gameCount}戦</span>
+              <RankPill rank={h.rank} playerCount={h.playerCount} />
+              <span className="text-slate-400 whitespace-nowrap">{h.gameCount}戦</span>
               <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
             </div>
           ))}
@@ -162,13 +191,15 @@ const ArchiveHistoryMini = ({
   );
 };
 
-// 個人ページ（モーダル）：通算成績・大会別の成績・着順分布・対戦相性・ペナルティ履歴をまとめて表示
+// 個人成績（モーダル）：通算成績・大会別成績・着順分布・対戦相性・ペナルティ履歴・半荘ごとの成績をまとめて表示
 const PlayerDetailModal = ({
   player,
   history,
   rankDist,
   headToHead,
   penalties,
+  maxScore,
+  hanchanGroups,
   onClose,
 }: {
   player: Player;
@@ -176,10 +207,14 @@ const PlayerDetailModal = ({
   rankDist: { dist: number[]; total: number };
   headToHead: { id: string; name: string; games: number; diffSum: number; avgDiff: number }[];
   penalties: { archiveId: string; archiveName: string; point: number; reason: string }[];
+  maxScore: { score: number; label: string } | null;
+  hanchanGroups: { key: string; label: string; rows: { rank: number; score: number; point: number }[] }[];
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
   const rankColors = ['bg-yellow-400', 'bg-slate-400', 'bg-amber-700', 'bg-slate-300'];
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const toggleGroup = (key: string) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 md:p-6" onClick={onClose}>
@@ -190,22 +225,27 @@ const PlayerDetailModal = ({
         {/* ヘッダー */}
         <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-5 md:px-8 py-6 flex items-start justify-between flex-shrink-0">
           <div>
-            <p className="text-indigo-200 text-xs font-bold mb-1">個人ページ</p>
+            <p className="text-indigo-200 text-xs font-bold mb-1">個人成績</p>
             <h2 className="text-2xl md:text-3xl font-black flex items-center">
               <PlayerLabel name={player.name} badgeClass="text-indigo-900" />
             </h2>
             <p className={`mt-2 text-2xl font-black tabular-nums ${player.totalPoint > 0 ? 'text-emerald-300' : player.totalPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
               {fmtPt(player.totalPoint)} <span className="text-sm font-bold text-indigo-200">（通算 {player.totalGames}半荘）</span>
             </p>
+            {maxScore && (
+              <p className="mt-2 text-xs font-bold text-indigo-200">
+                🎯 最高得点 <span className="text-white text-sm">{(maxScore.score * 100).toLocaleString()}点</span>（{maxScore.label}）
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="text-indigo-200 hover:text-white text-2xl leading-none font-bold px-2">✕</button>
         </div>
 
         {/* 本文 */}
         <div className="overflow-y-auto p-5 md:p-8 space-y-8">
-          {/* 大会別の成績 */}
+          {/* 大会別成績 */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">📅 大会別の成績</h3>
+            <h3 className="text-sm font-black text-slate-700 mb-3">大会別成績</h3>
             {history.length === 0 ? (
               <p className="text-xs text-slate-400">記録がありません。</p>
             ) : (
@@ -213,7 +253,8 @@ const PlayerDetailModal = ({
                 {history.map(h => (
                   <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
                     <span className="text-slate-700 font-bold">{h.name}</span>
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{h.rank}/{h.playerCount}位・{h.gameCount}戦</span>
+                    <RankPill rank={h.rank} playerCount={h.playerCount} />
+                    <span className="text-slate-400 text-xs whitespace-nowrap">{h.gameCount}戦</span>
                     <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
                   </div>
                 ))}
@@ -260,7 +301,7 @@ const PlayerDetailModal = ({
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">プラスは「この選手が相手より合計で勝っている」ことを表します。過去大会＋今大会の送信済み結果が対象です。</p>
+            <p className="text-[11px] text-slate-400 mt-2">プラスは「この選手が相手より合計で勝っている」ことを表します。</p>
           </section>
 
           {/* ペナルティ履歴 */}
@@ -277,6 +318,46 @@ const PlayerDetailModal = ({
                     <span className="font-black tabular-nums text-red-600">{fmtPt(p.point)}</span>
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* 半荘ごとの成績（大会ごとにプルダウン） */}
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">🀄 半荘ごとの成績</h3>
+            {hanchanGroups.length === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="space-y-2">
+                {hanchanGroups.map(g => {
+                  const isOpen = !!openGroups[g.key];
+                  return (
+                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => toggleGroup(g.key)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
+                      >
+                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
+                        <span className="text-xs text-slate-400 flex items-center gap-2">
+                          {g.rows.length}半荘
+                          <span className="font-bold">{isOpen ? '▲' : '▼'}</span>
+                        </span>
+                      </button>
+                      {isOpen && (
+                        <div className="divide-y divide-slate-100">
+                          {g.rows.map((r, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2 px-3 py-2 text-xs">
+                              <span className="text-slate-400 w-10">#{i + 1}</span>
+                              <RankPill rank={r.rank} />
+                              <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
+                              <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
@@ -1445,6 +1526,53 @@ export default function Home() {
       .sort((a, b) => b.diffSum - a.diffSum);
   };
 
+  // 指定選手の半荘ごとの成績を、大会ごとにまとめ、時系列順（第N回の若い順→進行中の今大会が最後）に並べる。
+  // 将来、大会が終わるたびに「今大会」がそのままここに1グループとして積み上がっていく想定。
+  const tournamentSortKey = (name: string) => {
+    const m = name.match(/第(\d+)回/);
+    return m ? parseInt(m[1], 10) : Number.POSITIVE_INFINITY;
+  };
+  const getPlayerHanchanGroups = (playerId: string) => {
+    type Row = { rank: number; score: number; point: number };
+    const groups: { key: string; label: string; sortKey: number; rows: Row[] }[] = [];
+
+    archives.forEach(a => {
+      const rows: Row[] = [];
+      a.hanchans.forEach(h => {
+        const me = h.results.find(r => r.playerId === playerId);
+        if (me && !me.excluded) rows.push({ rank: me.rank, score: me.score, point: me.point });
+      });
+      if (rows.length > 0) groups.push({ key: a.id, label: a.name, sortKey: tournamentSortKey(a.name), rows });
+    });
+
+    // 進行中の今大会（送信済みの卓のみ）
+    const currentRows: Row[] = [];
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      const me = t.players.find(p => p.playerId === playerId);
+      if (!me || isKuroko(me.name)) return;
+      const sorted = [...t.players].sort((a, b) => b.score - a.score);
+      const rank = sorted.findIndex(sp => sp.playerId === playerId) + 1;
+      currentRows.push({ rank, score: me.score, point: me.point });
+    }));
+    if (currentRows.length > 0) {
+      groups.push({ key: 'current', label: '今大会', sortKey: Number.POSITIVE_INFINITY, rows: currentRows });
+    }
+
+    return groups.sort((a, b) => a.sortKey - b.sortKey);
+  };
+
+  // 過去大会＋今大会を通じての最高得点（ポイントではなく素点）
+  const getMaxScore = (playerId: string): { score: number; label: string } | null => {
+    let best: { score: number; label: string } | null = null;
+    getPlayerHanchanGroups(playerId).forEach(g => {
+      g.rows.forEach(r => {
+        if (!best || r.score > best.score) best = { score: r.score, label: g.label };
+      });
+    });
+    return best;
+  };
+
   // 個人の今大会スケジュール（済・予定・未定・抜け番）
   type ScheduleItem = {
     key: string; roundNo: number;
@@ -1915,7 +2043,7 @@ export default function Home() {
               <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 align-middle mr-1"></span>
               🏆 は出場権が個別に付与されている選手 ／ 麻雀プロ（Ⓟ）は半荘数に関わらず出場権の対象外です
             </p>
-            <p className="text-[11px] text-slate-400 mb-3">選手名をクリックすると、大会別の成績・着順分布・対戦相性が表示されます。</p>
+            <p className="text-[11px] text-slate-400 mb-3">選手名をクリックすると大会別成績が表示され、「個人成績」から着順分布・対戦相性・半荘ごとの成績なども確認できます。</p>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
@@ -2023,6 +2151,8 @@ export default function Home() {
               rankDist={getRankDistribution(dp.id)}
               headToHead={getHeadToHead(dp.id)}
               penalties={getPlayerPenalties(dp.id)}
+              maxScore={getMaxScore(dp.id)}
+              hanchanGroups={getPlayerHanchanGroups(dp.id)}
               onClose={() => setDetailModalPlayerId(null)}
             />
           );
