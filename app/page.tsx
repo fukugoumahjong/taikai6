@@ -679,8 +679,13 @@ const api = {
   },
 
   deleteArchive: async (id: string) => {
-    const { error } = await supabase.from('tournament_archives').delete().eq('id', id);
+    const { data, error } = await supabase.from('tournament_archives').delete().eq('id', id).select();
     if (error) { console.error('過去大会削除エラー:', error); throw error; }
+    if (!data || data.length === 0) {
+      // RLSのDELETEポリシーが無い場合など、エラーにならず0件のまま「成功」扱いになることがあるための保険
+      throw new Error('削除できませんでした（0件）。tournament_archivesのDELETEポリシーを確認してください。');
+    }
+    return data[0];
   },
 };
 
@@ -707,6 +712,7 @@ export default function Home() {
   
   const [isResetting, setIsResetting] = useState(false);
   const [resetCountdown, setResetCountdown] = useState(0);
+  const [resetMessage, setResetMessage] = useState('リセット待機中...');
 
   // 今大会成績まわりの表示状態
   const [showKuroko, setShowKuroko] = useState(false); // デフォルトは非表示
@@ -722,6 +728,8 @@ export default function Home() {
   const [openTotalPlayerId, setOpenTotalPlayerId] = useState<string | null>(null);
   const [detailModalPlayerId, setDetailModalPlayerId] = useState<string | null>(null);
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
+  const [openArchivePlayerId, setOpenArchivePlayerId] = useState<string | null>(null);
+  const [openArchiveHanchanIdx, setOpenArchiveHanchanIdx] = useState<number | null>(null);
 
   const rule = { originPoint: 300, returnPoint: 300, uma: [30, 10, -10, -30], name: RULE_NAME };
 
@@ -1146,13 +1154,12 @@ export default function Home() {
   // ----------------------------------------
   // E. 大会全体のリセット
   // ----------------------------------------
-  const handleResetTournament = async () => {
-    if (!isAdmin) return;
-    if (!window.confirm('【警告】現在の大会の進行を全てリセットしますか？')) return;
+  // 誤操作防止のための共通30秒待機処理
+  const runResetCountdown = async (message: string) => {
+    setResetMessage(message);
     setIsResetting(true);
     let count = 30;
     setResetCountdown(count);
-
     await new Promise<void>(resolve => {
       const timer = setInterval(() => {
         count -= 1;
@@ -1160,8 +1167,13 @@ export default function Home() {
         if (count <= 0) { clearInterval(timer); resolve(); }
       }, 1000);
     });
-
     setIsResetting(false);
+  };
+
+  const handleResetTournament = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm('【警告】現在の大会の進行を全てリセットしますか？')) return;
+    await runResetCountdown('大会の進行をリセット中...');
     setTimeout(async () => {
       if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全てリセットしますか？')) {
         try {
@@ -1183,6 +1195,28 @@ export default function Home() {
         setSeating([]); setEntryPlayerIds([]); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
+      }
+    }, 100);
+  };
+
+  // 全選手の通算成績（ポイント・半荘数）を0にリセットする（過去大会の記録自体は削除しない）
+  const handleResetAllTotals = async () => {
+    if (!isAdmin) return;
+    if (!window.confirm('【警告】全選手の通算成績（ポイント・半荘数）を0にリセットしますか？\n※過去大会一覧・今大会の記録自体は削除されません。')) return;
+    await runResetCountdown('通算成績を全員リセット中...');
+    setTimeout(async () => {
+      if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全選手の通算成績を0にリセットしますか？')) {
+        try {
+          for (const p of dbPlayers) {
+            if (p.totalPoint === 0 && p.totalGames === 0) continue;
+            await api.updatePlayer({ ...p, totalPoint: 0, totalGames: 0 });
+          }
+          setDbPlayers(await api.getPlayers());
+          alert('全選手の通算成績を0にリセットしました。');
+        } catch (err) {
+          console.error(err);
+          alert('リセット中にエラーが発生しました。コンソールを確認してください。');
+        }
       }
     }, 100);
   };
@@ -1414,15 +1448,17 @@ export default function Home() {
     if (!isAdmin) return;
     if (!window.confirm(`「${archive.name}」を削除しますか？\n\n通算成績に加算されていたポイント・半荘数も取り消されます。`)) return;
     try {
+      // 先に削除を確定させ、成功したことを確認してから通算成績を取り消す。
+      // （削除に失敗した状態でポイントだけ取り消されると、再度削除ボタンを押した際に二重に減算されてしまうため）
+      await api.deleteArchive(archive.id);
       const reverses = archive.standings.map(s => ({ id: s.playerId, pointDelta: -s.totalPoint, gamesDelta: -s.gameCount }));
       if (reverses.length > 0) await api.updatePlayersScores(reverses);
-      await api.deleteArchive(archive.id);
       setDbPlayers(await api.getPlayers());
       setArchives(await api.getArchives());
       alert('削除しました。');
     } catch (err) {
       console.error(err);
-      alert('削除中にエラーが発生しました。コンソールを確認してください。');
+      alert('削除中にエラーが発生しました。通算成績への反映は行っていません。コンソールを確認してください。\n（tournament_archivesテーブルのDELETEポリシーが正しく設定されているか確認してください）');
     }
   };
 
@@ -1591,7 +1627,9 @@ export default function Home() {
 
     archives.forEach(a => {
       const rows: Row[] = [];
-      a.hanchans.forEach(h => {
+      // MMCの元データは新しい半荘から並んでいる（例: 51戦目→1戦目）ため、
+      // 古い順（時系列順）に表示するために反転してから処理する
+      [...a.hanchans].reverse().forEach(h => {
         const me = h.results.find(r => r.playerId === playerId);
         if (!me || me.excluded) return;
         const table: TableRow[] = h.results
@@ -1637,6 +1675,20 @@ export default function Home() {
       });
     });
     return best;
+  };
+
+  // 過去大会一覧で、特定の大会・特定の選手の半荘ごとの成績（同卓者つき）を取り出す
+  const getPlayerRowsInArchive = (archive: TournamentArchive, playerId: string) => {
+    const rows: PlayerDetailHanchanRow[] = [];
+    [...archive.hanchans].reverse().forEach(h => {
+      const me = h.results.find(r => r.playerId === playerId);
+      if (!me || me.excluded) return;
+      const table: PlayerDetailTableRow[] = h.results
+        .map(r => ({ playerId: r.playerId, name: nameOf(r.playerId, r.name), rank: r.rank, score: r.score, point: r.point }))
+        .sort((x, y) => x.rank - y.rank);
+      rows.push({ rank: me.rank, score: me.score, point: me.point, table });
+    });
+    return rows;
   };
 
   // 個人の今大会スケジュール（済・予定・未定・抜け番）
@@ -1990,7 +2042,7 @@ export default function Home() {
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center text-white">
           <div className="animate-pulse flex flex-col items-center">
             <span className="text-red-500 text-6xl mb-4 block text-center">⚠️</span>
-            <h2 className="text-2xl font-bold mb-2">リセット待機中...</h2>
+            <h2 className="text-2xl font-bold mb-2">{resetMessage}</h2>
             <p className="text-lg">誤操作防止のため、30秒間待機しています。</p>
             <p className="text-6xl font-mono text-center mt-8 font-black text-red-400">{resetCountdown}</p>
           </div>
@@ -2101,7 +2153,14 @@ export default function Home() {
         {/* ========== 通算成績 ========== */}
         {activeTab === 'totalRanking' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
-            <h2 className="text-xl font-bold mb-1">今年度通算成績ランキング</h2>
+            <div className="flex items-start justify-between gap-3 mb-1">
+              <h2 className="text-xl font-bold">今年度通算成績ランキング</h2>
+              {isAdmin && (
+                <button onClick={handleResetAllTotals} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg font-bold text-xs transition whitespace-nowrap">
+                  🗑️ 全員の通算成績をリセット
+                </button>
+              )}
+            </div>
             <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 align-middle mr-1"></span>
               年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です
@@ -2375,11 +2434,19 @@ export default function Home() {
                 <p className="text-sm text-slate-400">登録されている過去大会はまだありません。</p>
               ) : (
                 <div className="space-y-3">
-                  {archives.map(a => {
+                  {[...archives].sort((x, y) => tournamentSortKey(x.name) - tournamentSortKey(y.name)).map(a => {
                     const isOpen = openArchiveId === a.id;
                     return (
                       <div key={a.id} className="border border-slate-200 rounded-xl overflow-hidden">
-                        <button onClick={() => setOpenArchiveId(isOpen ? null : a.id)} className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition text-left">
+                        <button
+                          onClick={() => {
+                            const next = isOpen ? null : a.id;
+                            setOpenArchiveId(next);
+                            setOpenArchivePlayerId(null);
+                            setOpenArchiveHanchanIdx(null);
+                          }}
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition text-left"
+                        >
                           <span className="font-black text-slate-800">{a.name}</span>
                           <span className="text-xs text-slate-400 flex items-center gap-3">
                             {a.standings.length}名 ／ {a.hanchans.length}半荘
@@ -2394,6 +2461,7 @@ export default function Home() {
                         {isOpen && (
                           <div className="p-4">
                             {a.notes && <p className="text-xs text-slate-500 mb-3">📝 {a.notes}</p>}
+                            <p className="text-[11px] text-slate-400 mb-2">選手名をクリックすると半荘ごとの成績、さらにその半荘をクリックすると同卓者が見られます。</p>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs">
                                 <thead>
@@ -2405,14 +2473,68 @@ export default function Home() {
                                   </tr>
                                 </thead>
                                 <tbody>
-                                  {[...a.standings].sort((x, y) => x.rank - y.rank).map(s => (
-                                    <tr key={s.playerId} className="border-b border-slate-100">
-                                      <td className="py-1 pr-2 text-slate-400">{s.rank}</td>
-                                      <td className="py-1 pr-2 font-bold text-slate-700"><PlayerLabel name={nameOf(s.playerId, s.name)} /></td>
-                                      <td className="py-1 pr-2 text-right text-slate-500">{s.gameCount}</td>
-                                      <td className={`py-1 text-right font-bold ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
-                                    </tr>
-                                  ))}
+                                  {[...a.standings].sort((x, y) => x.rank - y.rank).map(s => {
+                                    const isPlayerOpen = openArchivePlayerId === s.playerId;
+                                    const rows = isPlayerOpen ? getPlayerRowsInArchive(a, s.playerId) : [];
+                                    return (
+                                      <React.Fragment key={s.playerId}>
+                                        <tr
+                                          className={`border-b border-slate-100 cursor-pointer transition ${isPlayerOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                          onClick={() => {
+                                            const next = isPlayerOpen ? null : s.playerId;
+                                            setOpenArchivePlayerId(next);
+                                            setOpenArchiveHanchanIdx(null);
+                                          }}
+                                        >
+                                          <td className="py-1 pr-2 text-slate-400">{s.rank}</td>
+                                          <td className="py-1 pr-2 font-bold text-slate-700"><PlayerLabel name={nameOf(s.playerId, s.name)} /></td>
+                                          <td className="py-1 pr-2 text-right text-slate-500">{s.gameCount}</td>
+                                          <td className={`py-1 text-right font-bold ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
+                                        </tr>
+                                        {isPlayerOpen && (
+                                          <tr>
+                                            <td colSpan={4} className="p-0 bg-slate-50/60 border-b border-slate-200">
+                                              <div className="px-3 py-2 space-y-1">
+                                                {rows.length === 0 ? (
+                                                  <p className="text-slate-400 py-1">半荘ごとの記録がありません。</p>
+                                                ) : rows.map((r, i) => {
+                                                  const hKey = i;
+                                                  const isHOpen = openArchiveHanchanIdx === hKey;
+                                                  return (
+                                                    <div key={i} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                                      <div
+                                                        className={`flex items-center justify-between gap-2 px-3 py-1.5 cursor-pointer transition ${isHOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                                        onClick={() => setOpenArchiveHanchanIdx(isHOpen ? null : hKey)}
+                                                      >
+                                                        <span className="text-slate-400 w-8">#{i + 1}</span>
+                                                        <span className="text-slate-600 font-bold w-10">{r.rank}位</span>
+                                                        <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
+                                                        <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                                                      </div>
+                                                      {isHOpen && (
+                                                        <div className="px-3 pb-2 pt-1 bg-white border-t border-slate-100">
+                                                          {r.table.map(tp => (
+                                                            <div key={tp.playerId} className={`flex items-center justify-between px-2 py-1 text-[11px] rounded ${tp.playerId === s.playerId ? 'bg-indigo-50' : ''}`}>
+                                                              <span className="text-slate-600 font-bold truncate flex-1">
+                                                                <span className="text-slate-400 font-mono mr-1">{tp.rank}位</span>
+                                                                <PlayerLabel name={tp.name} />
+                                                              </span>
+                                                              <span className="text-slate-400 mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
+                                                              <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(tp.point)}</span>
+                                                            </div>
+                                                          ))}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
+                                    );
+                                  })}
                                 </tbody>
                               </table>
                             </div>
