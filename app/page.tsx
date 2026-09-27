@@ -34,6 +34,7 @@ type Player = {
   totalPoint: number;
   totalGames: number;
   championshipRight?: boolean; // 年間チャンピオン大会 出場権（手動付与）
+  loginCode?: string; // 選手ログイン用のパスワード（英数字6桁程度・ランダム発行）
 };
 
 type PlayerScore = {
@@ -106,6 +107,17 @@ type TournamentArchive = {
 // ==========================================
 const isKuroko = (name: string) => name.includes('黒子');
 const fmtPt = (n: number) => (n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
+
+// 選手ログイン用コードの生成（見間違えやすい 0/O, 1/I/L を除いた英数字6桁）
+const LOGIN_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const generateLoginCode = (existing: Set<string>): string => {
+  let code = '';
+  do {
+    code = Array.from({ length: 6 }, () => LOGIN_CODE_CHARS[Math.floor(Math.random() * LOGIN_CODE_CHARS.length)]).join('');
+  } while (existing.has(code));
+  existing.add(code);
+  return code;
+};
 
 // 名前の末尾が P の選手は麻雀プロ（"プロ"という文字を含むだけでは判定しない）
 const PRO_SUFFIX = /[PＰⓅⓟ]$/;
@@ -546,6 +558,7 @@ const api = {
       totalPoint: Number(p.total_point),
       totalGames: p.total_games,
       championshipRight: p.championship_right,
+      loginCode: p.login_code || undefined,
     }));
   },
 
@@ -558,6 +571,7 @@ const api = {
         total_point: player.totalPoint,
         total_games: player.totalGames,
         championship_right: player.championshipRight ?? false,
+        login_code: player.loginCode || null,
       }]);
     if (error) console.error('プレイヤー保存エラー:', error);
   },
@@ -570,6 +584,7 @@ const api = {
         total_point: updatedPlayer.totalPoint,
         total_games: updatedPlayer.totalGames,
         championship_right: updatedPlayer.championshipRight ?? false,
+        login_code: updatedPlayer.loginCode || null,
       })
       .eq('id', updatedPlayer.id);
     if (error) console.error('プレイヤー更新エラー:', error);
@@ -702,6 +717,12 @@ export default function Home() {
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'archives' | 'players'>('tournament');
+
+  // ---- 選手ログイン（Googleを使わない、コードだけの簡易ログイン） ----
+  const [loggedInPlayerId, setLoggedInPlayerId] = useState<string | null>(null);
+  const [showPlayerLogin, setShowPlayerLogin] = useState(false);
+  const [loginCodeInput, setLoginCodeInput] = useState('');
+  const [loginError, setLoginError] = useState('');
   const [tournamentPhase, setTournamentPhase] = useState<'entry' | 'playing'>('entry');
   
   const [dbPlayers, setDbPlayers] = useState<Player[]>([]);
@@ -738,6 +759,36 @@ export default function Home() {
       setActiveTab('tournament');
     }
   }, [isAdmin, activeTab, isLoaded]);
+
+  // 選手ログインをブラウザに保持し、再読み込みしてもログイン状態を維持する
+  useEffect(() => {
+    const saved = localStorage.getItem('mahjong_player_login_id');
+    if (saved) setLoggedInPlayerId(saved);
+  }, []);
+  useEffect(() => {
+    if (loggedInPlayerId) localStorage.setItem('mahjong_player_login_id', loggedInPlayerId);
+    else localStorage.removeItem('mahjong_player_login_id');
+  }, [loggedInPlayerId]);
+
+  const loggedInPlayer = dbPlayers.find(p => p.id === loggedInPlayerId) || null;
+
+  const handlePlayerLogin = () => {
+    const code = loginCodeInput.trim().toUpperCase();
+    if (!code) return;
+    const found = dbPlayers.find(p => (p.loginCode || '').toUpperCase() === code);
+    if (!found) {
+      setLoginError('コードが正しくありません。もう一度確認してください。');
+      return;
+    }
+    setLoggedInPlayerId(found.id);
+    setShowPlayerLogin(false);
+    setLoginCodeInput('');
+    setLoginError('');
+  };
+
+  const handlePlayerLogout = () => {
+    setLoggedInPlayerId(null);
+  };
 
   useEffect(() => {
     const loadData = async () => {
@@ -786,17 +837,43 @@ export default function Home() {
     e.preventDefault();
     if (!isAdmin) return;
     if (!newPlayerName.trim()) return;
+    const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
     const newPlayer: Player = {
       id: crypto.randomUUID(),
       name: newPlayerName.trim(),
       totalPoint: newPlayerPoint,
       totalGames: newPlayerGames,
       championshipRight: isPro(newPlayerName) ? false : newPlayerRight,
+      loginCode: generateLoginCode(existingCodes),
     };
     await api.savePlayer(newPlayer);
     setDbPlayers(await api.getPlayers());
     setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerGames(0); setNewPlayerRight(false);
-    alert(`${newPlayer.name} を登録しました！`);
+    alert(`${newPlayer.name} を登録しました！\nログインコード: ${newPlayer.loginCode}`);
+  };
+
+  // 既にログインコードを持っていない選手（旧データなど）にまとめて発行する
+  const [isIssuingCodes, setIsIssuingCodes] = useState(false);
+  const handleIssueMissingCodes = async () => {
+    if (!isAdmin) return;
+    const missing = dbPlayers.filter(p => !p.loginCode);
+    if (missing.length === 0) { alert('未発行の選手はいません。'); return; }
+    if (!window.confirm(`${missing.length}名にログインコードを発行します。よろしいですか？`)) return;
+    setIsIssuingCodes(true);
+    try {
+      const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+      for (const p of missing) {
+        const loginCode = generateLoginCode(existingCodes);
+        await api.updatePlayer({ ...p, loginCode });
+      }
+      setDbPlayers(await api.getPlayers());
+      alert(`${missing.length}名分のログインコードを発行しました。`);
+    } catch (err) {
+      console.error(err);
+      alert('発行中にエラーが発生しました。コンソールを確認してください。');
+    } finally {
+      setIsIssuingCodes(false);
+    }
   };
 
   const startEditPlayer = (p: Player) => {
@@ -1050,8 +1127,13 @@ export default function Home() {
   // ----------------------------------------
   // C. スコア計算 (供託のトップ取り + チョンボ)
   // ----------------------------------------
+  // 管理者、または「その卓に座っていてまだ送信していない」ログイン中の選手なら編集可能。
+  // 送信済みの卓は運営（管理者）にしか編集できない。
+  const canEditTable = (table: Table) =>
+    isAdmin || (!!loggedInPlayerId && !table.isSubmitted && table.players.some(p => p.playerId === loggedInPlayerId));
+
   const handleScoreChange = (rIdx: number, tIdx: number, pIdx: number, val: number) => {
-    if (!isAdmin) return;
+    if (!canEditTable(seating[rIdx].tables[tIdx])) return;
     const updated = [...seating];
     if (updated[rIdx].tables[tIdx].isSubmitted) return;
     updated[rIdx].tables[tIdx].players[pIdx].score = val;
@@ -1060,7 +1142,7 @@ export default function Home() {
   };
 
   const handleChonboChange = (rIdx: number, tIdx: number, pIdx: number, delta: number) => {
-    if (!isAdmin) return;
+    if (!canEditTable(seating[rIdx].tables[tIdx])) return;
     const updated = [...seating];
     const table = updated[rIdx].tables[tIdx];
     if (table.isSubmitted) return;
@@ -1071,7 +1153,7 @@ export default function Home() {
   };
 
   const calculateTablePoints = (rIdx: number, tIdx: number) => {
-    if (!isAdmin) return;
+    if (!canEditTable(seating[rIdx].tables[tIdx])) return;
     const updated = [...seating];
     const table = updated[rIdx].tables[tIdx];
     const sum = table.players.reduce((acc, p) => acc + (p.score || 0), 0);
@@ -1119,10 +1201,13 @@ export default function Home() {
   // D. 送信と「送信の取り消し(編集)」
   // ----------------------------------------
   const handleSubmitTable = async (rIdx: number, tIdx: number) => {
-    if (!isAdmin) return;
     const table = seating[rIdx].tables[tIdx];
+    if (!canEditTable(table)) return;
     if (!table.isCalculated) { alert('先にスコアを計算してください。'); return; }
-    if (!window.confirm('クラウドに送信しますか？')) return;
+    const confirmMsg = isAdmin
+      ? 'クラウドに送信しますか？'
+      : '本当に送信しますか？\n\n卓内の1人が入力後、全員の確認を取ってから送信ボタンを押してください。\n送信後、一度確定すると自分では修正できません。間違いが発覚した場合は運営にお知らせください。';
+    if (!window.confirm(confirmMsg)) return;
 
     const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point, gamesDelta: 1 }));
     await api.updatePlayersScores(updates);
@@ -1259,7 +1344,8 @@ export default function Home() {
     const name = quickName.trim();
     if (!name) return;
     if (!window.confirm(`「${name}」を新規登録して今大会の参加者に追加しますか？`)) return;
-    const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false };
+    const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+    const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false, loginCode: generateLoginCode(existingCodes) };
     await api.savePlayer(newPlayer);
     setDbPlayers(await api.getPlayers());
     setEntryPlayerIds([...entryPlayerIds, newPlayer.id]);
@@ -1375,7 +1461,8 @@ export default function Home() {
         if (nameToId.has(name)) return nameToId.get(name)!;
         const found = workingPlayers.find(p => p.name === name);
         if (found) { nameToId.set(name, found.id); return found.id; }
-        const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false };
+        const existingCodes = new Set<string>(workingPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+        const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false, loginCode: generateLoginCode(existingCodes) };
         await api.savePlayer(newPlayer);
         workingPlayers = [...workingPlayers, newPlayer];
         nameToId.set(name, newPlayer.id);
@@ -1881,6 +1968,42 @@ export default function Home() {
 </body></html>`;
   };
 
+  const handlePrintLoginCodes = () => {
+    const rows = [...dbPlayers]
+      .filter(p => !isKuroko(p.name))
+      .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    const cards = rows.map(p => `
+      <div class="card">
+        <div class="name">${escapeHtml(proMarkedName(p.name))}</div>
+        <div class="label">ログインコード</div>
+        <div class="code">${p.loginCode || '（未発行）'}</div>
+      </div>`).join('');
+    const html = `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8" />
+<title>選手ログインコード一覧</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif; margin:0; padding:16px; color:#0f172a; }
+  h1 { font-size:16px; margin:0 0 12px; }
+  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
+  .card { border:1px solid #cbd5e1; border-radius:8px; padding:12px; text-align:center; page-break-inside: avoid; }
+  .name { font-weight:bold; font-size:14px; margin-bottom:6px; }
+  .label { font-size:10px; color:#64748b; }
+  .code { font-family: monospace; font-size:22px; font-weight:bold; letter-spacing:0.15em; margin-top:2px; }
+  @media print { @page { size: A4; margin: 10mm; } }
+</style></head>
+<body>
+  <h1>${escapeHtml(APP_TITLE)} ／ 選手ログインコード一覧（切り離して配布してください）</h1>
+  <div class="grid">${cards}</div>
+</body></html>`;
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 600);
+  };
+
   const handleExportPdf = () => {
     const html = buildReportHtml();
     const w = window.open('', '_blank');
@@ -2049,6 +2172,29 @@ export default function Home() {
         </div>
       )}
 
+      {showPlayerLogin && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowPlayerLogin(false)}>
+          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-slate-800 mb-1">🀄 選手ログイン</h2>
+            <p className="text-xs text-slate-500 mb-4">配布されたログインコードを入力してください。</p>
+            <input
+              type="text"
+              value={loginCodeInput}
+              onChange={(e) => { setLoginCodeInput(e.target.value); setLoginError(''); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePlayerLogin(); }}
+              placeholder="例: A3K7QZ"
+              autoFocus
+              className="w-full p-3 border-2 border-slate-200 focus:border-teal-500 rounded-lg text-center text-2xl font-mono font-bold tracking-widest uppercase outline-none"
+            />
+            {loginError && <p className="text-xs font-bold text-red-600 mt-2">{loginError}</p>}
+            <div className="flex gap-2 mt-4">
+              <button onClick={() => setShowPlayerLogin(false)} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition">キャンセル</button>
+              <button onClick={handlePlayerLogin} disabled={!loginCodeInput.trim()} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 text-white transition">ログイン</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========== ヘッダー (1行固定・折り返しなし) ========== */}
       <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -2088,6 +2234,24 @@ export default function Home() {
                 📂 復元
                 <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
               </label>
+            </div>
+          )}
+
+          {/* 選手ログイン（管理者以外向け） */}
+          {!isAdmin && (
+            <div className="flex-shrink-0 flex gap-2 items-center">
+              {loggedInPlayer ? (
+                <>
+                  <span className="text-[11px] font-bold text-teal-300 whitespace-nowrap">
+                    👤 {loggedInPlayer.name}
+                  </span>
+                  <button onClick={handlePlayerLogout} className="text-[11px] bg-slate-800 hover:bg-red-600 px-2.5 py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                </>
+              ) : (
+                <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-[11px] bg-teal-600 hover:bg-teal-500 px-3 py-1.5 rounded-md font-bold transition whitespace-nowrap">
+                  🀄 選手ログイン
+                </button>
+              )}
             </div>
           )}
 
@@ -2146,6 +2310,41 @@ export default function Home() {
 
                 <button type="submit" className="md:col-span-4 mt-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition">登録して保存</button>
               </form>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-xl font-bold">🔑 選手ログインコード一覧</h2>
+                <div className="flex gap-2">
+                  <button onClick={handleIssueMissingCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg transition">
+                    {isIssuingCodes ? '発行中...' : '未発行分をまとめて発行'}
+                  </button>
+                  <button onClick={handlePrintLoginCodes} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg transition">
+                    🖨️ 印刷する
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+                選手はこのコードだけでログインでき、自分が座っている卓の成績のみ入力できます（選手名の入力は不要です）。印刷して1人1枚ずつ配布してください。
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-600">
+                      <th className="p-2 font-bold">選手名</th>
+                      <th className="p-2 font-bold">ログインコード</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...dbPlayers].sort((a, b) => a.name.localeCompare(b.name, 'ja')).map(p => (
+                      <tr key={p.id} className="border-b border-slate-100">
+                        <td className="p-2 font-bold"><PlayerLabel name={p.name} /></td>
+                        <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || <span className="text-slate-300 font-sans font-normal">未発行</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -3026,11 +3225,11 @@ export default function Home() {
                                                       {p.wind}: <PlayerLabel name={p.name} className="text-indigo-900" />
                                                     </span>
                                                     
-                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-1.5 transition ${table.isSubmitted || !isAdmin ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
+                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
                                                       <input
-                                                        type="number" value={p.score} disabled={table.isSubmitted || !isAdmin}
+                                                        type="number" value={p.score} disabled={table.isSubmitted || !canEditTable(table)}
                                                         onChange={(e) => handleScoreChange(rIdx, tIdx, pIdx, Number(e.target.value))}
-                                                        className={`w-16 text-right font-mono font-bold text-lg outline-none ${table.isSubmitted || !isAdmin ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
+                                                        className={`w-16 text-right font-mono font-bold text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
                                                       />
                                                       <span className="text-slate-400 font-bold text-sm ml-1 select-none">00</span>
                                                     </div>
@@ -3041,7 +3240,7 @@ export default function Home() {
                                                   </div>
 
                                                   {/* チョンボ */}
-                                                  {(isAdmin && !table.isSubmitted) ? (
+                                                  {(canEditTable(table) && !table.isSubmitted) ? (
                                                     <div className="flex items-center justify-end gap-2 mt-2 pr-1">
                                                       <span className="text-[11px] font-bold text-slate-400 mr-auto pl-1">チョンボ</span>
                                                       <button onClick={() => handleChonboChange(rIdx, tIdx, pIdx, -1)}
@@ -3064,22 +3263,28 @@ export default function Home() {
                                             })}
                                           </div>
 
-                                          {isAdmin && (
-                                            <div className="mt-6 flex gap-2">
+                                          {!table.isSubmitted && canEditTable(table) && !isAdmin && (
+                                            <div className="mt-5 p-3 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800 leading-relaxed">
+                                              ⚠️ 卓内の1人が入力後、<span className="font-bold">全員の確認を取ってから</span>送信ボタンを押してください。送信すると自分では修正できなくなります。送信後に間違いが見つかった場合は、運営にお知らせください。
+                                            </div>
+                                          )}
+
+                                          {canEditTable(table) && (
+                                            <div className="mt-3 flex gap-2">
                                               {!table.isSubmitted ? (
                                                 <>
                                                   <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
                                                     {table.isCalculated ? '再計算' : '計算・確定'}
                                                   </button>
                                                   <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
-                                                    クラウドへ送信
+                                                    送信する
                                                   </button>
                                                 </>
-                                              ) : (
+                                              ) : isAdmin ? (
                                                 <button onClick={() => handleRevokeTable(rIdx, tIdx)} className="flex-1 py-3 rounded-lg font-bold text-sm transition bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300">
                                                   送信を取り消して編集する
                                                 </button>
-                                              )}
+                                              ) : null}
                                             </div>
                                           )}
                                         </div>

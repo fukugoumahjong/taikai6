@@ -1,0 +1,346 @@
+{
+  "players": [
+    {
+      "id": "9734663e-bd6b-48e7-b7a9-b1ec0e083253",
+      "name": "Ogibo",
+      "totalPoint": 401.6,
+      "totalGames": 20,
+      "championshipRight": true
+    },
+    {
+      "id": "5f451804-215e-4406-b4d1-4282f4cc3a48",
+      "name": "Toku",
+      "totalPoint": 362.8,
+      "totalGames": 20,
+      "championshipRight": true
+    },
+    {
+      "id": "02a849ba-157d-4b1d-bc90-9250100b76e9",
+      "name": "あおい",
+      "totalPoint": 144.8,
+      "totalGames": 20,
+      "championshipRight": true
+    },
+    {
+      "id": "dedadae7-be6f-4990-96ee-da5532c33bc6",
+      "name": "尾崎 太郎",
+      "totalPoint": 139.4,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "dc44074a-ec1c-4a51-8a95-a67ccc0dc838",
+      "name": "pu-",
+      "totalPoint": 114.8,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "3efdc889-2ad9-4439-860c-f815cfef9663",
+      "name": "はるのしん",
+      "totalPoint": 86.9,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "66909a90-0e51-4aac-9d36-d2928afb2bf7",
+      "name": "立直",
+      "totalPoint": 68.7,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "cd5b906e-671e-4484-a381-8be9dc5e46ab",
+      "name": "とらっぴ",
+      "totalPoint": 68.4,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "b965a054-0b1d-4792-b249-e14dffab3a7a",
+      "name": "千葉県のYさん",
+      "totalPoint": 63.7,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "591d09a3-fcc0-4f7a-a74e-b5268299fdbd",
+      "name": "おーちゃ",
+      "totalPoint": 51.5,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf",
+      "name": "moroU",
+      "totalPoint": 45.7,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "ffecb65f-d5ce-428a-a8bf-694cad4192a0",
+      "name": "偏屈な向日葵",
+      "totalPoint": 41.8,
+      "totalGames": 18,
+      "championshipRight": false
+    },
+    {
+      "id": "d8bca931-be20-4613-94d6-a46d04b69cbc",
+      "name": "なぎ",
+      "totalPoint": 32.6,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "d968bc70-c601-4762-83f1-b9180ed91dcf",
+      "name": "いぼっち",
+      "totalPoint": 19.7,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "de9e46b5-c3da-4d9d-8a33-1cb931416011",
+      "name": "れいんえふ",
+      "totalPoint": 4.2,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "f2d8c61a-bff4-49b4-a786-3b2f836ac17f",
+      "name": "カズキ",
+      "totalPoint": 2.9,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "1f3efa80-3ee1-4d83-9f18-3c96133e76cc",
+      "name": "ゆずぽん",
+      "totalPoint": -12,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "9e34f99c-6ec8-4786-951e-9adafbe215df",
+      "name": "みこっぱち",
+      "totalPoint": -18,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "05818d60-0362-4ca7-b865-e65dafadaf71",
+      "name": "shon",
+      "totalPoint": -23.6,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c",
+      "name": "外道城",
+      "totalPoint": -52.2,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "12c4bffd-0dbc-4482-b081-f39dafb1bcdd",
+      "name": "井上財閥",
+      "totalPoint": -79.3,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "f4b7ffed-f93d-4c99-976e-ee980473832e",
+      "name": "あかね",
+      "totalPoint": -87.3,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "313fd8ea-1dad-4f16-807b-e82e989b0808",
+      "name": "人亜目",
+      "totalPoint": -99.2,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "853bba16-ccdf-4a22-830d-18e71c1bb264",
+      "name": "和太鼓",
+      "totalPoint": -103.8,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "fe65b266-1f34-4a01-9551-4bee169c3dc1",
+      "name": "櫟木",
+      "totalPoint": -112.2,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "b47cf5fd-c0d9-47ab-8618-cc92b3956112",
+      "name": "鯨井商事",
+      "totalPoint": -201.3,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "a359fe66-83a4-413b-ab95-cf8a44718de7",
+      "name": "nagiまろん",
+      "totalPoint": -211.8,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "6262fba3-240a-4612-a4d8-e2b923012eb9",
+      "name": "睡産",
+      "totalPoint": -211.9,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "0196b2c7-d628-4173-8493-b9255c6da253",
+      "name": "Xe",
+      "totalPoint": -228.6,
+      "totalGames": 10,
+      "championshipRight": false
+    },
+    {
+      "id": "590ccb69-8817-4400-90ce-5c8887ae231d",
+      "name": "ゴマ油",
+      "totalPoint": -322.9,
+      "totalGames": 20,
+      "championshipRight": false
+    },
+    {
+      "id": "932677ed-d4f1-45ae-a17f-233a109e5281",
+      "name": "ピノット麻雀",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "dfcb17cb-4c44-4e26-a6b6-1304069a4ce0",
+      "name": "トナリニトロロ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "119e6f35-abdf-4750-a35e-6ff3ac88bd4f",
+      "name": "Jotaro",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "1df42c35-bbef-44f0-968e-ced28219a144",
+      "name": "萬拾",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "57029fdf-a134-4deb-b7ae-9ec86d9d3d9a",
+      "name": "Nakkun",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "e71179a6-5aa4-4dce-893e-694a7479d0d5",
+      "name": "岡崎 正道",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "fab7ecc0-d307-4408-8723-8dfd1db4ed94",
+      "name": "裏目ノプロ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "f66100c5-c061-45e4-8907-77168310a852",
+      "name": "し",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "3003bec1-d21b-4086-a08f-85c1fee26337",
+      "name": "たらこ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "ec2cdcf7-056b-4638-94c5-9e81abed05d6",
+      "name": "かなぴよ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "5a575c2d-e998-4ead-a136-4b4aa0b4ad67",
+      "name": "ちからかな",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "bf5fafb9-1937-49b3-b360-00aa1d869900",
+      "name": "アルス",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "1944a64c-6410-4a93-8282-314f717a9258",
+      "name": "暇人太郎",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "8018afab-2358-49e5-a517-f1468d337d5f",
+      "name": "りょうじ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "17be6baf-1355-4940-bb4e-c46483f80464",
+      "name": "藤田 明人P",
+      "totalPoint": 87.8,
+      "totalGames": 8,
+      "championshipRight": false
+    },
+    {
+      "id": "20ed8e7f-29fb-4b78-a4f4-286e58831aae",
+      "name": "松澤 悠介P",
+      "totalPoint": 42,
+      "totalGames": 15,
+      "championshipRight": false
+    },
+    {
+      "id": "944a825d-2025-4908-a702-5eb5ec5436b6",
+      "name": "紀平 一磨",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    },
+    {
+      "id": "6dbaabca-79d3-4d0e-9f89-7915f69acea0",
+      "name": "黒子",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false
+    }
+  ],
+  "tournament": {
+    "seating": [],
+    "roundsCount": 4,
+    "entryPlayerIds": [],
+    "tournamentPhase": "entry"
+  }
+}
