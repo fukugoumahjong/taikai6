@@ -207,6 +207,17 @@ const ArchiveHistoryMini = ({
 type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
 type PlayerDetailHanchanGroup = { key: string; label: string; rows: PlayerDetailHanchanRow[] };
+// ログイン中の本人だけに見せる「この後の対局」
+type UpcomingMatch = {
+  key: string;
+  roundNo: number;
+  time: string | null;
+  status: 'ready' | 'pending' | 'sitout';
+  tableNo?: number;
+  wind?: string;
+  isFinal?: boolean;
+  opponents?: { name: string; wind: string }[];
+};
 
 const PlayerDetailModal = ({
   player,
@@ -216,6 +227,7 @@ const PlayerDetailModal = ({
   penalties,
   maxScore,
   hanchanGroups,
+  upcoming,
   onClose,
 }: {
   player: Player;
@@ -225,6 +237,7 @@ const PlayerDetailModal = ({
   penalties: { archiveId: string; archiveName: string; point: number; reason: string }[];
   maxScore: { score: number; label: string } | null;
   hanchanGroups: PlayerDetailHanchanGroup[];
+  upcoming?: UpcomingMatch[];
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
@@ -261,6 +274,49 @@ const PlayerDetailModal = ({
 
         {/* 本文 */}
         <div className="overflow-y-auto p-5 md:p-8 space-y-8">
+          {/* この後の対局（ログイン中の本人のみ） */}
+          {upcoming && (
+            <section>
+              <h3 className="text-sm font-black text-slate-700 mb-3">📌 この後の対局</h3>
+              {upcoming.length === 0 ? (
+                <p className="text-xs text-slate-400">この後の対局はありません。</p>
+              ) : (
+                <div className="space-y-2">
+                  {upcoming.map(u => (
+                    <div
+                      key={u.key}
+                      className={`rounded-lg border px-3 py-2.5 text-sm ${u.isFinal ? 'border-amber-300 bg-amber-50' : u.status === 'ready' ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200 bg-slate-50'}`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-black text-slate-800">
+                          {u.roundNo}回戦
+                          {u.time && <span className="ml-2 text-[11px] font-bold text-slate-400">{u.time}〜</span>}
+                        </span>
+                        {u.status === 'ready' && (
+                          <span className="text-xs font-black text-indigo-700">
+                            {u.isFinal && '👑 決勝卓 '}{u.tableNo}卓・{u.wind}家
+                          </span>
+                        )}
+                        {u.status === 'pending' && <span className="text-xs font-bold text-slate-400">卓組未定</span>}
+                        {u.status === 'sitout' && <span className="text-xs font-bold text-slate-400">抜け番</span>}
+                      </div>
+                      {u.status === 'ready' && u.opponents && (
+                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-600">
+                          {u.opponents.map((o, i) => (
+                            <span key={i}><span className="text-slate-400 mr-1">{o.wind}</span><PlayerLabel name={o.name} className="font-bold" /></span>
+                          ))}
+                        </div>
+                      )}
+                      {u.status === 'pending' && (
+                        <p className="mt-1 text-[11px] text-slate-400">前の回戦が全て終了した時点で、順位順に卓組が決まります。</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+
           {/* 大会別成績 */}
           <section>
             <h3 className="text-sm font-black text-slate-700 mb-3">大会別成績</h3>
@@ -574,6 +630,7 @@ const api = {
         login_code: player.loginCode || null,
       }]);
     if (error) console.error('プレイヤー保存エラー:', error);
+    return !error;
   },
 
   updatePlayer: async (updatedPlayer: Player) => {
@@ -588,6 +645,7 @@ const api = {
       })
       .eq('id', updatedPlayer.id);
     if (error) console.error('プレイヤー更新エラー:', error);
+    return !error;
   },
 
   updatePlayersScores: async (updates: { id: string; pointDelta: number; gamesDelta: number }[]) => {
@@ -761,14 +819,17 @@ export default function Home() {
   }, [isAdmin, activeTab, isLoaded]);
 
   // 選手ログインをブラウザに保持し、再読み込みしてもログイン状態を維持する
+  const [loginRestored, setLoginRestored] = useState(false);
   useEffect(() => {
     const saved = localStorage.getItem('mahjong_player_login_id');
     if (saved) setLoggedInPlayerId(saved);
+    setLoginRestored(true);
   }, []);
   useEffect(() => {
+    if (!loginRestored) return; // 復元前に保存内容を消してしまわないようにする
     if (loggedInPlayerId) localStorage.setItem('mahjong_player_login_id', loggedInPlayerId);
     else localStorage.removeItem('mahjong_player_login_id');
-  }, [loggedInPlayerId]);
+  }, [loggedInPlayerId, loginRestored]);
 
   const loggedInPlayer = dbPlayers.find(p => p.id === loggedInPlayerId) || null;
 
@@ -846,7 +907,11 @@ export default function Home() {
       championshipRight: isPro(newPlayerName) ? false : newPlayerRight,
       loginCode: generateLoginCode(existingCodes),
     };
-    await api.savePlayer(newPlayer);
+    const saved = await api.savePlayer(newPlayer);
+    if (!saved) {
+      alert('登録に失敗しました。Supabaseで add_player_login_code.sql を実行済みか確認してください。（コンソールにエラーが出ています）');
+      return;
+    }
     setDbPlayers(await api.getPlayers());
     setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerGames(0); setNewPlayerRight(false);
     alert(`${newPlayer.name} を登録しました！\nログインコード: ${newPlayer.loginCode}`);
@@ -862,12 +927,20 @@ export default function Home() {
     setIsIssuingCodes(true);
     try {
       const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+      let failed = 0;
       for (const p of missing) {
         const loginCode = generateLoginCode(existingCodes);
-        await api.updatePlayer({ ...p, loginCode });
+        const ok = await api.updatePlayer({ ...p, loginCode });
+        if (!ok) failed++;
       }
-      setDbPlayers(await api.getPlayers());
-      alert(`${missing.length}名分のログインコードを発行しました。`);
+      const refreshed = await api.getPlayers();
+      setDbPlayers(refreshed);
+      const stillMissing = refreshed.filter(p => !p.loginCode).length;
+      if (failed > 0 || stillMissing > 0) {
+        alert(`コードを保存できませんでした（未発行 ${stillMissing}名）。\n\nSupabaseのSQL Editorで add_player_login_code.sql を実行済みか確認してください。\n（playersテーブルにlogin_code列が無い、または更新権限が無い場合に発生します）`);
+      } else {
+        alert(`${missing.length}名分のログインコードを発行しました。`);
+      }
     } catch (err) {
       console.error(err);
       alert('発行中にエラーが発生しました。コンソールを確認してください。');
@@ -875,6 +948,58 @@ export default function Home() {
       setIsIssuingCodes(false);
     }
   };
+
+  // 発行済みコードの取り消し（1人分）
+  const handleRevokeCode = async (p: Player) => {
+    if (!isAdmin || !p.loginCode) return;
+    if (!window.confirm(`${p.name} のログインコードを取り消しますか？\n取り消すと、この選手は現在のコードでログインできなくなります。`)) return;
+    const ok = await api.updatePlayer({ ...p, loginCode: undefined });
+    setDbPlayers(await api.getPlayers());
+    if (!ok) alert('取り消しに失敗しました。コンソールを確認してください。');
+  };
+
+  // 発行済みコードの取り消し（全員分）
+  const handleRevokeAllCodes = async () => {
+    if (!isAdmin) return;
+    const targets = dbPlayers.filter(p => !!p.loginCode);
+    if (targets.length === 0) { alert('発行済みのコードはありません。'); return; }
+    if (!window.confirm(`発行済みの ${targets.length}名分のログインコードを全て取り消しますか？\n取り消すと、全員が現在のコードでログインできなくなります。`)) return;
+    setIsIssuingCodes(true);
+    try {
+      let failed = 0;
+      for (const p of targets) {
+        const ok = await api.updatePlayer({ ...p, loginCode: undefined });
+        if (!ok) failed++;
+      }
+      setDbPlayers(await api.getPlayers());
+      alert(failed > 0 ? `${failed}名分の取り消しに失敗しました。コンソールを確認してください。` : `${targets.length}名分のコードを取り消しました。`);
+    } finally {
+      setIsIssuingCodes(false);
+    }
+  };
+
+  // 1人分のコードを新しく発行し直す（漏えい・紛失時など）
+  const handleReissueCode = async (p: Player) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`${p.name} のログインコードを${p.loginCode ? '再発行（古いコードは無効に）' : '発行'}しますか？`)) return;
+    const existingCodes = new Set<string>(dbPlayers.map(x => x.loginCode || '').filter(c => c !== ''));
+    const ok = await api.updatePlayer({ ...p, loginCode: generateLoginCode(existingCodes) });
+    setDbPlayers(await api.getPlayers());
+    if (!ok) alert('保存に失敗しました。add_player_login_code.sql を実行済みか確認してください。');
+  };
+
+  // 印刷対象から外す選手（デフォルトは全員が対象）
+  const [printExcludedIds, setPrintExcludedIds] = useState<string[]>([]);
+  const togglePrintTarget = (id: string) =>
+    setPrintExcludedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
+  const printTargets = dbPlayers.filter(p => !!p.loginCode && !isKuroko(p.name) && !printExcludedIds.includes(p.id));
+
+  // コードを取り消された（または削除された）選手が端末に残っているログインは自動で解除する
+  useEffect(() => {
+    if (!isLoaded || !loggedInPlayerId) return;
+    const me = dbPlayers.find(p => p.id === loggedInPlayerId);
+    if (!me || !me.loginCode) setLoggedInPlayerId(null);
+  }, [dbPlayers, isLoaded, loggedInPlayerId]);
 
   const startEditPlayer = (p: Player) => {
     if (!isAdmin) return;
@@ -1816,6 +1941,27 @@ export default function Home() {
     return items;
   };
 
+  // ログイン中の選手向け：これから行われる対局（卓・対戦相手・時間）
+  const getUpcomingMatches = (playerId: string): UpcomingMatch[] => {
+    const items = getPlayerSchedule(playerId);
+    const firstIdx = items.findIndex(it => it.status === 'ready' || it.status === 'pending');
+    if (firstIdx < 0) return [];
+    return items.slice(firstIdx)
+      .filter((it): it is ScheduleItem & { status: 'ready' | 'pending' | 'sitout' } => it.status !== 'done')
+      .map(it => ({
+        key: it.key,
+        roundNo: it.roundNo,
+        time: roundStartTime(it.roundNo),
+        status: it.status,
+        tableNo: it.tableNo,
+        wind: it.wind,
+        isFinal: it.status === 'ready' && it.roundNo === roundsCount && it.tableNo === 1,
+        opponents: it.table
+          ? it.table.players.filter(pl => pl.playerId !== playerId).map(pl => ({ name: pl.name, wind: pl.wind }))
+          : undefined,
+      }));
+  };
+
   const getTableRankList = (t: Table) => [...t.players].sort((a, b) => b.score - a.score);
   const getTableDeposit = (t: Table) => 1200 - t.players.reduce((s, p) => s + (p.score || 0), 0);
   const isFinalTable = (r: Round, t: Table) => r.round === roundsCount && t.tableNumber === 1 && !r.isPending;
@@ -1969,9 +2115,8 @@ export default function Home() {
   };
 
   const handlePrintLoginCodes = () => {
-    const rows = [...dbPlayers]
-      .filter(p => !isKuroko(p.name))
-      .sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    const rows = [...printTargets].sort((a, b) => a.name.localeCompare(b.name, 'ja'));
+    if (rows.length === 0) { alert('印刷する選手が選択されていません。'); return; }
     const cards = rows.map(p => `
       <div class="card">
         <div class="name">${escapeHtml(proMarkedName(p.name))}</div>
@@ -1985,11 +2130,11 @@ export default function Home() {
   * { box-sizing: border-box; }
   body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif; margin:0; padding:16px; color:#0f172a; }
   h1 { font-size:16px; margin:0 0 12px; }
-  .grid { display:grid; grid-template-columns: repeat(3, 1fr); gap:10px; }
-  .card { border:1px solid #cbd5e1; border-radius:8px; padding:12px; text-align:center; page-break-inside: avoid; }
-  .name { font-weight:bold; font-size:14px; margin-bottom:6px; }
-  .label { font-size:10px; color:#64748b; }
-  .code { font-family: monospace; font-size:22px; font-weight:bold; letter-spacing:0.15em; margin-top:2px; }
+  .grid { display:grid; grid-template-columns: repeat(4, 1fr); gap:6px; }
+  .card { border:1px solid #cbd5e1; border-radius:6px; padding:7px 4px; text-align:center; page-break-inside: avoid; }
+  .name { font-weight:bold; font-size:11px; margin-bottom:3px; word-break:break-all; }
+  .label { font-size:8px; color:#64748b; }
+  .code { font-family: monospace; font-size:16px; font-weight:bold; letter-spacing:0.1em; margin-top:1px; }
   @media print { @page { size: A4; margin: 10mm; } }
 </style></head>
 <body>
@@ -2242,9 +2387,13 @@ export default function Home() {
             <div className="flex-shrink-0 flex gap-2 items-center">
               {loggedInPlayer ? (
                 <>
-                  <span className="text-[11px] font-bold text-teal-300 whitespace-nowrap">
-                    👤 {loggedInPlayer.name}
-                  </span>
+                  <button
+                    onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
+                    className="text-[11px] font-bold bg-teal-700 hover:bg-teal-600 text-white px-2.5 py-1.5 rounded-md transition whitespace-nowrap"
+                    title="自分の個人成績と、この後の対局を見る"
+                  >
+                    👤 {loggedInPlayer.name}（個人成績）
+                  </button>
                   <button onClick={handlePlayerLogout} className="text-[11px] bg-slate-800 hover:bg-red-600 px-2.5 py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
                 </>
               ) : (
@@ -2315,31 +2464,59 @@ export default function Home() {
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold">🔑 選手ログインコード一覧</h2>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button onClick={handleIssueMissingCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg transition">
-                    {isIssuingCodes ? '発行中...' : '未発行分をまとめて発行'}
+                    {isIssuingCodes ? '処理中...' : '未発行分をまとめて発行'}
                   </button>
-                  <button onClick={handlePrintLoginCodes} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg transition">
-                    🖨️ 印刷する
+                  <button onClick={handleRevokeAllCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-red-100 hover:bg-red-200 disabled:bg-slate-200 text-red-700 px-3 py-2 rounded-lg transition">
+                    全員分を取り消す
+                  </button>
+                  <button onClick={handlePrintLoginCodes} disabled={printTargets.length === 0} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg transition">
+                    🖨️ 選択した{printTargets.length}名を印刷
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
-                選手はこのコードだけでログインでき、自分が座っている卓の成績のみ入力できます（選手名の入力は不要です）。印刷して1人1枚ずつ配布してください。
+              <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+                選手はこのコードだけでログインでき、自分が座っている卓の成績のみ入力できます（選手名の入力は不要です）。印刷する選手はチェックで選べます（コード発行済みの選手のみ対象）。
               </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button onClick={() => setPrintExcludedIds([])} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md transition">全員を選択</button>
+                <button onClick={() => setPrintExcludedIds(dbPlayers.map(p => p.id))} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md transition">全て解除</button>
+              </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
                   <thead>
                     <tr className="bg-slate-100 border-b border-slate-200 text-slate-600">
+                      <th className="p-2 font-bold w-10">印刷</th>
                       <th className="p-2 font-bold">選手名</th>
                       <th className="p-2 font-bold">ログインコード</th>
+                      <th className="p-2 font-bold text-center">操作</th>
                     </tr>
                   </thead>
                   <tbody>
                     {[...dbPlayers].sort((a, b) => a.name.localeCompare(b.name, 'ja')).map(p => (
                       <tr key={p.id} className="border-b border-slate-100">
+                        <td className="p-2">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-indigo-600"
+                            checked={!!p.loginCode && !printExcludedIds.includes(p.id)}
+                            disabled={!p.loginCode}
+                            onChange={() => togglePrintTarget(p.id)}
+                          />
+                        </td>
                         <td className="p-2 font-bold"><PlayerLabel name={p.name} /></td>
                         <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || <span className="text-slate-300 font-sans font-normal">未発行</span>}</td>
+                        <td className="p-2 text-center">
+                          <div className="inline-flex gap-1.5">
+                            <button onClick={() => handleReissueCode(p)} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-md transition">
+                              {p.loginCode ? '再発行' : '発行'}
+                            </button>
+                            {p.loginCode && (
+                              <button onClick={() => handleRevokeCode(p)} className="text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded-md transition">取り消し</button>
+                            )}
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2477,6 +2654,7 @@ export default function Home() {
               penalties={getPlayerPenalties(dp.id)}
               maxScore={getMaxScore(dp.id)}
               hanchanGroups={getPlayerHanchanGroups(dp.id)}
+              upcoming={!isAdmin && dp.id === loggedInPlayerId ? getUpcomingMatches(dp.id) : undefined}
               onClose={() => setDetailModalPlayerId(null)}
             />
           );
