@@ -11,8 +11,10 @@ import { supabase } from '@/lib/supabase';
 const APP_TITLE = '高等学校複合麻雀競技大会';
 const RULE_NAME = '最高位戦ルール';
 const CHONBO_PENALTY = 20.0;
-// 年間チャンピオン大会 出場権の「対象」表示に使う通算半荘数のしきい値
-const CHAMPIONSHIP_GAMES = 11;
+// 年間チャンピオン大会 出場権の「対象」判定基準:
+// 「7半荘以上出場した大会」が2大会以上あること（各大会優勝は別枠で手動付与）
+const CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT = 7;
+const CHAMPIONSHIP_MIN_TOURNAMENTS = 2;
 // 各回戦の開始時刻（あくまで目安）
 const ROUND_START_TIMES = ['08:40', '10:00', '11:15', '12:30', '13:45', '15:00', '16:20', '17:35', '19:50'];
 const roundStartTime = (roundNo: number) => ROUND_START_TIMES[roundNo - 1] || null;
@@ -1685,9 +1687,28 @@ export default function Home() {
   // 出場権が実際にあるのは「手動で付与されている」場合のみ。
   // 麻雀プロ(末尾がP)は半荘数や付与フラグに関わらず出場権を持たない。
   const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
+  // 今大会（進行中）で、指定選手が送信済みの卓に入った半荘数
+  const getCurrentTournamentGameCount = (playerId: string) => {
+    let count = 0;
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      if (t.players.some(p => p.playerId === playerId)) count++;
+    }));
+    return count;
+  };
+
   // 年間チャンピオン大会の出場権は、各大会優勝を除き今年度に2回以上の参加が必要。
   // ここでの「対象」表示は目安であり、自動的に出場権が得られるわけではない。
-  const isChampionshipCandidate = (p: Player) => !isPro(p.name) && p.totalGames >= CHAMPIONSHIP_GAMES;
+  const isChampionshipCandidate = (p: Player) => {
+    if (isPro(p.name)) return false;
+    let qualifyingTournaments = 0;
+    archives.forEach(a => {
+      const standing = a.standings.find(s => s.playerId === p.id);
+      if (standing && standing.gameCount >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
+    });
+    if (getCurrentTournamentGameCount(p.id) >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
+    return qualifyingTournaments >= CHAMPIONSHIP_MIN_TOURNAMENTS;
+  };
 
   // 今大会成績: 黒子の表示/非表示を選択可能 (デフォルト非表示)
   const currentRankingAll = entryPlayerIds
