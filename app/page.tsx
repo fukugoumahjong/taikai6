@@ -223,6 +223,7 @@ type UpcomingMatch = {
 
 const PlayerDetailModal = ({
   player,
+  totalGames,
   history,
   rankDist,
   headToHead,
@@ -233,6 +234,7 @@ const PlayerDetailModal = ({
   onClose,
 }: {
   player: Player;
+  totalGames: number;
   history: { archiveId: string; name: string; point: number; gameCount: number; rank: number; playerCount: number }[];
   rankDist: { dist: number[]; total: number };
   headToHead: { id: string; name: string; games: number; diffSum: number; avgDiff: number }[];
@@ -263,7 +265,7 @@ const PlayerDetailModal = ({
               <PlayerLabel name={player.name} badgeClass="text-indigo-900" />
             </h2>
             <p className={`mt-2 text-2xl font-black tabular-nums ${player.totalPoint > 0 ? 'text-emerald-300' : player.totalPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
-              {fmtPt(player.totalPoint)} <span className="text-sm font-bold text-indigo-200">（通算 {player.totalGames}半荘）</span>
+              {fmtPt(player.totalPoint)} <span className="text-sm font-bold text-indigo-200">（通算 {totalGames}半荘）</span>
             </p>
             {maxScore && (
               <p className="mt-2 text-xs font-bold text-indigo-200">
@@ -650,26 +652,36 @@ const api = {
     return !error;
   },
 
-  updatePlayersScores: async (updates: { id: string; pointDelta: number; gamesDelta: number }[]) => {
+  // 通算対局数はもう手動で加減算しない（過去大会＋今大会から自動計算するため）。
+  // ここではポイントの加減算のみ行う。失敗を握りつぶさず、1件でも失敗したら例外を投げる。
+  updatePlayersScores: async (updates: { id: string; pointDelta: number }[]) => {
+    const failures: string[] = [];
     for (const u of updates) {
-      const { data: current } = await supabase
+      const { data: current, error: selectError } = await supabase
         .from('players')
-        .select('total_point, total_games')
+        .select('total_point')
         .eq('id', u.id)
         .single();
-      
-      if (current) {
-        const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
-        const newGames = current.total_games + u.gamesDelta;
-        
-        await supabase
-          .from('players')
-          .update({
-            total_point: newPoint,
-            total_games: newGames,
-          })
-          .eq('id', u.id);
+
+      if (selectError || !current) {
+        console.error('プレイヤー取得エラー:', u.id, selectError);
+        failures.push(u.id);
+        continue;
       }
+
+      const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
+      const { error: updateError } = await supabase
+        .from('players')
+        .update({ total_point: newPoint })
+        .eq('id', u.id);
+
+      if (updateError) {
+        console.error('プレイヤー更新エラー:', u.id, updateError);
+        failures.push(u.id);
+      }
+    }
+    if (failures.length > 0) {
+      throw new Error(`通算ポイントの更新に失敗した選手があります（${failures.length}件）。players テーブルの update 権限（RLSポリシー）を確認してください。`);
     }
   },
 
@@ -891,10 +903,9 @@ export default function Home() {
   // ----------------------------------------
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerPoint, setNewPlayerPoint] = useState(0);
-  const [newPlayerGames, setNewPlayerGames] = useState(0);
   const [newPlayerRight, setNewPlayerRight] = useState(false); // 出場権（デフォルトなし）
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', totalPoint: 0, totalGames: 0, championshipRight: false });
+  const [editForm, setEditForm] = useState({ name: '', totalPoint: 0, championshipRight: false });
 
   const handleRegisterPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -905,7 +916,7 @@ export default function Home() {
       id: crypto.randomUUID(),
       name: newPlayerName.trim(),
       totalPoint: newPlayerPoint,
-      totalGames: newPlayerGames,
+      totalGames: 0,
       championshipRight: isPro(newPlayerName) ? false : newPlayerRight,
       loginCode: generateLoginCode(existingCodes),
     };
@@ -915,7 +926,7 @@ export default function Home() {
       return;
     }
     setDbPlayers(await api.getPlayers());
-    setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerGames(0); setNewPlayerRight(false);
+    setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerRight(false);
     alert(`${newPlayer.name} を登録しました！\nログインコード: ${newPlayer.loginCode}`);
   };
 
@@ -1006,7 +1017,7 @@ export default function Home() {
   const startEditPlayer = (p: Player) => {
     if (!isAdmin) return;
     setEditingPlayerId(p.id);
-    setEditForm({ name: p.name, totalPoint: p.totalPoint, totalGames: p.totalGames, championshipRight: !!p.championshipRight });
+    setEditForm({ name: p.name, totalPoint: p.totalPoint, championshipRight: !!p.championshipRight });
   };
 
   const saveEditPlayer = async () => {
@@ -1017,7 +1028,6 @@ export default function Home() {
         ...player,
         name: editForm.name,
         totalPoint: editForm.totalPoint,
-        totalGames: editForm.totalGames,
         championshipRight: isPro(editForm.name) ? false : editForm.championshipRight,
       };
       await api.updatePlayer(updated);
@@ -1336,7 +1346,7 @@ export default function Home() {
       : '本当に送信しますか？\n\n卓内の1人が入力後、全員の確認を取ってから送信ボタンを押してください。\n送信後、一度確定すると自分では修正できません。間違いが発覚した場合は運営にお知らせください。';
     if (!window.confirm(confirmMsg)) return;
 
-    const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point, gamesDelta: 1 }));
+    const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point }));
     await api.updatePlayersScores(updates);
     setDbPlayers(await api.getPlayers());
 
@@ -1352,7 +1362,7 @@ export default function Home() {
     const table = seating[rIdx].tables[tIdx];
     if (!window.confirm('【警告】\nこの卓の送信を取り消し、成績を編集できるようにしますか？\n※通算成績に加算されたポイントは一旦マイナスされます。')) return;
 
-    const reverses = table.players.map(p => ({ id: p.playerId, pointDelta: -p.point, gamesDelta: -1 }));
+    const reverses = table.players.map(p => ({ id: p.playerId, pointDelta: -p.point }));
     await api.updatePlayersScores(reverses);
     setDbPlayers(await api.getPlayers());
 
@@ -1390,11 +1400,11 @@ export default function Home() {
       if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全てリセットしますか？')) {
         try {
           // 送信済みの卓は既に通算成績へ加算されているため、リセット前に取り消す
-          const reverses: { id: string; pointDelta: number; gamesDelta: number }[] = [];
+          const reverses: { id: string; pointDelta: number }[] = [];
           seating.forEach(r => r.tables.forEach(t => {
             if (!t.isSubmitted) return;
             t.players.forEach(p => {
-              reverses.push({ id: p.playerId, pointDelta: -p.point, gamesDelta: -1 });
+              reverses.push({ id: p.playerId, pointDelta: -p.point });
             });
           }));
           if (reverses.length > 0) await api.updatePlayersScores(reverses);
@@ -1411,20 +1421,22 @@ export default function Home() {
     }, 100);
   };
 
-  // 全選手の通算成績（ポイント・半荘数）を0にリセットする（過去大会の記録自体は削除しない）
+  // 全選手の通算ポイントを0にリセットする（過去大会の記録自体は削除しない）。
+  // 通算対局数は過去大会＋今大会から自動計算される値なので、ここでは触らない
+  // （半荘数もリセットしたい場合は、過去大会一覧から該当の大会を削除してください）。
   const handleResetAllTotals = async () => {
     if (!isAdmin) return;
-    if (!window.confirm('【警告】全選手の通算成績（ポイント・半荘数）を0にリセットしますか？\n※過去大会一覧・今大会の記録自体は削除されません。')) return;
-    await runResetCountdown('通算成績を全員リセット中...');
+    if (!window.confirm('【警告】全選手の通算ポイントを0にリセットしますか？\n※半荘数は過去大会の記録から自動計算されるため、この操作では変わりません。\n※過去大会一覧・今大会の記録自体は削除されません。')) return;
+    await runResetCountdown('通算ポイントを全員リセット中...');
     setTimeout(async () => {
-      if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全選手の通算成績を0にリセットしますか？')) {
+      if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全選手の通算ポイントを0にリセットしますか？')) {
         try {
           for (const p of dbPlayers) {
-            if (p.totalPoint === 0 && p.totalGames === 0) continue;
-            await api.updatePlayer({ ...p, totalPoint: 0, totalGames: 0 });
+            if (p.totalPoint === 0) continue;
+            await api.updatePlayer({ ...p, totalPoint: 0 });
           }
           setDbPlayers(await api.getPlayers());
-          alert('全選手の通算成績を0にリセットしました。');
+          alert('全選手の通算ポイントを0にリセットしました。');
         } catch (err) {
           console.error(err);
           alert('リセット中にエラーが発生しました。コンソールを確認してください。');
@@ -1642,7 +1654,7 @@ export default function Home() {
       });
 
       // 4. 通算成績へ反映（standingsの値をそのまま加算。ペナルティは既に最終成績に織り込み済みのため二重加算しない）
-      const updates = standings.map(s => ({ id: s.playerId, pointDelta: s.totalPoint, gamesDelta: s.gameCount }));
+      const updates = standings.map(s => ({ id: s.playerId, pointDelta: s.totalPoint }));
       if (updates.length > 0) await api.updatePlayersScores(updates);
 
       setDbPlayers(await api.getPlayers());
@@ -1665,7 +1677,7 @@ export default function Home() {
       // 先に削除を確定させ、成功したことを確認してから通算成績を取り消す。
       // （削除に失敗した状態でポイントだけ取り消されると、再度削除ボタンを押した際に二重に減算されてしまうため）
       await api.deleteArchive(archive.id);
-      const reverses = archive.standings.map(s => ({ id: s.playerId, pointDelta: -s.totalPoint, gamesDelta: -s.gameCount }));
+      const reverses = archive.standings.map(s => ({ id: s.playerId, pointDelta: -s.totalPoint }));
       if (reverses.length > 0) await api.updatePlayersScores(reverses);
       setDbPlayers(await api.getPlayers());
       setArchives(await api.getArchives());
@@ -1687,6 +1699,18 @@ export default function Home() {
   // 出場権が実際にあるのは「手動で付与されている」場合のみ。
   // 麻雀プロ(末尾がP)は半荘数や付与フラグに関わらず出場権を持たない。
   const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
+  // 通算対局数 = 過去大会（アーカイブ）の半荘数の合計 ＋ 今大会（進行中・送信済み）の半荘数
+  // 手動で編集・加減算する値ではなく、常にここから計算する。
+  const getTotalGames = (playerId: string): number => {
+    let count = 0;
+    archives.forEach(a => {
+      const standing = a.standings.find(s => s.playerId === playerId);
+      if (standing) count += standing.gameCount;
+    });
+    count += getCurrentTournamentGameCount(playerId);
+    return count;
+  };
+
   // 今大会（進行中）で、指定選手が送信済みの卓に入った半荘数
   const getCurrentTournamentGameCount = (playerId: string) => {
     let count = 0;
@@ -2031,7 +2055,7 @@ export default function Home() {
       <tr class="${rowClass}">
         <td class="c">${i + 1}</td>
         <td>${nameForDoc(p.name)}</td>
-        <td class="r">${p.totalGames}</td>
+        <td class="r">${getTotalGames(p.id)}</td>
         <td class="r ${p.totalPoint > 0 ? 'plus' : p.totalPoint < 0 ? 'minus' : ''}">${fmtPt(p.totalPoint)}</td>
         <td class="c">${csLabel}</td>
       </tr>`;
@@ -2453,13 +2477,10 @@ export default function Home() {
                   <label className="block text-sm font-bold text-slate-600 mb-1">選手名</label>
                   <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
                 </div>
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-600 mb-1">過去の通算ポイント</label>
                   <input type="number" step="0.1" value={newPlayerPoint} onChange={e => setNewPlayerPoint(Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-1">過去の対局数</label>
-                  <input type="number" value={newPlayerGames} onChange={e => setNewPlayerGames(Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
+                  <p className="text-[11px] text-slate-400 mt-1">通算対局数は過去大会・今大会の記録から自動計算されるため、入力欄はありません。</p>
                 </div>
 
                 <div className="md:col-span-4">
@@ -2592,7 +2613,7 @@ export default function Home() {
                           {editingPlayerId === p.id && isAdmin ? (
                             <>
                               <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
-                              <td className="p-2 text-right"><input type="number" value={editForm.totalGames} onChange={e => setEditForm({...editForm, totalGames: Number(e.target.value)})} className="border p-1 w-20 text-right rounded" /></td>
+                              <td className="p-2 text-right text-slate-400">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
                               <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
                               <td className="p-2 text-center">
                                 <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600'}`}>
@@ -2620,7 +2641,7 @@ export default function Home() {
                                   <PlayerLabel name={p.name} />
                                 </span>
                               </td>
-                              <td className="p-3 text-right text-slate-500">{p.totalGames} 半荘</td>
+                              <td className="p-3 text-right text-slate-500">{getTotalGames(p.id)} 半荘</td>
                               <td className={`p-3 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                 {fmtPt(p.totalPoint)}
                               </td>
@@ -2669,6 +2690,7 @@ export default function Home() {
           return (
             <PlayerDetailModal
               player={dp}
+              totalGames={getTotalGames(dp.id)}
               history={getPlayerArchiveHistory(dp.id)}
               rankDist={getRankDistribution(dp.id)}
               headToHead={getHeadToHead(dp.id)}
