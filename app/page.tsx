@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { signIn, signOut, useSession } from "next-auth/react";
 import { supabase } from '@/lib/supabase';
 
@@ -65,6 +65,9 @@ type Round = {
   isPending?: boolean;  // 卓組がまだ決定していない
   sitOutIds?: string[]; // 抜け番
 };
+
+// 出場試合数の限定（例: 1〜3回戦のみ / 7〜9回戦のみ）。今大会ごとに設定する。
+type PlayerLimit = { from: number; to: number };
 
 // ---- 過去大会（アーカイブ）まわりの型 ----
 type ArchiveHanchanResult = {
@@ -795,10 +798,15 @@ export default function Home() {
   const [showPlayerLogin, setShowPlayerLogin] = useState(false);
   const [loginCodeInput, setLoginCodeInput] = useState('');
   const [loginError, setLoginError] = useState('');
-  const [tournamentPhase, setTournamentPhase] = useState<'entry' | 'playing'>('entry');
+  // entry   : 参加者の選択
+  // drawing : 卓組生成済み・運営確認中（管理者のみ卓組を閲覧/編集可。得点入力は不可。一般には「卓組抽選中」を表示）
+  // playing : 大会進行中
+  const [tournamentPhase, setTournamentPhase] = useState<'entry' | 'drawing' | 'playing'>('entry');
   
   const [dbPlayers, setDbPlayers] = useState<Player[]>([]);
   const [entryPlayerIds, setEntryPlayerIds] = useState<string[]>([]);
+  // 出場試合数を限定する選手（playerId → 出場する回戦の範囲）。未設定の選手は全試合に出場
+  const [playerLimits, setPlayerLimits] = useState<Record<string, PlayerLimit>>({});
   
   const [roundsCount, setRoundsCount] = useState(4);
   const [seating, setSeating] = useState<Round[]>([]);
@@ -825,6 +833,18 @@ export default function Home() {
   const [openArchiveHanchanIdx, setOpenArchiveHanchanIdx] = useState<number | null>(null);
 
   const rule = { originPoint: 300, returnPoint: 300, uma: [30, 10, -10, -30], name: RULE_NAME };
+
+  // 出場試合数を限定されている選手か
+  const isLimitedPlayer = (id: string) => !!playerLimits[id];
+  // 指定の回戦に出場できる選手か（限定されていなければ常に true）
+  const isAvailableInRound = (id: string, roundNo: number) => {
+    const l = playerLimits[id];
+    return !l || (roundNo >= l.from && roundNo <= l.to);
+  };
+  // 卓組抽選中は、管理者以外には卓組を見せない
+  const hideSeating = tournamentPhase === 'drawing' && !isAdmin;
+  // 今大会にエントリーしている、出場限定の選手一覧
+  const limitEntries = (Object.entries(playerLimits) as [string, PlayerLimit][]).filter(([id]) => entryPlayerIds.includes(id));
 
   useEffect(() => {
     if (isLoaded && !isAdmin && activeTab === 'players') {
@@ -870,33 +890,57 @@ export default function Home() {
       setDbPlayers(await api.getPlayers());
       setArchives(await api.getArchives());
       const current = await api.getCurrentTournament();
-      if (current) {
-        if (current.tournamentPhase) setTournamentPhase(current.tournamentPhase);
-        if (current.entryPlayerIds) setEntryPlayerIds(current.entryPlayerIds);
-        if (current.roundsCount) setRoundsCount(current.roundsCount);
-        if (current.seating) {
-          // 旧データ互換: chonbo / mode が無いデータを補完
-          const migrated: Round[] = (current.seating as Round[]).map((r: Round) => ({
-            ...r,
-            mode: r.mode || 'normal',
-            isPending: r.isPending || false,
-            tables: (r.tables || []).map((t: Table) => ({
-              ...t,
-              players: (t.players || []).map((p: PlayerScore) => ({ ...p, chonbo: p.chonbo || 0 })),
-            })),
-          }));
-          setSeating(migrated);
-        }
-      }
+      applyTournamentData(current);
       setIsLoaded(true);
     };
     loadData();
   }, []);
 
+  // 大会状態（DB上のデータ）を画面の state に反映する
+  const applyTournamentData = (current: any) => {
+    if (!current) return;
+    if (current.tournamentPhase) setTournamentPhase(current.tournamentPhase);
+    if (current.entryPlayerIds) setEntryPlayerIds(current.entryPlayerIds);
+    if (current.roundsCount) setRoundsCount(current.roundsCount);
+    setPlayerLimits(current.playerLimits || {});
+    if (current.seating) {
+      // 旧データ互換: chonbo / mode が無いデータを補完
+      const migrated: Round[] = (current.seating as Round[]).map((r: Round) => ({
+        ...r,
+        mode: r.mode || 'normal',
+        isPending: r.isPending || false,
+        tables: (r.tables || []).map((t: Table) => ({
+          ...t,
+          players: (t.players || []).map((p: PlayerScore) => ({ ...p, chonbo: p.chonbo || 0 })),
+        })),
+      }));
+      setSeating(migrated);
+    }
+  };
+
+  // 管理者以外は、大会が始まる（playingになる）まで数秒おきに最新状態を確認する。
+  // （「卓組抽選中」の画面から、大会開始と同時に自動で切り替わるようにするため）
+  const lastPolledJson = useRef('');
+  useEffect(() => {
+    if (!isLoaded || isAdmin || tournamentPhase === 'playing') return;
+    const timer = setInterval(async () => {
+      const current = await api.getCurrentTournament();
+      if (!current) return;
+      const json = JSON.stringify(current);
+      if (json === lastPolledJson.current) return;
+      lastPolledJson.current = json;
+      applyTournamentData(current);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [isLoaded, isAdmin, tournamentPhase]);
+
   useEffect(() => {
     if (!isLoaded) return;
-    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating });
-  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, isLoaded]);
+    // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
+    // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
+    if (!isAdmin && tournamentPhase !== 'playing') return;
+    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits });
+  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, isLoaded, isAdmin]);
 
   // ----------------------------------------
   // A. プレイヤー管理 & 編集機能
@@ -1040,10 +1084,55 @@ export default function Home() {
     if (!isAdmin) return;
     if (entryPlayerIds.includes(id)) {
       setEntryPlayerIds(entryPlayerIds.filter(pid => pid !== id));
+      // エントリーから外した選手の出場限定は解除する
+      setPlayerLimits(prev => {
+        if (!prev[id]) return prev;
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     } else {
       setEntryPlayerIds([...entryPlayerIds, id]);
     }
   };
+
+  // ----------------------------------------
+  // A-2. 出場試合数の限定（エントリー画面・管理者用）
+  // ----------------------------------------
+  const [limitPlayerId, setLimitPlayerId] = useState('');
+  const [limitFrom, setLimitFrom] = useState(1);
+  const [limitTo, setLimitTo] = useState(3);
+
+  const handleAddLimit = () => {
+    if (!isAdmin || !limitPlayerId) return;
+    const from = Math.floor(Number(limitFrom));
+    const to = Math.floor(Number(limitTo));
+    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 1 || to < from) {
+      alert('出場する回戦の範囲が正しくありません。（例: 1〜3、7〜9）');
+      return;
+    }
+    if (to > roundsCount) {
+      alert(`全${roundsCount}回戦のため、${roundsCount}回戦より後は指定できません。`);
+      return;
+    }
+    if (from === 1 && to === roundsCount) {
+      alert('全試合に出場するため、限定の設定は不要です。');
+      return;
+    }
+    setPlayerLimits(prev => ({ ...prev, [limitPlayerId]: { from, to } }));
+    setLimitPlayerId('');
+  };
+
+  const handleRemoveLimit = (id: string) => {
+    if (!isAdmin) return;
+    setPlayerLimits(prev => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const limitLabel = (l: PlayerLimit) => (l.from === l.to ? `${l.from}回戦のみ` : `${l.from}〜${l.to}回戦のみ`);
 
   // ----------------------------------------
   // B. 卓組生成
@@ -1055,8 +1144,24 @@ export default function Home() {
       alert('参加者は4名以上選択してください。');
       return;
     }
-    const numTables = Math.floor(entryPlayerIds.length / 4);
     const winds = ['東', '南', '西', '北'];
+
+    // 出場限定の設定が、現在の回戦数と矛盾していないか確認
+    for (const [id, l] of limitEntries) {
+      if (l.from < 1 || l.to > roundsCount || l.from > l.to) {
+        const nm = dbPlayers.find(p => p.id === id)?.name || '不明';
+        alert(`${nm} の出場限定（${l.from}〜${l.to}回戦）が全${roundsCount}回戦の範囲外です。設定を見直してください。`);
+        return;
+      }
+    }
+    // 各回戦で、卓を立てられるだけの人数（4名以上）が出場できるか確認
+    for (let rn = 1; rn <= roundsCount; rn++) {
+      const cnt = entryPlayerIds.filter(id => isAvailableInRound(id, rn)).length;
+      if (cnt < 4) {
+        alert(`${rn}回戦に出場できる選手が${cnt}名しかいません。（4名以上必要です）\n出場限定の設定を見直してください。`);
+        return;
+      }
+    }
 
     // 通常生成する回戦数 (最後の2半荘は順位順で後決め。ただし最低1回戦は通常生成)
     const normalCount = Math.max(1, roundsCount - 2);
@@ -1078,8 +1183,11 @@ export default function Home() {
 
     const generatedRounds: Round[] = [];
     for (let r = 0; r < normalCount; r++) {
+      // その回戦に出場できる選手のみ対象（出場限定の選手は範囲外の回戦には入らない）
+      const eligibleIds = entryPlayerIds.filter(id => isAvailableInRound(id, r + 1));
+      const numTables = Math.floor(eligibleIds.length / 4);
       // 抜け番を均等にするため、抜け番回数が少ない人を優先してアクティブに
-      const sortedForActive = [...entryPlayerIds].sort((a, b) => {
+      const sortedForActive = [...eligibleIds].sort((a, b) => {
         if (sitOuts[a] !== sitOuts[b]) return sitOuts[a] - sitOuts[b];
         return Math.random() - 0.5;
       });
@@ -1164,26 +1272,37 @@ export default function Home() {
     setSeating(generatedRounds);
     setRoundOpen({});
     setTableOpen({});
+    // 卓組を生成したら「抽選中」へ。管理者が「大会開始」を押すまで得点入力はできない
+    setTournamentPhase('drawing');
+  };
+
+  // 管理者が卓組を確認し終えたら、大会を開始する（ここから得点入力が可能になる）
+  const handleStartTournament = () => {
+    if (!isAdmin || tournamentPhase !== 'drawing') return;
+    if (!window.confirm('大会を開始しますか？\n開始すると、全員に卓組が公開され、得点入力ができるようになります。')) return;
     setTournamentPhase('playing');
   };
 
   // ----------------------------------------
   // B-2. 順位順の卓組
   // ----------------------------------------
-  // 「黒子」が上位8位(上位2卓)に入らないよう、その下を繰り上げる。
-  // 弾かれた黒子は順位順に9位のところへ差し込む。
+  // 「黒子」と「出場試合数を限定された選手」が上位8位(上位2卓)に入らないよう、その下を繰り上げる。
+  // 弾かれた選手は順位順に9位のところへ差し込む。
+  const isTopExcluded = (id: string, name: string) => isKuroko(name) || isLimitedPlayer(id);
   const applyKurokoRule = <T extends { id: string; name: string }>(ranked: T[]): T[] => {
-    const nonKuroko = ranked.filter(p => !isKuroko(p.name));
+    const nonKuroko = ranked.filter(p => !isTopExcluded(p.id, p.name));
     const top8 = nonKuroko.slice(0, 8);
     if (top8.length === 0) return ranked;
     const cutoffIndex = ranked.indexOf(top8[top8.length - 1]);
-    const displacedKuroko = ranked.filter((p, i) => isKuroko(p.name) && i < cutoffIndex);
+    const displacedKuroko = ranked.filter((p, i) => isTopExcluded(p.id, p.name) && i < cutoffIndex);
     const usedIds = new Set([...top8.map(p => p.id), ...displacedKuroko.map(p => p.id)]);
     const rest = ranked.filter(p => !usedIds.has(p.id));
     return [...top8, ...displacedKuroko, ...rest];
   };
 
-  const buildRankedOrder = (data: Round[], beforeIdx: number) => {
+  const buildRankedOrder = (data: Round[], beforeIdx: number, roundNo?: number) => {
+    // roundNo を指定した場合は、その回戦に出場できる選手のみを順位付けの対象にする
+    const rankTargetIds = roundNo ? entryPlayerIds.filter(id => isAvailableInRound(id, roundNo)) : entryPlayerIds;
     const stats: Record<string, { point: number; games: number }> = {};
     entryPlayerIds.forEach(id => { stats[id] = { point: 0, games: 0 }; });
     data.forEach((r, idx) => {
@@ -1198,7 +1317,7 @@ export default function Home() {
         });
       });
     });
-    const list = entryPlayerIds.map(id => {
+    const list = rankTargetIds.map(id => {
       const pl = dbPlayers.find(p => p.id === id);
       return {
         id,
@@ -1214,8 +1333,8 @@ export default function Home() {
 
   const resolvePendingRound = (data: Round[], idx: number): Round => {
     const target = data[idx];
-    const ordered = buildRankedOrder(data, idx);
-    const numTables = Math.floor(entryPlayerIds.length / 4);
+    const ordered = buildRankedOrder(data, idx, target.round);
+    const numTables = Math.floor(ordered.length / 4);
     const active = ordered.slice(0, numTables * 4);
     const sitOut = ordered.slice(numTables * 4);
     const winds = ['東', '南', '西', '北'];
@@ -1249,7 +1368,7 @@ export default function Home() {
     const updated = [...seating];
     updated[idx] = resolvePendingRound(updated, idx);
     setSeating(updated);
-  }, [seating, isLoaded, tournamentPhase, dbPlayers, entryPlayerIds]);
+  }, [seating, isLoaded, tournamentPhase, dbPlayers, entryPlayerIds, playerLimits]);
 
   const handleReshufflePendingRound = (rIdx: number) => {
     if (!isAdmin) return;
@@ -1266,8 +1385,9 @@ export default function Home() {
   // ----------------------------------------
   // 管理者、または「その卓に座っていてまだ送信していない」ログイン中の選手なら編集可能。
   // 送信済みの卓は運営（管理者）にしか編集できない。
+  // ※ 大会開始前（卓組抽選中）は、管理者を含め誰も入力できない
   const canEditTable = (table: Table) =>
-    isAdmin || (!!loggedInPlayerId && !table.isSubmitted && table.players.some(p => p.playerId === loggedInPlayerId));
+    tournamentPhase === 'playing' && (isAdmin || (!!loggedInPlayerId && !table.isSubmitted && table.players.some(p => p.playerId === loggedInPlayerId)));
 
   const handleScoreChange = (rIdx: number, tIdx: number, pIdx: number, val: number) => {
     if (!canEditTable(seating[rIdx].tables[tIdx])) return;
@@ -1414,7 +1534,7 @@ export default function Home() {
           alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
-        setSeating([]); setEntryPlayerIds([]); setTournamentPhase('entry'); setActiveTab('tournament');
+        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
@@ -1762,9 +1882,12 @@ export default function Home() {
     })
     .sort((a, b) => b.point - a.point);
 
-  const displayCurrentRanking = showKuroko
+  // 出場試合数を限定された選手は、今大会成績のランキングには表示しない
+  // （通算成績には通常通り加算・表示される）
+  const displayCurrentRanking = (showKuroko
     ? currentRankingAll
-    : currentRankingAll.filter(p => !isKuroko(p.name));
+    : currentRankingAll.filter(p => !isKuroko(p.name))
+  ).filter(p => !isLimitedPlayer(p.id));
 
   // ----------------------------------------
   // G-2. 過去大会（アーカイブ）まわりの集計
@@ -1957,6 +2080,8 @@ export default function Home() {
   const getPlayerSchedule = (playerId: string): ScheduleItem[] => {
     const items: ScheduleItem[] = [];
     seating.forEach(r => {
+      // 出場限定の範囲外の回戦は、そもそも予定に含めない
+      if (!isAvailableInRound(playerId, r.round)) return;
       if (r.isPending || r.tables.length === 0) {
         items.push({ key: `r${r.round}`, roundNo: r.round, status: 'pending' });
         return;
@@ -1988,6 +2113,7 @@ export default function Home() {
 
   // ログイン中の選手向け：これから行われる対局（卓・対戦相手・時間）
   const getUpcomingMatches = (playerId: string): UpcomingMatch[] => {
+    if (hideSeating) return [];
     const items = getPlayerSchedule(playerId);
     const firstIdx = items.findIndex(it => it.status === 'ready' || it.status === 'pending');
     if (firstIdx < 0) return [];
@@ -2061,7 +2187,7 @@ export default function Home() {
       </tr>`;
     }).join('');
 
-    const resultBlocks = seating.map(r => {
+    const resultBlocks = (hideSeating ? [] : seating).map(r => {
       const timeNote = roundStartTime(r.round) ? `<span class="time">開始目安 ${roundStartTime(r.round)}</span>` : '';
       if (r.isPending || r.tables.length === 0) {
         return `<div class="round"><h3>${r.round}回戦 ${timeNote}</h3><p class="note">卓組未定（前の回戦が全て終了した時点で順位順に決定）</p></div>`;
@@ -3004,8 +3130,8 @@ export default function Home() {
               </div>
             </div>
 
-            {tournamentPhase === 'entry' ? (
-              <p className="text-slate-500">大会が始まっていません。</p>
+            {tournamentPhase === 'entry' || hideSeating ? (
+              <p className="text-slate-500">{tournamentPhase === 'drawing' ? '卓組抽選中です。大会が始まるまでお待ちください。' : '大会が始まっていません。'}</p>
             ) : (
               <>
                 <p className="text-xs text-slate-500 mb-3">選手名をクリックすると、今大会の全成績（これからの対局予定を含む）が表示されます。</p>
@@ -3162,8 +3288,46 @@ export default function Home() {
         {activeTab === 'tournament' && (
           <div className="space-y-6 animate-in fade-in duration-300">
 
+            {/* 卓組抽選中（管理者のみ）: 画面の一番上に「大会開始」ボタン */}
+            {isAdmin && tournamentPhase === 'drawing' && (
+              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5 shadow-sm">
+                <div className="flex-1">
+                  <h2 className="text-lg font-black text-amber-900">🎲 卓組抽選中（運営確認中）</h2>
+                  <p className="text-xs text-amber-800 leading-relaxed mt-1">
+                    卓組は生成済みです。内容を確認・編集（🛠️ 選手の追加・差し替え）してから「大会開始」を押してください。<br />
+                    開始するまで得点入力はできません。一般の画面には「卓組抽選中」と表示されています。
+                  </p>
+                </div>
+                <button
+                  onClick={handleStartTournament}
+                  className="w-full md:w-auto bg-amber-500 hover:bg-amber-600 text-white font-black py-4 px-10 rounded-xl shadow-lg text-lg transition"
+                >
+                  🚀 大会開始
+                </button>
+              </div>
+            )}
+
             {/* 大会規定 */}
             <RulesDocCard />
+
+            {/* 卓組抽選中（管理者以外）: 抽選中アニメーション */}
+            {tournamentPhase === 'drawing' && !isAdmin && (
+              <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
+                <div className="flex justify-center gap-3 mb-6" aria-hidden="true">
+                  {['🀄', '🀅', '🀀', '🀁'].map((tile, i) => (
+                    <span
+                      key={i}
+                      className="text-5xl animate-bounce"
+                      style={{ animationDelay: `${i * 150}ms` }}
+                    >{tile}</span>
+                  ))}
+                </div>
+                <h2 className="text-2xl md:text-3xl font-black text-indigo-900 animate-pulse">卓組抽選中...</h2>
+                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                  運営が卓組を確認しています。<br />大会が始まると、この画面に自動で卓組が表示されます。
+                </p>
+              </div>
+            )}
 
             {tournamentPhase === 'entry' && (
               <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
@@ -3188,6 +3352,39 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {/* 出場試合数の限定 */}
+                    <div className="mb-8 p-4 bg-amber-50/60 rounded-xl border border-amber-200">
+                      <h3 className="font-bold text-slate-700 mb-1">出場試合数を限定する選手（任意）</h3>
+                      <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+                        基本は全選手が全試合に出場します。一部の選手のみ「1〜3回戦のみ」「7〜9回戦のみ」のように限定できます。<br />
+                        限定された選手は、順位順で決まる回戦では黒子と同様に上位8位（2卓）に入らず、弾かれた場合は9位の位置に入ります。今大会成績のランキングには表示されず、通算成績には通常通り加算されます。
+                      </p>
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <select value={limitPlayerId} onChange={e => setLimitPlayerId(e.target.value)} className="p-2.5 border rounded-lg bg-white text-sm min-w-[12rem]">
+                          <option value="">エントリー済みの選手から選ぶ...</option>
+                          {dbPlayers.filter(p => entryPlayerIds.includes(p.id) && !playerLimits[p.id]).map(p => (
+                            <option key={p.id} value={p.id}>{proMarkedName(p.name)}</option>
+                          ))}
+                        </select>
+                        <input type="number" min="1" value={limitFrom} onChange={e => setLimitFrom(Number(e.target.value))} className="w-16 p-2.5 border rounded-lg text-sm font-bold text-center bg-white" />
+                        <span className="text-sm font-bold text-slate-500">〜</span>
+                        <input type="number" min="1" value={limitTo} onChange={e => setLimitTo(Number(e.target.value))} className="w-16 p-2.5 border rounded-lg text-sm font-bold text-center bg-white" />
+                        <span className="text-sm font-bold text-slate-500">回戦のみ</span>
+                        <button onClick={handleAddLimit} disabled={!limitPlayerId} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">追加</button>
+                      </div>
+                      {limitEntries.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {limitEntries.map(([id, l]) => (
+                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-slate-700">
+                              <PlayerLabel name={dbPlayers.find(p => p.id === id)?.name || '不明'} />
+                              <span className="text-xs text-amber-700">{limitLabel(l)}</span>
+                              <button onClick={() => handleRemoveLimit(id)} className="w-5 h-5 rounded-full bg-slate-200 hover:bg-red-200 text-slate-500 hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
                     <div className="flex flex-col md:flex-row gap-6 items-end border-t pt-6">
                       <div className="w-full md:w-auto">
                         <label className="block text-sm font-bold text-slate-600 mb-2">参加予定</label>
@@ -3199,10 +3396,11 @@ export default function Home() {
                       </div>
                       <div className="flex-1"></div>
                       <button onClick={handleGenerateTables} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition">
-                        自動卓組を生成して大会開始 ➡️
+                        自動卓組を生成
                       </button>
                     </div>
                     <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                      ※ 生成後は「卓組抽選中」になり、管理者が卓組を確認して「大会開始」を押すまで得点入力はできません。<br />
                       ※ 8回戦・9回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
                       　 最後から2つ目は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
                     </p>
@@ -3211,13 +3409,18 @@ export default function Home() {
               </div>
             )}
 
-            {tournamentPhase === 'playing' && (
+            {(tournamentPhase === 'playing' || (tournamentPhase === 'drawing' && isAdmin)) && (
               <div className="space-y-6">
                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
                   <div className="flex justify-between items-center gap-4">
                     <div>
-                      <h2 className="text-lg font-black text-indigo-900">大会進行中</h2>
+                      <h2 className="text-lg font-black text-indigo-900">{tournamentPhase === 'drawing' ? '卓組の確認（大会開始前）' : '大会進行中'}</h2>
                       <p className="text-sm text-indigo-700 font-medium">参加者: {entryPlayerIds.length}名 / 全{roundsCount}回戦</p>
+                      {limitEntries.length > 0 && (
+                        <p className="text-xs text-amber-700 font-bold mt-1">
+                          出場限定: {limitEntries.map(([id, l]) => `${proMarkedName(dbPlayers.find(p => p.id === id)?.name || '不明')}（${limitLabel(l)}）`).join('、')}
+                        </p>
+                      )}
                     </div>
                     {isAdmin && (
                       <div className="flex gap-2">
