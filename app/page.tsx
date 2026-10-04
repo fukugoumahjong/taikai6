@@ -2468,7 +2468,7 @@ export default function Home() {
   if (!isLoaded || status === 'loading') return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
 
   // ==========================================
-  // データタブ用の集計（過去大会の全結果が対象。黒子・順位対象外の記録は除く）
+  // データタブ用の集計（過去大会＋今大会（送信済みの卓）の全結果が対象。黒子・順位対象外の記録は除く）
   // ==========================================
   const DATA_TOP_N = 5;
   const AVOID_LAST_MIN_GAMES = 10;
@@ -2487,12 +2487,21 @@ export default function Home() {
 
   // 最高スコア TOP5（1半荘ごと）
   const topScoreRanking = (() => {
-    const list: { playerId: string; name: string; archiveName: string; hanchanNo: number; score: number }[] = [];
+    const list: { playerId: string; name: string; archiveName: string; score: number }[] = [];
     archives.forEach(a => a.hanchans.forEach(h => h.results.forEach(r => {
       const nm = nameOf(r.playerId, r.name);
       if (r.excluded || isKuroko(nm)) return;
-      list.push({ playerId: r.playerId, name: nm, archiveName: a.name, hanchanNo: h.no, score: r.score * 100 });
+      list.push({ playerId: r.playerId, name: nm, archiveName: a.name, score: r.score * 100 });
     })));
+    // 今大会（送信済みの卓のみ）
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      t.players.forEach(pl => {
+        const nm = nameOf(pl.playerId, pl.name);
+        if (isKuroko(nm)) return;
+        list.push({ playerId: pl.playerId, name: nm, archiveName: '今大会', score: pl.score * 100 });
+      });
+    }));
     list.sort((x, y) => y.score - x.score);
     return assignRanks(list.slice(0, DATA_TOP_N), x => x.score);
   })();
@@ -2508,6 +2517,19 @@ export default function Home() {
       if (r.rank === 4) cur.lastCount += 1;
       map.set(r.playerId, cur);
     })));
+    // 今大会（送信済みの卓のみ）。着順は卓内のスコア順
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      const sorted = [...t.players].sort((a, b) => b.score - a.score);
+      t.players.forEach(pl => {
+        const nm = nameOf(pl.playerId, pl.name);
+        if (isKuroko(nm)) return;
+        const cur = map.get(pl.playerId) || { playerId: pl.playerId, name: nm, games: 0, lastCount: 0 };
+        cur.games += 1;
+        if (sorted.findIndex(sp => sp.playerId === pl.playerId) === 3) cur.lastCount += 1;
+        map.set(pl.playerId, cur);
+      });
+    }));
     const list = Array.from(map.values())
       .filter(x => x.games >= AVOID_LAST_MIN_GAMES)
       .map(x => ({ ...x, rate: (x.games - x.lastCount) / x.games }))
@@ -2752,26 +2774,26 @@ export default function Home() {
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-700 via-purple-700 to-indigo-800 text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">📊</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">データ</h2>
-              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去大会 {archives.length} 大会 ／ 全 {archives.reduce((n, a) => n + a.hanchans.length, 0)} 半荘の記録から集計（黒子は除く）</p>
+              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去大会 {archives.length} 大会 ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
             </div>
 
-            {archives.length === 0 ? (
+            {topScoreRanking.length === 0 ? (
               <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">過去大会のデータがまだありません。</div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* 最高スコアランキング */}
-                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="px-5 py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-amber-100">
+                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                  <div className="px-5 py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-amber-100 min-h-[84px]">
                     <h3 className="text-lg font-black text-amber-900 flex items-center gap-2">🎯 最高スコアランキング <span className="text-xs font-bold text-amber-600 bg-white/70 px-2 py-0.5 rounded-full">TOP{DATA_TOP_N}</span></h3>
                     <p className="text-[11px] text-amber-700/80 mt-0.5">1半荘あたりの最高スコア（過去大会すべての半荘が対象）</p>
                   </div>
-                  <ol className="divide-y divide-slate-100">
+                  <ol className="divide-y divide-slate-100 flex-1 flex flex-col">
                     {topScoreRanking.map((x, i) => (
-                      <li key={`${x.playerId}-${x.archiveName}-${x.hanchanNo}-${i}`} className={`flex items-center gap-3 px-4 py-3.5 ${x.rankNo === 1 ? 'bg-amber-50/50' : ''}`}>
+                      <li key={`${x.playerId}-${x.archiveName}-${i}`} className={`flex items-center gap-3 px-4 flex-1 min-h-[84px] ${x.rankNo === 1 ? 'bg-amber-50/50' : ''}`}>
                         <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${x.rankNo === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white' : x.rankNo === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : x.rankNo === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{x.rankNo}</span>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-slate-800 truncate"><PlayerLabel name={x.name} /></div>
-                          <div className="text-[11px] text-slate-400">{x.archiveName}　{x.hanchanNo}半荘目</div>
+                          <div className="text-[11px] text-slate-400">{x.archiveName}</div>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <span className="text-xl font-black text-amber-600 tabular-nums">{x.score.toLocaleString()}</span>
@@ -2779,19 +2801,21 @@ export default function Home() {
                         </div>
                       </li>
                     ))}
-                    {topScoreRanking.length === 0 && <li className="p-6 text-center text-sm text-slate-400">データがありません。</li>}
+                    {Array.from({ length: Math.max(0, DATA_TOP_N - topScoreRanking.length) }).map((_, i) => (
+                      <li key={`ph-${i}`} className="flex items-center justify-center flex-1 min-h-[84px] text-sm text-slate-300">—</li>
+                    ))}
                   </ol>
                 </section>
 
                 {/* ラス回避率ランキング */}
-                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                  <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-sky-100">
+                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+                  <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-sky-100 min-h-[84px]">
                     <h3 className="text-lg font-black text-sky-900 flex items-center gap-2">🛡️ ラス回避率 <span className="text-xs font-bold text-sky-600 bg-white/70 px-2 py-0.5 rounded-full">TOP{DATA_TOP_N}</span></h3>
                     <p className="text-[11px] text-sky-700/80 mt-0.5">全半荘のうちラス（4着）でなかった割合（{AVOID_LAST_MIN_GAMES}半荘以上の選手が対象 ／ 対象 {avoidLastRanking.eligibleCount}名）</p>
                   </div>
-                  <ol className="divide-y divide-slate-100">
+                  <ol className="divide-y divide-slate-100 flex-1 flex flex-col">
                     {avoidLastRanking.top.map((x, i) => (
-                      <li key={`${x.playerId}-${i}`} className={`px-4 py-3.5 ${x.rankNo === 1 ? 'bg-sky-50/50' : ''}`}>
+                      <li key={`${x.playerId}-${i}`} className={`px-4 flex-1 min-h-[84px] flex flex-col justify-center ${x.rankNo === 1 ? 'bg-sky-50/50' : ''}`}>
                         <div className="flex items-center gap-3">
                           <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${x.rankNo === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white' : x.rankNo === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : x.rankNo === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{x.rankNo}</span>
                           <div className="flex-1 min-w-0">
@@ -2805,7 +2829,9 @@ export default function Home() {
                         </div>
                       </li>
                     ))}
-                    {avoidLastRanking.top.length === 0 && <li className="p-6 text-center text-sm text-slate-400">{AVOID_LAST_MIN_GAMES}半荘以上の選手がまだいません。</li>}
+                    {Array.from({ length: Math.max(0, DATA_TOP_N - avoidLastRanking.top.length) }).map((_, i) => (
+                      <li key={`ph-${i}`} className="flex items-center justify-center flex-1 min-h-[84px] text-sm text-slate-300">{i === 0 && avoidLastRanking.top.length === 0 ? `${AVOID_LAST_MIN_GAMES}半荘以上の選手がまだいません` : '—'}</li>
+                    ))}
                   </ol>
                 </section>
               </div>
