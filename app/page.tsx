@@ -791,7 +791,7 @@ export default function Home() {
   const isAdmin = !!session?.user?.email && adminEmails.includes(session.user.email);
 
   const [isLoaded, setIsLoaded] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'archives' | 'players'>('tournament');
+  const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'archives' | 'players' | 'data'>('tournament');
 
   // ---- 選手ログイン（Googleを使わない、コードだけの簡易ログイン） ----
   const [loggedInPlayerId, setLoggedInPlayerId] = useState<string | null>(null);
@@ -2467,6 +2467,57 @@ export default function Home() {
 
   if (!isLoaded || status === 'loading') return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
 
+  // ==========================================
+  // データタブ用の集計（過去大会の全結果が対象。黒子・順位対象外の記録は除く）
+  // ==========================================
+  const DATA_TOP_N = 5;
+  const AVOID_LAST_MIN_GAMES = 10;
+
+  // 同じ値は同順位にする（1,2,2,4…）
+  const assignRanks = <T,>(sorted: T[], valueOf: (x: T) => number): (T & { rankNo: number })[] =>
+    sorted.map((x, i) => {
+      let rankNo = i + 1;
+      if (i > 0 && valueOf(sorted[i - 1]) === valueOf(x)) rankNo = (null as any); // 後で埋める
+      return { ...x, rankNo } as any;
+    }).reduce((acc: any[], x: any, i: number) => {
+      if (x.rankNo === null) x.rankNo = acc[i - 1].rankNo;
+      acc.push(x);
+      return acc;
+    }, []);
+
+  // 最高スコア TOP5（1半荘ごと）
+  const topScoreRanking = (() => {
+    const list: { playerId: string; name: string; archiveName: string; hanchanNo: number; score: number }[] = [];
+    archives.forEach(a => a.hanchans.forEach(h => h.results.forEach(r => {
+      const nm = nameOf(r.playerId, r.name);
+      if (r.excluded || isKuroko(nm)) return;
+      list.push({ playerId: r.playerId, name: nm, archiveName: a.name, hanchanNo: h.no, score: r.score * 100 });
+    })));
+    list.sort((x, y) => y.score - x.score);
+    return assignRanks(list.slice(0, DATA_TOP_N), x => x.score);
+  })();
+
+  // ラス回避率 TOP5（10半荘以上の選手が対象。ラス回避率 = ラスでなかった半荘数 ÷ 全半荘数）
+  const avoidLastRanking = (() => {
+    const map = new Map<string, { playerId: string; name: string; games: number; lastCount: number }>();
+    archives.forEach(a => a.hanchans.forEach(h => h.results.forEach(r => {
+      const nm = nameOf(r.playerId, r.name);
+      if (r.excluded || isKuroko(nm)) return;
+      const cur = map.get(r.playerId) || { playerId: r.playerId, name: nm, games: 0, lastCount: 0 };
+      cur.games += 1;
+      if (r.rank === 4) cur.lastCount += 1;
+      map.set(r.playerId, cur);
+    })));
+    const list = Array.from(map.values())
+      .filter(x => x.games >= AVOID_LAST_MIN_GAMES)
+      .map(x => ({ ...x, rate: (x.games - x.lastCount) / x.games }))
+      .sort((x, y) => y.rate - x.rate || y.games - x.games);
+    return {
+      top: assignRanks(list.slice(0, DATA_TOP_N), x => x.rate),
+      eligibleCount: list.length,
+    };
+  })();
+
   const tabBtn = (key: typeof activeTab, label: string, color: string) => (
     <button
       onClick={() => setActiveTab(key)}
@@ -2527,6 +2578,7 @@ export default function Home() {
             {tabBtn('totalRanking', '通算成績', 'bg-indigo-600')}
             {tabBtn('archives', '過去大会', 'bg-amber-600')}
             {isAdmin && tabBtn('players', '新規登録', 'bg-indigo-600')}
+            {tabBtn('data', 'データ', 'bg-fuchsia-600')}
           </nav>
 
           {/* 大会規定 */}
@@ -2691,6 +2743,73 @@ export default function Home() {
                 </table>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* ========== データ ========== */}
+        {activeTab === 'data' && (
+          <div className="space-y-6 animate-in fade-in duration-300">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-700 via-purple-700 to-indigo-800 text-white p-5 md:p-7 shadow-lg">
+              <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">📊</div>
+              <h2 className="text-xl md:text-2xl font-black tracking-wide">データ</h2>
+              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去大会 {archives.length} 大会 ／ 全 {archives.reduce((n, a) => n + a.hanchans.length, 0)} 半荘の記録から集計（黒子は除く）</p>
+            </div>
+
+            {archives.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">過去大会のデータがまだありません。</div>
+            ) : (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* 最高スコアランキング */}
+                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 bg-gradient-to-r from-amber-50 to-yellow-50 border-b border-amber-100">
+                    <h3 className="text-lg font-black text-amber-900 flex items-center gap-2">🎯 最高スコアランキング <span className="text-xs font-bold text-amber-600 bg-white/70 px-2 py-0.5 rounded-full">TOP{DATA_TOP_N}</span></h3>
+                    <p className="text-[11px] text-amber-700/80 mt-0.5">1半荘あたりの最高スコア（過去大会すべての半荘が対象）</p>
+                  </div>
+                  <ol className="divide-y divide-slate-100">
+                    {topScoreRanking.map((x, i) => (
+                      <li key={`${x.playerId}-${x.archiveName}-${x.hanchanNo}-${i}`} className={`flex items-center gap-3 px-4 py-3.5 ${x.rankNo === 1 ? 'bg-amber-50/50' : ''}`}>
+                        <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${x.rankNo === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white' : x.rankNo === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : x.rankNo === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{x.rankNo}</span>
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-slate-800 truncate"><PlayerLabel name={x.name} /></div>
+                          <div className="text-[11px] text-slate-400">{x.archiveName}　{x.hanchanNo}半荘目</div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="text-xl font-black text-amber-600 tabular-nums">{x.score.toLocaleString()}</span>
+                          <span className="text-xs font-bold text-slate-400 ml-0.5">点</span>
+                        </div>
+                      </li>
+                    ))}
+                    {topScoreRanking.length === 0 && <li className="p-6 text-center text-sm text-slate-400">データがありません。</li>}
+                  </ol>
+                </section>
+
+                {/* ラス回避率ランキング */}
+                <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                  <div className="px-5 py-4 bg-gradient-to-r from-sky-50 to-cyan-50 border-b border-sky-100">
+                    <h3 className="text-lg font-black text-sky-900 flex items-center gap-2">🛡️ ラス回避率 <span className="text-xs font-bold text-sky-600 bg-white/70 px-2 py-0.5 rounded-full">TOP{DATA_TOP_N}</span></h3>
+                    <p className="text-[11px] text-sky-700/80 mt-0.5">全半荘のうちラス（4着）でなかった割合（{AVOID_LAST_MIN_GAMES}半荘以上の選手が対象 ／ 対象 {avoidLastRanking.eligibleCount}名）</p>
+                  </div>
+                  <ol className="divide-y divide-slate-100">
+                    {avoidLastRanking.top.map((x, i) => (
+                      <li key={`${x.playerId}-${i}`} className={`px-4 py-3.5 ${x.rankNo === 1 ? 'bg-sky-50/50' : ''}`}>
+                        <div className="flex items-center gap-3">
+                          <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${x.rankNo === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white' : x.rankNo === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : x.rankNo === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'bg-slate-100 text-slate-500'}`}>{x.rankNo}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-slate-800 truncate"><PlayerLabel name={x.name} /></div>
+                            <div className="text-[11px] text-slate-400">{x.games}半荘中 ラス {x.lastCount}回</div>
+                          </div>
+                          <div className="text-xl font-black text-sky-600 tabular-nums flex-shrink-0">{x.rate.toFixed(3)}</div>
+                        </div>
+                        <div className="mt-2 ml-12 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-sky-400 to-cyan-500" style={{ width: `${x.rate * 100}%` }} />
+                        </div>
+                      </li>
+                    ))}
+                    {avoidLastRanking.top.length === 0 && <li className="p-6 text-center text-sm text-slate-400">{AVOID_LAST_MIN_GAMES}半荘以上の選手がまだいません。</li>}
+                  </ol>
+                </section>
+              </div>
+            )}
           </div>
         )}
 
