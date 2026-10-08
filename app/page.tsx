@@ -66,8 +66,42 @@ type Round = {
   sitOutIds?: string[]; // 抜け番
 };
 
-// 出場試合数の限定（例: 1〜3回戦のみ / 7〜9回戦のみ）。今大会ごとに設定する。
-type PlayerLimit = { from: number; to: number };
+// 出場試合数の限定。出場する回戦を個別に指定する（例: 1〜3回戦と7〜9回戦、2・5・8回戦 など、連続していなくてもよい）。
+// 今大会ごとに設定する。
+type PlayerLimit = { rounds: number[] };
+
+// 保存データの読み込み用。旧形式 { from, to }（連続範囲）も rounds 形式に変換して受け入れる。
+const normalizePlayerLimits = (raw: any): Record<string, PlayerLimit> => {
+  const out: Record<string, PlayerLimit> = {};
+  if (!raw || typeof raw !== 'object') return out;
+  Object.entries(raw).forEach(([id, v]: [string, any]) => {
+    if (!v) return;
+    let rounds: number[] = [];
+    if (Array.isArray(v.rounds)) {
+      rounds = v.rounds.map((n: any) => Math.floor(Number(n))).filter((n: number) => Number.isFinite(n) && n >= 1);
+    } else if (Number.isFinite(Number(v.from)) && Number.isFinite(Number(v.to))) {
+      for (let n = Math.floor(Number(v.from)); n <= Math.floor(Number(v.to)); n++) rounds.push(n);
+    }
+    rounds = Array.from(new Set(rounds)).sort((a, b) => a - b);
+    if (rounds.length > 0) out[id] = { rounds };
+  });
+  return out;
+};
+
+// [1,2,3,7,8,9] → "1〜3・7〜9回戦のみ" / [2,5] → "2・5回戦のみ"
+const formatLimitRounds = (rounds: number[]): string => {
+  const sorted = Array.from(new Set(rounds)).sort((a, b) => a - b);
+  const parts: string[] = [];
+  let i = 0;
+  while (i < sorted.length) {
+    let j = i;
+    while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+    const len = j - i + 1;
+    parts.push(len === 1 ? `${sorted[i]}` : len === 2 ? `${sorted[i]}・${sorted[j]}` : `${sorted[i]}〜${sorted[j]}`);
+    i = j + 1;
+  }
+  return `${parts.join('・')}回戦のみ`;
+};
 
 // ---- 過去大会（アーカイブ）まわりの型 ----
 type ArchiveHanchanResult = {
@@ -839,7 +873,7 @@ export default function Home() {
   // 指定の回戦に出場できる選手か（限定されていなければ常に true）
   const isAvailableInRound = (id: string, roundNo: number) => {
     const l = playerLimits[id];
-    return !l || (roundNo >= l.from && roundNo <= l.to);
+    return !l || l.rounds.includes(roundNo);
   };
   // 卓組抽選中は、管理者以外には卓組を見せない
   const hideSeating = tournamentPhase === 'drawing' && !isAdmin;
@@ -902,7 +936,7 @@ export default function Home() {
     if (current.tournamentPhase) setTournamentPhase(current.tournamentPhase);
     if (current.entryPlayerIds) setEntryPlayerIds(current.entryPlayerIds);
     if (current.roundsCount) setRoundsCount(current.roundsCount);
-    setPlayerLimits(current.playerLimits || {});
+    setPlayerLimits(normalizePlayerLimits(current.playerLimits));
     if (current.seating) {
       // 旧データ互換: chonbo / mode が無いデータを補完
       const migrated: Round[] = (current.seating as Round[]).map((r: Round) => ({
@@ -1100,27 +1134,34 @@ export default function Home() {
   // A-2. 出場試合数の限定（エントリー画面・管理者用）
   // ----------------------------------------
   const [limitPlayerId, setLimitPlayerId] = useState('');
-  const [limitFrom, setLimitFrom] = useState(1);
-  const [limitTo, setLimitTo] = useState(3);
+  // 出場する回戦（トグルで個別に選択。連続していなくてもよい）
+  const [limitRounds, setLimitRounds] = useState<number[]>([]);
+
+  const toggleLimitRound = (n: number) => {
+    setLimitRounds(prev => (prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n].sort((a, b) => a - b)));
+  };
 
   const handleAddLimit = () => {
     if (!isAdmin || !limitPlayerId) return;
-    const from = Math.floor(Number(limitFrom));
-    const to = Math.floor(Number(limitTo));
-    if (!Number.isFinite(from) || !Number.isFinite(to) || from < 1 || to < from) {
-      alert('出場する回戦の範囲が正しくありません。（例: 1〜3、7〜9）');
+    const rounds = limitRounds.filter(n => n >= 1 && n <= roundsCount);
+    if (rounds.length === 0) {
+      alert('出場する回戦を1つ以上選択してください。');
       return;
     }
-    if (to > roundsCount) {
-      alert(`全${roundsCount}回戦のため、${roundsCount}回戦より後は指定できません。`);
-      return;
-    }
-    if (from === 1 && to === roundsCount) {
+    if (rounds.length === roundsCount) {
       alert('全試合に出場するため、限定の設定は不要です。');
       return;
     }
-    setPlayerLimits(prev => ({ ...prev, [limitPlayerId]: { from, to } }));
+    setPlayerLimits(prev => ({ ...prev, [limitPlayerId]: { rounds } }));
     setLimitPlayerId('');
+    setLimitRounds([]);
+  };
+
+  // 設定済みの選手の出場回戦を、編集用の入力欄に読み込む（変更して「追加」で上書き）
+  const handleEditLimit = (id: string) => {
+    if (!isAdmin || !playerLimits[id]) return;
+    setLimitPlayerId(id);
+    setLimitRounds(playerLimits[id].rounds);
   };
 
   const handleRemoveLimit = (id: string) => {
@@ -1132,7 +1173,7 @@ export default function Home() {
     });
   };
 
-  const limitLabel = (l: PlayerLimit) => (l.from === l.to ? `${l.from}回戦のみ` : `${l.from}〜${l.to}回戦のみ`);
+  const limitLabel = (l: PlayerLimit) => formatLimitRounds(l.rounds);
 
   // ----------------------------------------
   // B. 卓組生成
@@ -1148,9 +1189,9 @@ export default function Home() {
 
     // 出場限定の設定が、現在の回戦数と矛盾していないか確認
     for (const [id, l] of limitEntries) {
-      if (l.from < 1 || l.to > roundsCount || l.from > l.to) {
+      if (l.rounds.length === 0 || l.rounds.some(n => n < 1 || n > roundsCount)) {
         const nm = dbPlayers.find(p => p.id === id)?.name || '不明';
-        alert(`${nm} の出場限定（${l.from}〜${l.to}回戦）が全${roundsCount}回戦の範囲外です。設定を見直してください。`);
+        alert(`${nm} の出場限定（${formatLimitRounds(l.rounds)}）が全${roundsCount}回戦の範囲外です。設定を見直してください。`);
         return;
       }
     }
@@ -3501,28 +3542,45 @@ export default function Home() {
                     <div className="mb-8 p-4 bg-amber-50/60 rounded-xl border border-amber-200">
                       <h3 className="font-bold text-slate-700 mb-1">出場試合数を限定する選手（任意）</h3>
                       <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-                        基本は全選手が全試合に出場します。一部の選手のみ「1〜3回戦のみ」「7〜9回戦のみ」のように限定できます。<br />
+                        基本は全選手が全試合に出場します。一部の選手のみ、出場する回戦を自由に選んで限定できます（例: 1〜3回戦のみ、7〜9回戦のみ、1〜3回戦＋7〜9回戦、2・5・8回戦のみ）。<br />
                         限定された選手は、順位順で決まる回戦では黒子と同様に上位8位（2卓）に入らず、弾かれた場合は9位の位置に入ります。今大会成績のランキングには表示されず、通算成績には通常通り加算されます。
                       </p>
                       <div className="flex flex-wrap gap-2 items-center">
-                        <select value={limitPlayerId} onChange={e => setLimitPlayerId(e.target.value)} className="p-2.5 border rounded-lg bg-white text-sm min-w-[12rem]">
+                        <select value={limitPlayerId} onChange={e => { setLimitPlayerId(e.target.value); setLimitRounds(playerLimits[e.target.value]?.rounds || []); }} className="p-2.5 border rounded-lg bg-white text-sm min-w-[12rem]">
                           <option value="">エントリー済みの選手から選ぶ...</option>
-                          {dbPlayers.filter(p => entryPlayerIds.includes(p.id) && !playerLimits[p.id]).map(p => (
-                            <option key={p.id} value={p.id}>{proMarkedName(p.name)}</option>
+                          {dbPlayers.filter(p => entryPlayerIds.includes(p.id)).map(p => (
+                            <option key={p.id} value={p.id}>{proMarkedName(p.name)}{playerLimits[p.id] ? '（設定済み）' : ''}</option>
                           ))}
                         </select>
-                        <input type="number" min="1" value={limitFrom} onChange={e => setLimitFrom(Number(e.target.value))} className="w-16 p-2.5 border rounded-lg text-sm font-bold text-center bg-white" />
-                        <span className="text-sm font-bold text-slate-500">〜</span>
-                        <input type="number" min="1" value={limitTo} onChange={e => setLimitTo(Number(e.target.value))} className="w-16 p-2.5 border rounded-lg text-sm font-bold text-center bg-white" />
-                        <span className="text-sm font-bold text-slate-500">回戦のみ</span>
-                        <button onClick={handleAddLimit} disabled={!limitPlayerId} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">追加</button>
+                        <button onClick={handleAddLimit} disabled={!limitPlayerId || limitRounds.length === 0} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">{limitPlayerId && playerLimits[limitPlayerId] ? '更新' : '追加'}</button>
+                      </div>
+                      <div className="mt-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-bold text-slate-600">出場する回戦（タップで選択）</span>
+                          <button onClick={() => setLimitRounds(Array.from({ length: roundsCount }, (_, i) => i + 1))} className="text-[11px] font-bold text-amber-700 underline">全選択</button>
+                          <button onClick={() => setLimitRounds([])} className="text-[11px] font-bold text-slate-500 underline">クリア</button>
+                          {limitRounds.length > 0 && <span className="text-[11px] font-bold text-amber-700">→ {formatLimitRounds(limitRounds.filter(n => n <= roundsCount))}</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Array.from({ length: roundsCount }, (_, i) => i + 1).map(n => {
+                            const on = limitRounds.includes(n);
+                            return (
+                              <button
+                                key={n}
+                                onClick={() => toggleLimitRound(n)}
+                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'}`}
+                              >{n}</button>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-1.5">※ {roundsCount - 1}・{roundsCount}回戦は順位順で決まる回戦です。</p>
                       </div>
                       {limitEntries.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
                           {limitEntries.map(([id, l]) => (
                             <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-slate-700">
                               <PlayerLabel name={dbPlayers.find(p => p.id === id)?.name || '不明'} />
-                              <span className="text-xs text-amber-700">{limitLabel(l)}</span>
+                              <button onClick={() => handleEditLimit(id)} className="text-xs text-amber-700 underline decoration-dotted hover:text-amber-900" title="出場回戦を編集">{limitLabel(l)}</button>
                               <button onClick={() => handleRemoveLimit(id)} className="w-5 h-5 rounded-full bg-slate-200 hover:bg-red-200 text-slate-500 hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
                             </span>
                           ))}
