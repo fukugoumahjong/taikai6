@@ -2511,8 +2511,8 @@ export default function Home() {
   // ==========================================
   // データタブ用の集計（過去大会＋今大会（送信済みの卓）の全結果が対象。黒子・順位対象外の記録は除く）
   // ==========================================
-  const DATA_TOP_N = 5;
-  const MIN_GAMES_FOR_RATE = 10; // 連対率・ラス回避率の対象となる最低半荘数
+  const DATA_TOP_N = 7;
+  const MIN_GAMES_FOR_RATE = 8; // 連対率・ラス回避率の対象となる最低半荘数
 
   // 同じ値は同順位にする（1,2,2,4…）
   const assignRanks = <T,>(sorted: T[], valueOf: (x: T) => number): (T & { rankNo: number })[] => {
@@ -2592,7 +2592,7 @@ export default function Home() {
   const rateEligible = aggList.filter(x => x.games >= MIN_GAMES_FOR_RATE);
   const round1 = (v: number) => Math.round(v * 10) / 10;
 
-  // 連対率（1着または2着の割合）／ラス回避率（4着でなかった割合）。10半荘以上が対象
+  // 連対率（1着または2着の割合）／ラス回避率（4着でなかった割合）。8半荘以上が対象
   const rentaiRanking = assignRanks(
     rateEligible.map(x => ({ ...x, rate: (x.top + x.second) / x.games })).sort((x, y) => y.rate - x.rate || y.games - x.games).slice(0, DATA_TOP_N),
     x => x.rate,
