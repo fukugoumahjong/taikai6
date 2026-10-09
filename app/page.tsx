@@ -1882,6 +1882,9 @@ export default function Home() {
     return count;
   };
 
+  // 通算成績ランキングに表示する選手（通算0半荘の選手は表示しない）
+  const totalRankingPlayers = displayDbPlayers.filter(p => getTotalGames(p.id) > 0);
+
   // 年間チャンピオン大会の出場権は、各大会優勝を除き今年度に2回以上の参加が必要。
   // ここでの「対象」表示は目安であり、自動的に出場権が得られるわけではない。
   const isChampionshipCandidate = (p: Player) => {
@@ -2212,7 +2215,7 @@ export default function Home() {
         <td class="r ${p.point > 0 ? 'plus' : p.point < 0 ? 'minus' : ''}">${fmtPt(p.point)}</td>
       </tr>`).join('');
 
-    const totalRows = displayDbPlayers.map((p, i) => {
+    const totalRows = totalRankingPlayers.map((p, i) => {
       const granted = hasChampionshipRight(p);
       const candidate = isChampionshipCandidate(p);
       const pro = isPro(p.name);
@@ -2975,7 +2978,7 @@ export default function Home() {
                   </tr>
                 </thead>
                 <tbody>
-                  {displayDbPlayers.map((p, i) => {
+                  {totalRankingPlayers.map((p, i) => {
                     const pro = isPro(p.name);
                     const granted = hasChampionshipRight(p);
                     const candidate = isChampionshipCandidate(p);
