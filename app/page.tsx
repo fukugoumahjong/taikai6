@@ -112,7 +112,7 @@ const formatLimitRounds = (rounds: number[]): string => {
 // stamp       : 最終更新時刻（端末間で新しい方を採用するための印）
 type TimerState = { breakMinutes: number; startAts: Record<number, number>; stamp: number };
 const DEFAULT_BREAK_MINUTES = 4;
-const TIMER_SHOW_AFTER_START_MS = 5 * 60 * 1000; // 開始時刻を過ぎてもバナーを残す時間
+const TIMER_SHOW_AFTER_START_MS = 10 * 60 * 1000; // 開始時刻を過ぎてもバナーを残す時間
 
 const normalizeTimer = (raw: any): TimerState => {
   const bm = Number(raw?.breakMinutes);
@@ -155,14 +155,14 @@ function NextRoundTimerBar({ round, startAt, seatText, isAdmin, onOpenSettings }
       ? 'from-amber-500 to-orange-600'
       : 'from-indigo-700 to-violet-700';
   return (
-    <div className={`relative w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-2.5 shadow-md`}>
+    <div className={`sticky top-0 md:top-16 z-30 w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-1.5 sm:py-2.5 shadow-lg`}>
       <div className="text-[11px] sm:text-xs font-bold tracking-widest opacity-90">
         {started ? `${round}回戦 開始時刻です` : `次の回戦まで（${round}回戦）`}
       </div>
-      <div className={`font-black font-mono tabular-nums leading-tight text-5xl sm:text-6xl ${urgent ? 'animate-pulse' : ''}`}>
+      <div className={`font-black font-mono tabular-nums leading-none text-4xl sm:text-6xl my-0.5 ${urgent ? 'animate-pulse' : ''}`}>
         {started ? '対局開始！' : text}
       </div>
-      {seatText && <div className="text-lg sm:text-xl font-black mt-0.5">{seatText}</div>}
+      {seatText && <div className="text-base sm:text-xl font-black">{seatText}</div>}
       {isAdmin && (
         <button
           onClick={onOpenSettings}
@@ -2394,7 +2394,7 @@ export default function Home() {
     }).join('');
 
     const resultBlocks = (hideSeating ? [] : seating).map(r => {
-      const timeNote = startTimeOf(r.round) ? `<span class="time">${timerState.startAts[r.round] ? '開始' : '開始目安'} ${startTimeOf(r.round)}</span>` : '';
+      const timeNote = startTimeOf(r.round) ? `<span class="time">${timerState.startAts[r.round] ? '開始時間' : '開始目安'} ${startTimeOf(r.round)}</span>` : '';
       if (r.isPending || r.tables.length === 0) {
         return `<div class="round"><h3>${r.round}回戦 ${timeNote}</h3><p class="note">卓組未定（前の回戦が全て終了した時点で順位順に決定）</p></div>`;
       }
@@ -2465,7 +2465,7 @@ export default function Home() {
   <h1>${escapeHtml(APP_TITLE)} ／ 今大会成績レポート</h1>
   <div class="sub">
     出力日時: ${dateStr} ／ ${escapeHtml(RULE_NAME)} ／ 参加 ${entryPlayerIds.length}名 ／ 全${roundsCount}回戦 ／ チョンボ 1回 -${CHONBO_PENALTY.toFixed(1)}pt<br>
-    開始時刻（目安）: ${timeTable}
+    開始時間（1回戦は目安）: ${timeTable}
   </div>
 
   <h2>今大会ランキング${showKuroko ? '（黒子を含む）' : ''}</h2>
@@ -3882,8 +3882,8 @@ export default function Home() {
               </div>
             )}
 
-            {/* 大会規定 */}
-            <RulesDocCard />
+            {/* 大会規定（大会開催中は、全ての回戦の下に表示する） */}
+            {!(tournamentPhase === 'playing' || (tournamentPhase === 'drawing' && isAdmin)) && <RulesDocCard />}
 
             {/* 卓組抽選中（管理者以外）: 抽選中アニメーション */}
             {tournamentPhase === 'drawing' && !isAdmin && (
@@ -4003,6 +4003,7 @@ export default function Home() {
 
             {(tournamentPhase === 'playing' || (tournamentPhase === 'drawing' && isAdmin)) && (
               <div className="space-y-6">
+                {(isAdmin || !loggedInPlayerId) && (
                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
                   <div className="flex justify-between items-center gap-4">
                     <div>
@@ -4025,14 +4026,15 @@ export default function Home() {
                       </div>
                     )}
                   </div>
-                  {/* 開始時刻の目安 */}
+                  {/* 開始時間（1回戦は目安） */}
                   <p className="mt-3 text-[10px] text-indigo-400 leading-relaxed">
-                    開始時刻（1回戦は目安、2回戦以降は前の回戦の全卓送信＋休憩{timerState.breakMinutes}分）:&nbsp;
+                    開始時間（1回戦は目安、2回戦以降は前の回戦の全卓送信＋休憩{timerState.breakMinutes}分）:&nbsp;
                     {ROUND_START_TIMES.slice(0, roundsCount).map((t, i) => (
                       <span key={i} className={`mr-2 whitespace-nowrap ${timerState.startAts[i + 1] ? 'text-indigo-700 font-bold' : ''}`}>{i + 1}回戦 {startTimeOf(i + 1) || t}</span>
                     ))}
                   </p>
                 </div>
+                )}
 
                 {/* ---- 管理者用ツール ---- */}
                 {isAdmin && showAdminTools && (
@@ -4119,7 +4121,7 @@ export default function Home() {
                           <span className="text-xl md:text-2xl font-black text-slate-800">{r.round}回戦</span>
                         </button>
 
-                        {time && <span className="text-[11px] text-slate-400 font-bold">開始目安 {time}〜</span>}
+                        {time && <span className={`text-[11px] font-bold ${timerState.startAts[r.round] ? 'text-indigo-500' : 'text-slate-400'}`}>{timerState.startAts[r.round] ? '開始時間' : '開始目安'} {time}〜</span>}
 
                         {r.mode === 'rankTopFirst' && <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded">順位戦 / 上位から東南西北</span>}
                         {r.mode === 'rankBottomFirst' && <span className="text-[11px] font-bold bg-rose-100 text-rose-800 px-2 py-1 rounded">最終戦 / 下位から東南西北</span>}
@@ -4316,6 +4318,9 @@ export default function Home() {
                     </div>
                   );
                 })}
+
+                {/* 大会規定（全ての回戦の下） */}
+                <RulesDocCard />
 
               </div>
             )}
