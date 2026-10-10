@@ -103,6 +103,78 @@ const formatLimitRounds = (rounds: number[]): string => {
   return `${parts.join('・')}回戦のみ`;
 };
 
+// ==========================================
+// 次の回戦までのタイマー
+// ==========================================
+// 2回戦以降の開始時刻 = 「前の回戦の全卓の送信が完了した瞬間」＋ 休憩時間。
+// breakMinutes: 休憩時間（分）。管理者が途中で変更できる
+// startAts    : 回戦番号 → 開始時刻（エポックms）
+// stamp       : 最終更新時刻（端末間で新しい方を採用するための印）
+type TimerState = { breakMinutes: number; startAts: Record<number, number>; stamp: number };
+const DEFAULT_BREAK_MINUTES = 4;
+const TIMER_SHOW_AFTER_START_MS = 5 * 60 * 1000; // 開始時刻を過ぎてもバナーを残す時間
+
+const normalizeTimer = (raw: any): TimerState => {
+  const bm = Number(raw?.breakMinutes);
+  const startAts: Record<number, number> = {};
+  if (raw?.startAts && typeof raw.startAts === 'object') {
+    Object.entries(raw.startAts).forEach(([k, v]) => {
+      const n = Number(k), t = Number(v);
+      if (Number.isFinite(n) && Number.isFinite(t)) startAts[n] = t;
+    });
+  }
+  return {
+    breakMinutes: Number.isFinite(bm) && bm >= 0 ? bm : DEFAULT_BREAK_MINUTES,
+    startAts,
+    stamp: Number.isFinite(Number(raw?.stamp)) ? Number(raw.stamp) : 0,
+  };
+};
+
+// 開始時刻（エポックms）→ "HH:MM"（日本時間）
+const formatClock = (ms: number) =>
+  new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Tokyo' }).format(new Date(ms));
+
+// ヘッダー下に全ページ共通で出すカウントダウン。1秒ごとの再描画はこの部品の中だけで完結させる
+function NextRoundTimerBar({ round, startAt, seatText, isAdmin, onOpenSettings }: {
+  round: number; startAt: number; seatText?: string; isAdmin: boolean; onOpenSettings: () => void;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const remainMs = startAt - now;
+  if (remainMs < -TIMER_SHOW_AFTER_START_MS) return null;
+  const started = remainMs <= 0;
+  const sec = Math.max(0, Math.ceil(remainMs / 1000));
+  const text = `${String(Math.floor(sec / 60)).padStart(2, '0')}:${String(sec % 60).padStart(2, '0')}`;
+  const urgent = !started && sec <= 60;
+  const tone = started
+    ? 'from-emerald-600 to-teal-600'
+    : urgent
+      ? 'from-amber-500 to-orange-600'
+      : 'from-indigo-700 to-violet-700';
+  return (
+    <div className={`relative w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-2.5 shadow-md`}>
+      <div className="text-[11px] sm:text-xs font-bold tracking-widest opacity-90">
+        {started ? `${round}回戦 開始時刻です` : `次の回戦まで（${round}回戦）`}
+      </div>
+      <div className={`font-black font-mono tabular-nums leading-tight text-5xl sm:text-6xl ${urgent ? 'animate-pulse' : ''}`}>
+        {started ? '対局開始！' : text}
+      </div>
+      {seatText && <div className="text-lg sm:text-xl font-black mt-0.5">{seatText}</div>}
+      {isAdmin && (
+        <button
+          onClick={onOpenSettings}
+          className="absolute right-2 top-2 w-10 h-10 rounded-full bg-black/25 hover:bg-black/40 active:bg-black/50 text-lg leading-none transition"
+          title="休憩時間・タイマーの設定"
+          aria-label="タイマー設定"
+        >⚙️</button>
+      )}
+    </div>
+  );
+}
+
 // ---- 過去大会（アーカイブ）まわりの型 ----
 type ArchiveHanchanResult = {
   playerId: string;
@@ -289,13 +361,13 @@ const PlayerDetailModal = ({
   const toggleHanchan = (key: string) => setOpenHanchan(prev => (prev === key ? null : key));
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 md:p-6" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-3 md:p-6" onClick={onClose}>
       <div
-        className="bg-white w-full max-w-3xl max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
+        className="bg-white w-full max-w-3xl max-h-[94vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-5 md:px-8 py-6 flex items-start justify-between flex-shrink-0">
+        <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
           <div>
             <p className="text-indigo-200 text-xs font-bold mb-1">個人成績</p>
             <h2 className="text-2xl md:text-3xl font-black flex items-center">
@@ -841,6 +913,13 @@ export default function Home() {
   const [entryPlayerIds, setEntryPlayerIds] = useState<string[]>([]);
   // 出場試合数を限定する選手（playerId → 出場する回戦の範囲）。未設定の選手は全試合に出場
   const [playerLimits, setPlayerLimits] = useState<Record<string, PlayerLimit>>({});
+  // 次の回戦までのタイマー（休憩時間と、2回戦以降の開始時刻）
+  const [timerState, setTimerState] = useState<TimerState>({ breakMinutes: DEFAULT_BREAK_MINUTES, startAts: {}, stamp: 0 });
+  const [showTimerSettings, setShowTimerSettings] = useState(false);
+  const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
+  // タイマーを変更する共通関数（変更時刻を stamp に残し、他端末より新しい内容として扱えるようにする）
+  const updateTimer = (fn: (prev: TimerState) => TimerState) =>
+    setTimerState(prev => ({ ...fn(prev), stamp: Date.now() }));
   
   const [roundsCount, setRoundsCount] = useState(4);
   const [seating, setSeating] = useState<Round[]>([]);
@@ -937,6 +1016,7 @@ export default function Home() {
     if (current.entryPlayerIds) setEntryPlayerIds(current.entryPlayerIds);
     if (current.roundsCount) setRoundsCount(current.roundsCount);
     setPlayerLimits(normalizePlayerLimits(current.playerLimits));
+    if (current.timer) setTimerState(normalizeTimer(current.timer));
     if (current.seating) {
       // 旧データ互換: chonbo / mode が無いデータを補完
       const migrated: Round[] = (current.seating as Round[]).map((r: Round) => ({
@@ -973,8 +1053,58 @@ export default function Home() {
     // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
     // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
     if (!isAdmin && tournamentPhase !== 'playing') return;
-    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits });
-  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, isLoaded, isAdmin]);
+    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState });
+  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, isLoaded, isAdmin]);
+
+  // 大会進行中は5秒おきに最新状態を確認し、次の2点だけ取り込む（入力中の内容を壊さないため）
+  //  ① タイマー（休憩時間・開始時刻）…新しい方を採用
+  //  ② 他の端末で送信が済んだ卓／順位順で新しく決まった回戦
+  useEffect(() => {
+    if (!isLoaded || tournamentPhase !== 'playing') return;
+    const timer = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      const current = await api.getCurrentTournament();
+      if (!current) return;
+      if (current.timer) {
+        const srv = normalizeTimer(current.timer);
+        setTimerState(prev => (srv.stamp > prev.stamp ? srv : prev));
+      }
+      if (Array.isArray(current.seating)) {
+        const server = current.seating as Round[];
+        setSeating(prev => {
+          let changed = false;
+          const next = prev.map(lr => {
+            const sr = server.find(x => x.round === lr.round);
+            if (!sr) return lr;
+            // 順位順の回戦がサーバー側で決定済みなら、その回戦をそのまま取り込む
+            if ((lr.isPending || lr.tables.length === 0) && !sr.isPending && sr.tables.length > 0) {
+              changed = true;
+              return {
+                ...sr,
+                mode: sr.mode || 'normal',
+                tables: sr.tables.map(t => ({ ...t, players: t.players.map(pl => ({ ...pl, chonbo: pl.chonbo || 0 })) })),
+              };
+            }
+            // 未送信だった卓が、他の端末で送信済みになっていれば取り込む
+            let tablesChanged = false;
+            const tables = lr.tables.map(lt => {
+              if (lt.isSubmitted) return lt;
+              const st = sr.tables.find(x => x.tableNumber === lt.tableNumber);
+              if (st && st.isSubmitted) {
+                tablesChanged = true;
+                return { ...st, players: st.players.map(pl => ({ ...pl, chonbo: pl.chonbo || 0 })) };
+              }
+              return lt;
+            });
+            if (tablesChanged) { changed = true; return { ...lr, tables }; }
+            return lr;
+          });
+          return changed ? next : prev;
+        });
+      }
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [isLoaded, tournamentPhase]);
 
   // ----------------------------------------
   // A. プレイヤー管理 & 編集機能
@@ -1314,6 +1444,7 @@ export default function Home() {
     setRoundOpen({});
     setTableOpen({});
     // 卓組を生成したら「抽選中」へ。管理者が「大会開始」を押すまで得点入力はできない
+    updateTimer(prev => ({ ...prev, startAts: {} }));
     setTournamentPhase('drawing');
   };
 
@@ -1516,6 +1647,25 @@ export default function Home() {
     setSeating(updated);
     // 送信した卓は自動的に畳む
     setTableOpen(prev => ({ ...prev, [`${seating[rIdx].round}-${table.tableNumber}`]: false }));
+
+    // この回戦の全卓の送信が終わった瞬間に、次の回戦の開始時刻（＝今 + 休憩時間）を決める。
+    // 他の端末で送信された卓を見落とさないよう、サーバー上の最新状態も確認する。
+    const thisRound = seating[rIdx];
+    if (thisRound.round < roundsCount) {
+      let serverRound: Round | undefined;
+      try {
+        const latest = await api.getCurrentTournament();
+        serverRound = (latest?.seating as Round[] | undefined)?.find(x => x.round === thisRound.round);
+      } catch { /* 取得できなくても手元の状態で判定する */ }
+      const allSubmitted = thisRound.tables.length > 0 && thisRound.tables.every(t =>
+        t.isSubmitted || !!serverRound?.tables.find(x => x.tableNumber === t.tableNumber)?.isSubmitted);
+      if (allSubmitted) {
+        const nextRound = thisRound.round + 1;
+        updateTimer(prev => (prev.startAts[nextRound]
+          ? prev
+          : { ...prev, startAts: { ...prev.startAts, [nextRound]: Date.now() + prev.breakMinutes * 60 * 1000 } }));
+      }
+    }
   };
 
   const handleRevokeTable = async (rIdx: number, tIdx: number) => {
@@ -1531,6 +1681,14 @@ export default function Home() {
     updated[rIdx].tables[tIdx].isSubmitted = false;
     updated[rIdx].tables[tIdx].isCalculated = false;
     setSeating(updated);
+    // この回戦が未完了に戻ったので、次の回戦のタイマーは取り消す（再び全卓が送信されたら改めて開始）
+    const revokedNext = seating[rIdx].round + 1;
+    updateTimer(prev => {
+      if (prev.startAts[revokedNext] === undefined) return prev;
+      const startAts = { ...prev.startAts };
+      delete startAts[revokedNext];
+      return { ...prev, startAts };
+    });
     alert('送信を取り消しました。スコアを修正してください。');
   };
 
@@ -1575,7 +1733,7 @@ export default function Home() {
           alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
-        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setTournamentPhase('entry'); setActiveTab('tournament');
+        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
@@ -1882,6 +2040,10 @@ export default function Home() {
     return count;
   };
 
+  // 各回戦の開始時刻の表示用。2回戦以降でタイマーが動いた回戦は実際の開始時刻、それ以外は従来の目安
+  const startTimeOf = (roundNo: number): string | null =>
+    timerState.startAts[roundNo] ? formatClock(timerState.startAts[roundNo]) : roundStartTime(roundNo);
+
   // 通算成績ランキングに表示する選手（通算0半荘の選手は表示しない）
   const totalRankingPlayers = displayDbPlayers.filter(p => getTotalGames(p.id) > 0);
 
@@ -2166,7 +2328,7 @@ export default function Home() {
       .map(it => ({
         key: it.key,
         roundNo: it.roundNo,
-        time: roundStartTime(it.roundNo),
+        time: startTimeOf(it.roundNo),
         status: it.status,
         tableNo: it.tableNo,
         wind: it.wind,
@@ -2232,7 +2394,7 @@ export default function Home() {
     }).join('');
 
     const resultBlocks = (hideSeating ? [] : seating).map(r => {
-      const timeNote = roundStartTime(r.round) ? `<span class="time">開始目安 ${roundStartTime(r.round)}</span>` : '';
+      const timeNote = startTimeOf(r.round) ? `<span class="time">${timerState.startAts[r.round] ? '開始' : '開始目安'} ${startTimeOf(r.round)}</span>` : '';
       if (r.isPending || r.tables.length === 0) {
         return `<div class="round"><h3>${r.round}回戦 ${timeNote}</h3><p class="note">卓組未定（前の回戦が全て終了した時点で順位順に決定）</p></div>`;
       }
@@ -2269,7 +2431,7 @@ export default function Home() {
     }).join('');
 
     const timeTable = ROUND_START_TIMES.slice(0, Math.max(roundsCount, 0))
-      .map((t, i) => `${i + 1}回戦 ${t}`).join(' / ');
+      .map((t, i) => `${i + 1}回戦 ${startTimeOf(i + 1) || t}`).join(' / ');
 
     return `<!DOCTYPE html>
 <html lang="ja"><head><meta charset="utf-8" />
@@ -2676,8 +2838,52 @@ export default function Home() {
     >{label}</button>
   );
 
+  // スマホ用の下部ナビの項目
+  const mobileNavItems: { key: typeof activeTab; icon: string; label: string; color: string }[] = [
+    { key: 'tournament', icon: '🀄', label: '大会進行', color: 'bg-indigo-400' },
+    { key: 'currentRanking', icon: '🏆', label: '今大会', color: 'bg-teal-400' },
+    { key: 'totalRanking', icon: '📈', label: '通算', color: 'bg-indigo-400' },
+    { key: 'archives', icon: '🗂️', label: '過去大会', color: 'bg-amber-400' },
+    ...(isAdmin ? [{ key: 'players' as const, icon: '👥', label: '登録', color: 'bg-indigo-400' }] : []),
+    { key: 'data', icon: '📊', label: 'データ', color: 'bg-fuchsia-400' },
+  ];
+
+  // 表示するタイマー: 開始時刻が設定済みで、まだ終わっていない回戦のうち一番新しいもの
+  // （開始時刻を過ぎて一定時間が経つと、タイマー部品の側で自動的に消える）
+  const activeTimer = (() => {
+    if (tournamentPhase !== 'playing') return null;
+    const cands = Object.entries(timerState.startAts)
+      .map(([k, v]) => ({ round: Number(k), startAt: Number(v) }))
+      .filter(c => {
+        const rd = seating.find(r => r.round === c.round);
+        return !!rd && !isRoundFinished(rd);
+      })
+      .sort((a, b) => b.round - a.round);
+    return cands[0] || null;
+  })();
+  // 一番下の「〇卓〇家」は、選手ログイン中のみ表示する
+  const timerSeatText = (() => {
+    if (!activeTimer || !loggedInPlayerId || hideSeating) return undefined;
+    const item = getPlayerSchedule(loggedInPlayerId).find(it => it.roundNo === activeTimer.round);
+    if (!item) return undefined;
+    if (item.status === 'ready' && item.tableNo) return `${item.tableNo}卓${item.wind}家`;
+    if (item.status === 'sitout') return '抜け番';
+    return undefined;
+  })();
+
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-800 font-sans relative pb-20">
+    <main className="min-h-screen bg-slate-100 text-slate-800 font-sans relative pb-28 md:pb-20">
+      {/* スマホ向けの共通調整: 入力欄の自動ズーム防止（16px）、タップ時の青いハイライト抑止、横スクロールの慣性など */}
+      <style>{`
+        html { -webkit-text-size-adjust: 100%; }
+        body { -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        @media (max-width: 767px) {
+          input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px !important; }
+          .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        }
+        .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+      `}</style>
       
       {isResetting && (
         <div className="fixed inset-0 bg-black/90 z-50 flex flex-col items-center justify-center text-white">
@@ -2691,8 +2897,8 @@ export default function Home() {
       )}
 
       {showPlayerLogin && (
-        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setShowPlayerLogin(false)}>
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowPlayerLogin(false)}>
+          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-black text-slate-800 mb-1">🀄 選手ログイン</h2>
             <p className="text-xs text-slate-500 mb-4">配布されたログインコードを入力してください。</p>
             <input
@@ -2713,17 +2919,19 @@ export default function Home() {
         </div>
       )}
 
-      {/* ========== ヘッダー (1行固定・折り返しなし) ========== */}
-      <header className="bg-slate-900 text-white shadow-md sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-4 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      {/* ========== ヘッダー ==========
+          スマホ: 1段目=タイトル+ログイン、2段目=横スクロールの操作ボタン。画面切替は下部ナビで行う
+          PC    : 従来どおり1行（画面上部に固定） */}
+      <header className="bg-slate-900 text-white shadow-md relative md:sticky md:top-0 z-40">
+        <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 md:h-16 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-2 md:gap-4 md:overflow-x-auto no-scrollbar">
           {/* タイトル */}
-          <div className="flex-shrink-0 leading-tight mr-1">
-            <h1 className="text-base sm:text-lg lg:text-xl font-bold tracking-wide whitespace-nowrap">{APP_TITLE}</h1>
+          <div className="order-1 md:order-none min-w-0 flex-1 md:flex-none md:flex-shrink-0 leading-tight mr-1">
+            <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap">{APP_TITLE}</h1>
             <p className="text-[10px] text-slate-400 whitespace-nowrap">{RULE_NAME}</p>
           </div>
 
-          {/* タブ */}
-          <nav className="flex-shrink-0 flex bg-slate-800 p-1 rounded-lg gap-0.5">
+          {/* タブ（PCのみ。スマホは下部ナビ） */}
+          <nav className="hidden md:flex order-none flex-shrink-0 bg-slate-800 p-1 rounded-lg gap-0.5">
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '通算成績', 'bg-indigo-600')}
@@ -2732,69 +2940,181 @@ export default function Home() {
             {tabBtn('data', 'データ', 'bg-fuchsia-600')}
           </nav>
 
-          {/* 大会規定 */}
-          <a
-            href={RULES_DOC_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex-shrink-0 text-[11px] font-bold bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white px-2.5 py-1.5 rounded-md transition whitespace-nowrap"
-            title="大会規定（Google ドキュメント）を別タブで開きます"
-          >
-            📖 大会規定
-          </a>
+          {/* 操作ボタン（スマホでは2段目で横スクロール／PCでは1行に並ぶ） */}
+          <div className="order-3 md:order-none w-full md:w-auto md:contents flex items-center gap-2 overflow-x-auto md:overflow-visible no-scrollbar pb-0.5 md:pb-0">
+            {/* 大会規定 */}
+            <a
+              href={RULES_DOC_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-shrink-0 text-xs md:text-[11px] font-bold bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+              title="大会規定（Google ドキュメント）を別タブで開きます"
+            >
+              📖 大会規定
+            </a>
 
-          <div className="flex-1" />
+            <div className="hidden md:block md:flex-1" />
 
-          {/* 管理ツール */}
-          {isAdmin && (
-            <div className="flex-shrink-0 flex gap-2 items-center">
-              <button onClick={api.exportBackup} className="text-[11px] bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-md transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-              <label className="text-[11px] bg-slate-800 hover:bg-slate-700 px-2.5 py-1.5 rounded-md transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
-                📂 復元
-                <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
-              </label>
-            </div>
-          )}
+            {/* 管理ツール */}
+            {isAdmin && (
+              <div className="flex-shrink-0 flex gap-2 items-center">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={api.exportBackup} className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+                  📂 復元
+                  <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
+                </label>
+              </div>
+            )}
 
-          {/* 選手ログイン（管理者以外向け） */}
-          {!isAdmin && (
-            <div className="flex-shrink-0 flex gap-2 items-center">
-              {loggedInPlayer ? (
-                <>
-                  <button
-                    onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
-                    className="text-[11px] font-bold bg-teal-700 hover:bg-teal-600 text-white px-2.5 py-1.5 rounded-md transition whitespace-nowrap"
-                    title="自分の個人成績と、この後の対局を見る"
-                  >
-                    👤 {loggedInPlayer.name}（個人成績）
+            {/* 選手ログイン（管理者以外向け） */}
+            {!isAdmin && (
+              <div className="flex-shrink-0 flex gap-2 items-center">
+                {loggedInPlayer ? (
+                  <>
+                    <button
+                      onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
+                      className="text-xs md:text-[11px] font-bold bg-teal-700 hover:bg-teal-600 text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+                      title="自分の個人成績と、この後の対局を見る"
+                    >
+                      👤 {loggedInPlayer.name}（個人成績）
+                    </button>
+                    <button onClick={handlePlayerLogout} className="text-xs md:text-[11px] bg-slate-800 hover:bg-red-600 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                  </>
+                ) : (
+                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-[11px] bg-teal-600 hover:bg-teal-500 px-4 md:px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">
+                    🀄 選手ログイン
                   </button>
-                  <button onClick={handlePlayerLogout} className="text-[11px] bg-slate-800 hover:bg-red-600 px-2.5 py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
-                </>
-              ) : (
-                <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-[11px] bg-teal-600 hover:bg-teal-500 px-3 py-1.5 rounded-md font-bold transition whitespace-nowrap">
-                  🀄 選手ログイン
-                </button>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Auth Area */}
-          <div className="flex-shrink-0 flex gap-2 items-center pl-3 ml-1 border-l border-slate-700">
+          <div className="order-2 md:order-none flex-shrink-0 flex gap-2 items-center md:pl-3 md:ml-1 md:border-l md:border-slate-700">
             {session ? (
               <>
                 <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap hidden sm:inline">
                   {session.user?.name}{isAdmin && ' (管理者)'}
                 </span>
-                <button onClick={() => signOut()} className="text-[11px] bg-slate-800 hover:bg-red-600 px-2.5 py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                {isAdmin && <span className="sm:hidden text-[10px] font-bold bg-indigo-600 px-1.5 py-0.5 rounded">管理者</span>}
+                <button onClick={() => signOut()} className="text-xs md:text-[11px] bg-slate-800 hover:bg-red-600 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-[11px] bg-indigo-600 hover:bg-indigo-500 px-3 py-1.5 rounded-md font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="text-xs md:text-[11px] bg-indigo-600 hover:bg-indigo-500 px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">Googleログイン</button>
             )}
           </div>
         </div>
       </header>
 
-      <div className="max-w-5xl mx-auto p-4 md:p-6">
+      {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
+      <nav
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-700 shadow-[0_-4px_16px_rgba(0,0,0,0.25)]"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        aria-label="画面の切り替え"
+      >
+        <div className="grid" style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}>
+          {mobileNavItems.map(it => {
+            const on = activeTab === it.key;
+            return (
+              <button
+                key={it.key}
+                onClick={() => { setActiveTab(it.key); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }); }}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] transition ${on ? 'text-white' : 'text-slate-400 active:text-white'}`}
+                aria-current={on ? 'page' : undefined}
+              >
+                {on && <span className={`absolute top-0 inset-x-3 h-[3px] rounded-b-full ${it.color}`} />}
+                <span className="text-xl leading-none">{it.icon}</span>
+                <span className={`text-[10px] leading-none ${on ? 'font-black' : 'font-bold'}`}>{it.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
+
+      {/* ========== 次の回戦までのタイマー（全ページ共通・ヘッダーの下） ========== */}
+      {activeTimer && (
+        <NextRoundTimerBar
+          round={activeTimer.round}
+          startAt={activeTimer.startAt}
+          seatText={timerSeatText}
+          isAdmin={isAdmin}
+          onOpenSettings={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }}
+        />
+      )}
+
+      {/* ========== タイマー設定（管理者） ========== */}
+      {showTimerSettings && isAdmin && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTimerSettings(false)}>
+          <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-black text-slate-800 mb-1">⏱ 休憩時間・タイマー設定</h2>
+            <p className="text-xs text-slate-500 mb-4 leading-relaxed">2回戦以降は「前の回戦の全卓が送信された瞬間」からこの時間後が開始時刻になります。</p>
+
+            <label className="block text-xs font-bold text-slate-600 mb-1">休憩時間（分）</label>
+            <div className="flex gap-2 mb-1">
+              <input
+                type="number" min="0" max="60" step="1"
+                value={breakInput}
+                onChange={(e) => setBreakInput(e.target.value)}
+                className="flex-1 p-2.5 border-2 border-slate-200 focus:border-indigo-500 rounded-lg text-center text-xl font-black outline-none"
+              />
+              <button
+                onClick={() => {
+                  const v = Math.floor(Number(breakInput));
+                  if (!Number.isFinite(v) || v < 0 || v > 60) { alert('休憩時間は0〜60分の整数で指定してください。'); return; }
+                  const delta = (v - timerState.breakMinutes) * 60 * 1000;
+                  const target = activeTimer?.round;
+                  updateTimer(prev => ({
+                    ...prev,
+                    breakMinutes: v,
+                    // 動いているタイマーにも、変更分をそのまま反映する
+                    startAts: target !== undefined && prev.startAts[target] !== undefined
+                      ? { ...prev.startAts, [target]: prev.startAts[target] + delta }
+                      : prev.startAts,
+                  }));
+                }}
+                className="px-4 rounded-lg font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white transition"
+              >設定</button>
+            </div>
+            <p className="text-[11px] text-slate-400 mb-5">現在: {timerState.breakMinutes}分{activeTimer ? '（動いているタイマーにも反映されます）' : ''}</p>
+
+            {activeTimer ? (
+              <div className="border-t pt-4">
+                <p className="text-xs font-bold text-slate-600 mb-1">いまのタイマー（{activeTimer.round}回戦 ／ 開始 {formatClock(activeTimer.startAt)}）</p>
+                <p className="text-[11px] text-slate-400 mb-2">早く進んでいる・遅れているときの微調整</p>
+                <div className="grid grid-cols-4 gap-2 mb-2">
+                  {[-5, -1, 1, 5].map(m => (
+                    <button
+                      key={m}
+                      onClick={() => updateTimer(prev => ({ ...prev, startAts: { ...prev.startAts, [activeTimer.round]: activeTimer.startAt + m * 60 * 1000 } }))}
+                      className="py-2 rounded-lg font-black text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                    >{m > 0 ? `+${m}` : m}分</button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => updateTimer(prev => ({ ...prev, startAts: { ...prev.startAts, [activeTimer.round]: Date.now() } }))}
+                    className="py-2 rounded-lg font-bold text-sm bg-emerald-100 hover:bg-emerald-200 text-emerald-800 transition"
+                  >今すぐ開始</button>
+                  <button
+                    onClick={() => {
+                      if (!window.confirm('このタイマーを消しますか？（次に回戦の全卓が送信されると、また自動で始まります）')) return;
+                      updateTimer(prev => { const startAts = { ...prev.startAts }; delete startAts[activeTimer.round]; return { ...prev, startAts }; });
+                    }}
+                    className="py-2 rounded-lg font-bold text-sm bg-red-100 hover:bg-red-200 text-red-700 transition"
+                  >タイマーを消す</button>
+                </div>
+              </div>
+            ) : (
+              <p className="border-t pt-4 text-[11px] text-slate-400">いま動いているタイマーはありません。</p>
+            )}
+
+            <button onClick={() => setShowTimerSettings(false)} className="w-full mt-5 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition">閉じる</button>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-5xl mx-auto p-3 sm:p-4 md:p-6">
         
         {/* ========== 新規登録 ========== */}
         {activeTab === 'players' && isAdmin && (
@@ -2969,12 +3289,12 @@ export default function Home() {
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                   <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 text-sm">
-                    <th className="p-3 font-bold">順位</th>
-                    <th className="p-3 font-bold">選手名</th>
-                    <th className="p-3 font-bold text-right">通算対局数</th>
-                    <th className="p-3 font-bold text-right">通算ポイント</th>
-                    <th className="p-3 font-bold text-center">年間CS</th>
-                    {isAdmin && <th className="p-3 font-bold text-center">操作</th>}
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold">順位</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold">選手名</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">通算対局数</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">通算ポイント</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-center">年間CS</th>
+                    {isAdmin && <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-center">操作</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -2987,7 +3307,7 @@ export default function Home() {
                     return (
                       <React.Fragment key={p.id}>
                         <tr className={`border-b border-slate-100 transition ${isOpen ? 'bg-indigo-50/60' : granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
-                          <td className="p-3 font-bold text-slate-400">{i + 1}</td>
+                          <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-slate-400">{i + 1}</td>
                           {editingPlayerId === p.id && isAdmin ? (
                             <>
                               <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
@@ -3013,17 +3333,17 @@ export default function Home() {
                             </>
                           ) : (
                             <>
-                              <td className="p-3 font-bold text-lg cursor-pointer" onClick={() => setOpenTotalPlayerId(isOpen ? null : p.id)}>
+                              <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-lg cursor-pointer" onClick={() => setOpenTotalPlayerId(isOpen ? null : p.id)}>
                                 <span className="inline-flex items-center gap-1.5">
                                   <span className={`text-[10px] text-slate-400 transition ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                                   <PlayerLabel name={p.name} />
                                 </span>
                               </td>
-                              <td className="p-3 text-right text-slate-500">{getTotalGames(p.id)} 半荘</td>
+                              <td className="p-2 md:p-3 text-right text-slate-500">{getTotalGames(p.id)} 半荘</td>
                               <td className={`p-3 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                 {fmtPt(p.totalPoint)}
                               </td>
-                              <td className="p-3 text-center">
+                              <td className="p-2 md:p-3 text-center">
                                 {pro ? (
                                   <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 border border-slate-200">対象外（プロ）</span>
                                 ) : granted ? (
@@ -3035,7 +3355,7 @@ export default function Home() {
                                 )}
                               </td>
                               {isAdmin && (
-                                <td className="p-3 text-center">
+                                <td className="p-2 md:p-3 text-center">
                                   <button onClick={() => startEditPlayer(p)} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-bold transition">編集</button>
                                 </td>
                               )}
@@ -3395,21 +3715,24 @@ export default function Home() {
                       <div key={p.id} className={`rounded-xl overflow-hidden border ${isOpen ? 'border-teal-300 shadow-sm' : 'border-transparent'}`}>
                         <button
                           onClick={() => { setOpenPlayerId(isOpen ? null : p.id); setOpenGameKey(null); }}
-                          className={`w-full flex items-center gap-3 px-4 py-4 text-left transition ${isOpen ? 'bg-emerald-50' : 'bg-gradient-to-r from-emerald-50/70 to-white hover:from-emerald-100/70'}`}
+                          className={`w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3.5 sm:py-4 text-left transition ${isOpen ? 'bg-emerald-50' : 'bg-gradient-to-r from-emerald-50/70 to-white hover:from-emerald-100/70'}`}
                         >
                           <span className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center font-black text-sm ${i === 0 ? 'bg-yellow-400 text-white' : i === 1 ? 'bg-slate-400 text-white' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
                             {i + 1}
                           </span>
-                          <span className="flex-1 font-black text-lg text-slate-800 truncate">
-                            <PlayerLabel name={p.name} />
-                            {isKuroko(p.name) && <span className="ml-2 text-[10px] font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full align-middle">黒子</span>}
-                            {p.chonbo > 0 && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full align-middle">🚫 {p.chonbo}</span>}
+                          <span className="flex-1 min-w-0">
+                            <span className="block font-black text-base sm:text-lg text-slate-800 truncate">
+                              <PlayerLabel name={p.name} />
+                              {isKuroko(p.name) && <span className="ml-2 text-[10px] font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full align-middle">黒子</span>}
+                              {p.chonbo > 0 && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full align-middle">🚫 {p.chonbo}</span>}
+                            </span>
+                            <span className="block sm:hidden text-[11px] text-slate-400 mt-0.5">{p.games}戦 ／ 平均着順 {p.games > 0 ? p.avgRank.toFixed(2) : '-'}</span>
                           </span>
-                          <span className={`font-black text-2xl tabular-nums ${p.point > 0 ? 'text-emerald-700' : p.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          <span className={`font-black text-xl sm:text-2xl tabular-nums ${p.point > 0 ? 'text-emerald-700' : p.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                             {fmtPt(p.point)}
                           </span>
-                          <span className="w-16 text-right text-sm text-slate-400 font-medium">{p.games}戦</span>
-                          <span className="w-14 text-right text-sm text-slate-500 tabular-nums">
+                          <span className="hidden sm:block w-16 text-right text-sm text-slate-400 font-medium">{p.games}戦</span>
+                          <span className="hidden sm:block w-14 text-right text-sm text-slate-500 tabular-nums">
                             {p.games > 0 ? p.avgRank.toFixed(2) : '-'}
                           </span>
                         </button>
@@ -3422,13 +3745,13 @@ export default function Home() {
                             {schedule.map(g => {
                               const gKey = `${p.id}-${g.key}`;
                               const isGOpen = openGameKey === gKey;
-                              const time = roundStartTime(g.roundNo);
+                              const time = startTimeOf(g.roundNo);
 
                               // --- 未定 (最後の2回戦) ---
                               if (g.status === 'pending') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-3 px-6 py-3 border-b border-slate-100 last:border-b-0 bg-slate-50/60">
-                                    <span className="font-mono text-sm text-slate-400 w-40">
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0 bg-slate-50/60">
+                                    <span className="font-mono text-xs sm:text-sm text-slate-400 w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦{time && <span className="ml-2 text-[10px]">{time}〜</span>}
                                     </span>
                                     <span className="flex-1 text-center text-sm font-bold text-slate-400">卓組未定</span>
@@ -3442,8 +3765,8 @@ export default function Home() {
                               // --- 抜け番 ---
                               if (g.status === 'sitout') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-3 px-6 py-3 border-b border-slate-100 last:border-b-0">
-                                    <span className="font-mono text-sm text-slate-400 w-40">
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0">
+                                    <span className="font-mono text-xs sm:text-sm text-slate-400 w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦{time && <span className="ml-2 text-[10px]">{time}〜</span>}
                                     </span>
                                     <span className="flex-1 text-center text-sm text-slate-400">抜け番</span>
@@ -3455,8 +3778,8 @@ export default function Home() {
                               // --- 対局予定 ---
                               if (g.status === 'ready') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-3 px-6 py-3 border-b border-slate-100 last:border-b-0 bg-indigo-50/40">
-                                    <span className="font-mono text-sm text-slate-500 w-40">
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0 bg-indigo-50/40">
+                                    <span className="font-mono text-xs sm:text-sm text-slate-500 w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦 / {g.tableNo}卓{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
                                     </span>
                                     <span className="flex-1 text-center text-sm font-bold text-indigo-500">
@@ -3475,9 +3798,9 @@ export default function Home() {
                                 <div key={gKey} className="border-b border-slate-100 last:border-b-0">
                                   <button
                                     onClick={() => setOpenGameKey(isGOpen ? null : gKey)}
-                                    className={`w-full flex items-center gap-3 px-6 py-3 text-left transition ${isGOpen ? 'bg-emerald-50/60' : 'hover:bg-slate-50'}`}
+                                    className={`w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 sm:py-3 text-left transition ${isGOpen ? 'bg-emerald-50/60' : 'hover:bg-slate-50'}`}
                                   >
-                                    <span className="font-mono text-sm text-slate-600 w-40">
+                                    <span className="font-mono text-xs sm:text-sm text-slate-600 w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦 / {g.tableNo}卓{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
                                     </span>
                                     <span className={`flex-1 text-center font-black text-lg tabular-nums ${(g.point || 0) > 0 ? 'text-emerald-700' : (g.point || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
@@ -3488,10 +3811,10 @@ export default function Home() {
                                   </button>
 
                                   {isGOpen && (
-                                    <div className="px-6 pb-4 pt-1 bg-white">
+                                    <div className="px-3 sm:px-6 pb-4 pt-1 bg-white">
                                       <div className="border border-slate-200 rounded-lg overflow-hidden">
                                         {ranked.map((rp, rIdx2) => (
-                                          <div key={rp.playerId} className={`flex items-center justify-between px-4 py-2.5 text-sm ${rp.playerId === p.id ? 'bg-emerald-50' : 'bg-white'} ${rIdx2 < 3 ? 'border-b border-slate-100' : ''}`}>
+                                          <div key={rp.playerId} className={`flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 text-sm ${rp.playerId === p.id ? 'bg-emerald-50' : 'bg-white'} ${rIdx2 < 3 ? 'border-b border-slate-100' : ''}`}>
                                             <span className="text-slate-700 font-bold truncate">
                                               <span className="text-slate-400 font-mono mr-2">{rIdx2 + 1}</span>
                                               <PlayerLabel name={rp.name} />
@@ -3596,7 +3919,7 @@ export default function Home() {
                           const isEntry = entryPlayerIds.includes(p.id);
                           return (
                             <button key={p.id} onClick={() => toggleEntry(p.id)}
-                              className={`px-4 py-2 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>
+                              className={`px-4 py-2.5 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>
                               <PlayerLabel name={p.name} /> {isEntry && '✓'}
                             </button>
                           );
@@ -3704,9 +4027,9 @@ export default function Home() {
                   </div>
                   {/* 開始時刻の目安 */}
                   <p className="mt-3 text-[10px] text-indigo-400 leading-relaxed">
-                    開始時刻（目安）:&nbsp;
+                    開始時刻（1回戦は目安、2回戦以降は前の回戦の全卓送信＋休憩{timerState.breakMinutes}分）:&nbsp;
                     {ROUND_START_TIMES.slice(0, roundsCount).map((t, i) => (
-                      <span key={i} className="mr-2 whitespace-nowrap">{i + 1}回戦 {t}</span>
+                      <span key={i} className={`mr-2 whitespace-nowrap ${timerState.startAts[i + 1] ? 'text-indigo-700 font-bold' : ''}`}>{i + 1}回戦 {startTimeOf(i + 1) || t}</span>
                     ))}
                   </p>
                 </div>
@@ -3784,7 +4107,7 @@ export default function Home() {
                 {seating.map((r, rIdx) => {
                   const finished = isRoundFinished(r);
                   const open = roundIsOpen(r);
-                  const time = roundStartTime(r.round);
+                  const time = startTimeOf(r.round);
                   return (
                     <div key={r.round} className={`bg-white rounded-2xl shadow-sm border transition ${finished ? 'border-slate-200' : 'border-indigo-100'}`}>
                       {/* 回戦ヘッダー */}
@@ -3806,8 +4129,8 @@ export default function Home() {
 
                         {!r.isPending && r.tables.length > 0 && open && (
                           <div className="flex gap-1">
-                            <button onClick={() => setAllTablesOfRound(r, false)} className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg font-bold transition">全て畳む</button>
-                            <button onClick={() => setAllTablesOfRound(r, true)} className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-2.5 py-1.5 rounded-lg font-bold transition">全て開く</button>
+                            <button onClick={() => setAllTablesOfRound(r, false)} className="text-xs sm:text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て畳む</button>
+                            <button onClick={() => setAllTablesOfRound(r, true)} className="text-xs sm:text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て開く</button>
                           </div>
                         )}
                         {!r.isPending && isAdmin && r.mode !== 'normal' && !r.tables.some(t => t.isSubmitted) && (
@@ -3866,7 +4189,7 @@ export default function Home() {
                                       )}
 
                                       {/* 卓ヘッダー（クリックで開閉） */}
-                                      <button onClick={() => toggleTable(r, table)} className="w-full flex justify-between items-center gap-2 p-4 md:p-5 pb-3 text-left">
+                                      <button onClick={() => toggleTable(r, table)} className="w-full flex justify-between items-center gap-2 p-3 sm:p-4 md:p-5 pb-3 text-left">
                                         <div className="flex items-center gap-2">
                                           <h4 className={`font-black text-lg px-3 py-1 rounded ${isFinal ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : table.isSubmitted ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white'}`}>
                                             {table.tableNumber}卓
@@ -3907,27 +4230,27 @@ export default function Home() {
 
                                       {/* 展開時 */}
                                       {isOpen && (
-                                        <div className="px-4 md:px-5 pb-5">
+                                        <div className="px-3 sm:px-4 md:px-5 pb-5">
                                           <div className="space-y-3">
                                             {table.players.map((p, pIdx) => {
                                               const chonbo = p.chonbo || 0;
                                               return (
                                                 <div key={pIdx} className={`p-2 rounded-lg ${table.isSubmitted ? 'opacity-80' : 'bg-slate-50'} ${chonbo > 0 ? 'ring-1 ring-red-200 bg-red-50/60' : ''}`}>
                                                   <div className="flex justify-between items-center gap-3">
-                                                    <span className="w-28 font-bold text-slate-700 truncate">
+                                                    <span className="w-20 sm:w-28 flex-shrink-0 font-bold text-slate-700 truncate">
                                                       {p.wind}: <PlayerLabel name={p.name} className="text-indigo-900" />
                                                     </span>
                                                     
-                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
+                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-2 sm:py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
                                                       <input
                                                         type="number" value={p.score} disabled={table.isSubmitted || !canEditTable(table)}
                                                         onChange={(e) => handleScoreChange(rIdx, tIdx, pIdx, Number(e.target.value))}
-                                                        className={`w-16 text-right font-mono font-bold text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
+                                                        className={`w-16 sm:w-20 text-right font-mono font-bold text-xl sm:text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
                                                       />
                                                       <span className="text-slate-400 font-bold text-sm ml-1 select-none">00</span>
                                                     </div>
 
-                                                    <span className={`w-20 text-right font-black text-xl ${!table.isCalculated && !table.isSubmitted ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                                    <span className={`w-16 sm:w-20 flex-shrink-0 text-right font-black text-lg sm:text-xl tabular-nums ${!table.isCalculated && !table.isSubmitted ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
                                                       {table.isCalculated || table.isSubmitted ? fmtPt(p.point) : '-'}
                                                     </span>
                                                   </div>
@@ -3935,13 +4258,13 @@ export default function Home() {
                                                   {/* チョンボ */}
                                                   {(canEditTable(table) && !table.isSubmitted) ? (
                                                     <div className="flex items-center justify-end gap-2 mt-2 pr-1">
-                                                      <span className="text-[11px] font-bold text-slate-400 mr-auto pl-1">チョンボ</span>
+                                                      <span className="text-xs font-bold text-slate-400 mr-auto pl-1">チョンボ</span>
                                                       <button onClick={() => handleChonboChange(rIdx, tIdx, pIdx, -1)}
-                                                        className="w-7 h-7 rounded-md bg-white border border-slate-300 text-slate-600 font-black hover:bg-slate-100 transition disabled:opacity-40"
+                                                        className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-white border border-slate-300 text-slate-600 text-lg font-black hover:bg-slate-100 transition disabled:opacity-40"
                                                         disabled={chonbo === 0}>−</button>
                                                       <span className={`w-8 text-center font-black tabular-nums ${chonbo > 0 ? 'text-red-600' : 'text-slate-400'}`}>{chonbo}</span>
                                                       <button onClick={() => handleChonboChange(rIdx, tIdx, pIdx, 1)}
-                                                        className="w-7 h-7 rounded-md bg-red-500 text-white font-black hover:bg-red-600 transition">＋</button>
+                                                        className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-red-500 text-white text-lg font-black hover:bg-red-600 transition">＋</button>
                                                       <span className={`w-16 text-right text-xs font-bold ${chonbo > 0 ? 'text-red-600' : 'text-slate-300'}`}>
                                                         {chonbo > 0 ? `−${(CHONBO_PENALTY * chonbo).toFixed(1)}` : '−0.0'}
                                                       </span>
@@ -3966,15 +4289,15 @@ export default function Home() {
                                             <div className="mt-3 flex gap-2">
                                               {!table.isSubmitted ? (
                                                 <>
-                                                  <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
+                                                  <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
                                                     {table.isCalculated ? '再計算' : '計算・確定'}
                                                   </button>
-                                                  <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-3 rounded-lg font-bold text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                                                  <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
                                                     送信する
                                                   </button>
                                                 </>
                                               ) : isAdmin ? (
-                                                <button onClick={() => handleRevokeTable(rIdx, tIdx)} className="flex-1 py-3 rounded-lg font-bold text-sm transition bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300">
+                                                <button onClick={() => handleRevokeTable(rIdx, tIdx)} className="flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition bg-amber-100 hover:bg-amber-200 text-amber-800 border border-amber-300">
                                                   送信を取り消して編集する
                                                 </button>
                                               ) : null}
