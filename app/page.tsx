@@ -17,7 +17,13 @@ const CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT = 7;
 const CHAMPIONSHIP_MIN_TOURNAMENTS = 2;
 // 各回戦の開始時刻（あくまで目安）
 const ROUND_START_TIMES = ['08:40', '10:00', '11:15', '12:30', '13:45', '15:00', '16:20', '17:35', '19:50'];
-const roundStartTime = (roundNo: number) => ROUND_START_TIMES[roundNo - 1] || null;
+// 大会（第N回）ごとに開始目安が決まっている場合はこちらを優先する。無い回は上の ROUND_START_TIMES を使う。
+const ROUND_START_TIMES_BY_TOURNAMENT: Record<number, string[]> = {
+  7: ['09:10', '10:20', '11:30', '12:40', '13:50', '15:00', '16:10', '17:20'],
+};
+// 次に入力する大会の回（運営都合で第7回が第6回より先に開催される）。管理者が画面から手動で変更できる。
+const DEFAULT_TOURNAMENT_NO = '7';
+const scheduleFor = (tournamentNo: string): string[] => ROUND_START_TIMES_BY_TOURNAMENT[Number(tournamentNo)] || ROUND_START_TIMES;
 
 // 大会規定 (Google ドキュメント)
 const RULES_DOC_URL = 'https://docs.google.com/document/d/1gnUvQFS7stf_LjJg7G2Nb4AglvrBcx1sd3v27xPCVwc/edit?usp=sharing';
@@ -921,7 +927,19 @@ export default function Home() {
   const updateTimer = (fn: (prev: TimerState) => TimerState) =>
     setTimerState(prev => ({ ...fn(prev), stamp: Date.now() }));
   
-  const [roundsCount, setRoundsCount] = useState(4);
+  // いま入力している大会の回（過去大会として登録するとき「第N回」になる）。管理者が手動で設定できる
+  const [tournamentNo, setTournamentNo] = useState(DEFAULT_TOURNAMENT_NO);
+  const [roundsCount, setRoundsCount] = useState(ROUND_START_TIMES_BY_TOURNAMENT[Number(DEFAULT_TOURNAMENT_NO)]?.length ?? 4);
+  // この回の開始目安（回ごとに異なる）
+  const scheduleTimes = scheduleFor(tournamentNo);
+  // 大会の回を変更する。開始目安が決まっている回で、まだエントリー中なら回戦数もそれに合わせる
+  const handleChangeTournamentNo = (v: string) => {
+    if (!isAdmin) return;
+    const cleaned = v.replace(/[^0-9]/g, '').slice(0, 3);
+    setTournamentNo(cleaned);
+    const sched = ROUND_START_TIMES_BY_TOURNAMENT[Number(cleaned)];
+    if (tournamentPhase === 'entry' && sched) setRoundsCount(sched.length);
+  };
   const [seating, setSeating] = useState<Round[]>([]);
   
   const [isResetting, setIsResetting] = useState(false);
@@ -1015,6 +1033,13 @@ export default function Home() {
     if (current.tournamentPhase) setTournamentPhase(current.tournamentPhase);
     if (current.entryPlayerIds) setEntryPlayerIds(current.entryPlayerIds);
     if (current.roundsCount) setRoundsCount(current.roundsCount);
+    if (current.tournamentNo !== undefined && current.tournamentNo !== null) {
+      setTournamentNo(String(current.tournamentNo));
+    } else if ((current.tournamentPhase || 'entry') === 'entry') {
+      // 回の設定が保存されていない（これから入力する）大会は、既定の回（第7回）にそろえる
+      const sched = ROUND_START_TIMES_BY_TOURNAMENT[Number(DEFAULT_TOURNAMENT_NO)];
+      if (sched) setRoundsCount(sched.length);
+    }
     setPlayerLimits(normalizePlayerLimits(current.playerLimits));
     if (current.timer) setTimerState(normalizeTimer(current.timer));
     if (current.seating) {
@@ -1053,8 +1078,8 @@ export default function Home() {
     // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
     // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
     if (!isAdmin && tournamentPhase !== 'playing') return;
-    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState });
-  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, isLoaded, isAdmin]);
+    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo });
+  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, isLoaded, isAdmin]);
 
   // 大会進行中は5秒おきに最新状態を確認し、次の2点だけ取り込む（入力中の内容を壊さないため）
   //  ① タイマー（休憩時間・開始時刻）…新しい方を採用
@@ -1867,6 +1892,11 @@ export default function Home() {
   // ----------------------------------------
   const [showArchiveImport, setShowArchiveImport] = useState(false);
   const [archiveRoundNumber, setArchiveRoundNumber] = useState('');
+  // 手で書き換えていない間は、いま入力している大会の回（tournamentNo）を自動で入れておく
+  const archiveRoundTouched = useRef(false);
+  useEffect(() => {
+    if (!archiveRoundTouched.current) setArchiveRoundNumber(tournamentNo);
+  }, [tournamentNo]);
   const [archiveNotes, setArchiveNotes] = useState('');
   const [archiveRawText, setArchiveRawText] = useState('');
   const [archivePreview, setArchivePreview] = useState<{
@@ -1978,7 +2008,24 @@ export default function Home() {
 
       setDbPlayers(await api.getPlayers());
       setArchives(await api.getArchives());
-      setArchiveRoundNumber(''); setArchiveNotes(''); setArchiveRawText(''); setArchivePreview(null); setPenaltyRows([]);
+      // 登録した回が「いま入力している大会の回」だった場合は、次に入力する回を、まだ登録されていない一番小さい回にする
+      // （例: 第1〜5回と第7回が登録済みなら、次は第6回）。必要なら画面から手動で変更できる。
+      if (roundNum === tournamentNo) {
+        const done = new Set<number>();
+        (await api.getArchives()).forEach((a: TournamentArchive) => {
+          const m = a.name.match(/第(\d+)回/);
+          if (m) done.add(parseInt(m[1], 10));
+        });
+        let next = 1;
+        while (done.has(next)) next++;
+        setTournamentNo(String(next));
+        archiveRoundTouched.current = false;
+        setArchiveRoundNumber(String(next));
+      } else {
+        archiveRoundTouched.current = false;
+        setArchiveRoundNumber(tournamentNo);
+      }
+      setArchiveNotes(''); setArchiveRawText(''); setArchivePreview(null); setPenaltyRows([]);
       setShowArchiveImport(false);
       alert('過去大会を登録しました。');
     } catch (err) {
@@ -2042,7 +2089,7 @@ export default function Home() {
 
   // 各回戦の開始時刻の表示用。2回戦以降でタイマーが動いた回戦は実際の開始時刻、それ以外は従来の目安
   const startTimeOf = (roundNo: number): string | null =>
-    timerState.startAts[roundNo] ? formatClock(timerState.startAts[roundNo]) : roundStartTime(roundNo);
+    timerState.startAts[roundNo] ? formatClock(timerState.startAts[roundNo]) : (scheduleTimes[roundNo - 1] || null);
 
   // 通算成績ランキングに表示する選手（通算0半荘の選手は表示しない）
   const totalRankingPlayers = displayDbPlayers.filter(p => getTotalGames(p.id) > 0);
@@ -2246,7 +2293,14 @@ export default function Home() {
       currentRows.push({ rank, score: me.score, point: me.point, table });
     }));
     if (currentRows.length > 0) {
-      groups.push({ key: 'current', label: '今大会', sortKey: Number.POSITIVE_INFINITY, rows: currentRows });
+      const curNo = parseInt(tournamentNo, 10);
+      groups.push({
+        key: 'current',
+        label: Number.isFinite(curNo) ? `今大会（第${curNo}回）` : '今大会',
+        // 第N回の若い順に並べる。同じ回が登録済みでも重ならないよう、わずかに後ろへ
+        sortKey: Number.isFinite(curNo) ? curNo + 0.5 : Number.POSITIVE_INFINITY,
+        rows: currentRows,
+      });
     }
 
     return groups.sort((a, b) => a.sortKey - b.sortKey);
@@ -2430,7 +2484,7 @@ export default function Home() {
       </div>`;
     }).join('');
 
-    const timeTable = ROUND_START_TIMES.slice(0, Math.max(roundsCount, 0))
+    const timeTable = scheduleTimes.slice(0, Math.max(roundsCount, 0))
       .map((t, i) => `${i + 1}回戦 ${startTimeOf(i + 1) || t}`).join(' / ');
 
     return `<!DOCTYPE html>
@@ -3428,7 +3482,7 @@ export default function Home() {
                           <input
                             type="number"
                             value={archiveRoundNumber}
-                            onChange={e => setArchiveRoundNumber(e.target.value)}
+                            onChange={e => { archiveRoundTouched.current = true; setArchiveRoundNumber(e.target.value); }}
                             placeholder="4"
                             className="w-20 p-2.5 border rounded-lg bg-slate-50 text-sm text-center"
                           />
@@ -3983,6 +4037,18 @@ export default function Home() {
                         <div className="text-2xl font-black text-indigo-600">{entryPlayerIds.length} <span className="text-base text-slate-500 font-normal">名</span></div>
                       </div>
                       <div className="w-full md:w-auto">
+                        <label className="block text-sm font-bold text-slate-600 mb-2">大会の回</label>
+                        {isAdmin ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-bold text-slate-500">第</span>
+                            <input type="number" min="1" inputMode="numeric" value={tournamentNo} onChange={e => handleChangeTournamentNo(e.target.value)} className="w-20 p-3 border rounded-lg text-lg font-bold text-center"/>
+                            <span className="text-sm font-bold text-slate-500">回</span>
+                          </div>
+                        ) : (
+                          <div className="text-2xl font-black text-indigo-600">第{tournamentNo || '?'}回</div>
+                        )}
+                      </div>
+                      <div className="w-full md:w-auto">
                         <label className="block text-sm font-bold text-slate-600 mb-2">回戦数</label>
                         <input type="number" min="1" value={roundsCount} onChange={e => setRoundsCount(Number(e.target.value))} className="w-24 p-3 border rounded-lg text-lg font-bold text-center"/>
                       </div>
@@ -3993,7 +4059,8 @@ export default function Home() {
                     </div>
                     <p className="text-xs text-slate-500 mt-4 leading-relaxed">
                       ※ 生成後は「卓組抽選中」になり、管理者が卓組を確認して「大会開始」を押すまで得点入力はできません。<br />
-                      ※ 8回戦・9回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
+                      ※ {roundsCount - 1}回戦・{roundsCount}回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
+                      ※ この大会は「第{tournamentNo || '?'}回」として扱われ、過去大会として登録するときもこの回が入力されます。{ROUND_START_TIMES_BY_TOURNAMENT[Number(tournamentNo)] ? '（この回の開始目安時刻が設定済みです）' : ''}<br />
                       　 最後から2つ目は卓内上位から東南西北、最終戦は卓内下位から東南西北に着席。上位2卓（8位まで）に「黒子」は入らず、その下を繰り上げます。
                     </p>
                   </>
@@ -4007,7 +4074,7 @@ export default function Home() {
                 <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
                   <div className="flex justify-between items-center gap-4">
                     <div>
-                      <h2 className="text-lg font-black text-indigo-900">{tournamentPhase === 'drawing' ? '卓組の確認（大会開始前）' : '大会進行中'}</h2>
+                      <h2 className="text-lg font-black text-indigo-900">第{tournamentNo || '?'}回 {tournamentPhase === 'drawing' ? '卓組の確認（大会開始前）' : '大会進行中'}</h2>
                       <p className="text-sm text-indigo-700 font-medium">参加者: {entryPlayerIds.length}名 / 全{roundsCount}回戦</p>
                       {limitEntries.length > 0 && (
                         <p className="text-xs text-amber-700 font-bold mt-1">
@@ -4029,7 +4096,7 @@ export default function Home() {
                   {/* 開始時間（1回戦は目安） */}
                   <p className="mt-3 text-[10px] text-indigo-400 leading-relaxed">
                     開始時間（1回戦は目安、2回戦以降は前の回戦の全卓送信＋休憩{timerState.breakMinutes}分）:&nbsp;
-                    {ROUND_START_TIMES.slice(0, roundsCount).map((t, i) => (
+                    {scheduleTimes.slice(0, roundsCount).map((t, i) => (
                       <span key={i} className={`mr-2 whitespace-nowrap ${timerState.startAts[i + 1] ? 'text-indigo-700 font-bold' : ''}`}>{i + 1}回戦 {startTimeOf(i + 1) || t}</span>
                     ))}
                   </p>
