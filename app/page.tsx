@@ -28,6 +28,16 @@ const DEFAULT_TOURNAMENT_NO = '7';
 const TABLE_NAMES_BY_TOURNAMENT: Record<number, string[]> = {
   7: ['白卓', '橙卓', '黒卓'],
 };
+// 卓の色（アイコン）。badge=卓ヘッダーの色、dot=小さな丸いアイコン、emoji=文字だけの場所用
+const TABLE_COLORS_BY_TOURNAMENT: Record<number, { badge: string; dot: string; emoji: string }[]> = {
+  7: [
+    { badge: 'bg-white text-slate-800 border-2 border-slate-300', dot: 'bg-white border-slate-400', emoji: '⚪' },
+    { badge: 'bg-orange-500 text-white border-2 border-orange-500', dot: 'bg-orange-500 border-orange-600', emoji: '🟠' },
+    { badge: 'bg-slate-900 text-white border-2 border-slate-900', dot: 'bg-slate-900 border-slate-900', emoji: '⚫' },
+  ],
+};
+const tableColorFor = (tournamentNo: string, tableNo?: number) =>
+  tableNo ? TABLE_COLORS_BY_TOURNAMENT[Number(tournamentNo)]?.[tableNo - 1] || null : null;
 const tableNameFor = (tournamentNo: string, tableNo?: number): string => {
   if (!tableNo) return '';
   return TABLE_NAMES_BY_TOURNAMENT[Number(tournamentNo)]?.[tableNo - 1] || `${tableNo}卓`;
@@ -944,6 +954,20 @@ export default function Home() {
   const scheduleTimes = scheduleFor(tournamentNo);
   // 卓の表示名（第7回は 白卓／橙卓／黒卓、それ以外は 1卓／2卓…）
   const tableName = (n?: number) => tableNameFor(tournamentNo, n);
+  // 卓の色。色が決まっていない回は null
+  const tableColor = (n?: number) => tableColorFor(tournamentNo, n);
+  // 色つきの小さな丸アイコン＋卓名（画面表示用）
+  const tableTag = (n?: number) => {
+    const c = tableColor(n);
+    return (
+      <span className="inline-flex items-center gap-1 align-middle">
+        {c && <span className={`inline-block w-3 h-3 rounded-full border ${c.dot}`} aria-hidden="true" />}
+        {tableName(n)}
+      </span>
+    );
+  };
+  // 文字だけの場所用（色つきの丸の絵文字＋卓名）
+  const tableTextWithIcon = (n?: number) => `${tableColor(n)?.emoji || ''}${tableName(n)}`;
   // 大会の回を変更する。開始目安が決まっている回で、まだエントリー中なら回戦数もそれに合わせる
   const handleChangeTournamentNo = (v: string) => {
     if (!isAdmin) return;
@@ -2397,7 +2421,7 @@ export default function Home() {
         time: startTimeOf(it.roundNo),
         status: it.status,
         tableNo: it.tableNo,
-        tableLabel: tableName(it.tableNo),
+        tableLabel: tableTextWithIcon(it.tableNo),
         wind: it.wind,
         isFinal: it.status === 'ready' && it.roundNo === roundsCount && it.tableNo === 1,
         opponents: it.table
@@ -2481,7 +2505,7 @@ export default function Home() {
         const deposit = getTableDeposit(t);
         return `
           <div class="tbl ${isFinalTable(r, t) ? 'final' : ''}">
-            <div class="tblhead">${tableName(t.tableNumber)}${isFinalTable(r, t) ? ' 👑 決勝卓' : ''} <span class="badge">${t.isSubmitted ? '確定' : '未確定'}</span></div>
+            <div class="tblhead">${tableTextWithIcon(t.tableNumber)}${isFinalTable(r, t) ? ' 👑 決勝卓' : ''} <span class="badge">${t.isSubmitted ? '確定' : '未確定'}</span></div>
             <table>
               <thead><tr><th>席</th><th>選手</th><th class="r">素点</th><th>着順</th><th class="r">チョンボ</th><th class="r">ポイント</th></tr></thead>
               <tbody>${rows}</tbody>
@@ -2933,7 +2957,7 @@ export default function Home() {
     if (!activeTimer || !loggedInPlayerId || hideSeating) return undefined;
     const item = getPlayerSchedule(loggedInPlayerId).find(it => it.roundNo === activeTimer.round);
     if (!item) return undefined;
-    if (item.status === 'ready' && item.tableNo) return `${tableName(item.tableNo)}${item.wind}家`;
+    if (item.status === 'ready' && item.tableNo) return `${tableTextWithIcon(item.tableNo)}${item.wind}家`;
     if (item.status === 'sitout') return '抜け番';
     return undefined;
   })();
@@ -3847,7 +3871,7 @@ export default function Home() {
                                 return (
                                   <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0 bg-indigo-50/40">
                                     <span className="font-mono text-xs sm:text-sm text-slate-500 w-28 sm:w-40 flex-shrink-0">
-                                      {g.roundNo}回戦 / {tableName(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
+                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
                                     </span>
                                     <span className="flex-1 text-center text-sm font-bold text-indigo-500">
                                       対局予定（{g.wind}家）
@@ -3868,7 +3892,7 @@ export default function Home() {
                                     className={`w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 sm:py-3 text-left transition ${isGOpen ? 'bg-emerald-50/60' : 'hover:bg-slate-50'}`}
                                   >
                                     <span className="font-mono text-xs sm:text-sm text-slate-600 w-28 sm:w-40 flex-shrink-0">
-                                      {g.roundNo}回戦 / {tableName(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
+                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
                                     </span>
                                     <span className={`flex-1 text-center font-black text-lg tabular-nums ${(g.point || 0) > 0 ? 'text-emerald-700' : (g.point || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                       {fmtPt(g.point || 0)}
@@ -3898,7 +3922,7 @@ export default function Home() {
                                         <span>{RULE_NAME}</span>
                                         <div className="text-right">
                                           <div>供託・不足分：{(deposit * 100).toLocaleString()}点</div>
-                                          <div>{g.roundNo}回戦 {tableName(g.tableNo)}</div>
+                                          <div>{g.roundNo}回戦 {tableTag(g.tableNo)}</div>
                                         </div>
                                       </div>
                                     </div>
@@ -4273,7 +4297,7 @@ export default function Home() {
                                       {/* 卓ヘッダー（クリックで開閉） */}
                                       <button onClick={() => toggleTable(r, table)} className="w-full flex justify-between items-center gap-2 p-3 sm:p-4 md:p-5 pb-3 text-left">
                                         <div className="flex items-center gap-2">
-                                          <h4 className={`font-black text-lg px-3 py-1 rounded ${isFinal ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : table.isSubmitted ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white'}`}>
+                                          <h4 className={`font-black text-lg px-3 py-1 rounded ${tableColor(table.tableNumber) ? `${tableColor(table.tableNumber)!.badge} ${table.isSubmitted ? 'opacity-60' : ''}` : isFinal ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : table.isSubmitted ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white'}`}>
                                             {tableName(table.tableNumber)}
                                           </h4>
                                           <span className={`text-slate-400 text-xs font-bold`}>{isOpen ? '▼' : '▶'}</span>
