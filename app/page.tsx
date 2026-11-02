@@ -3320,7 +3320,7 @@ export default function Home() {
                 })}
                 {renderDataCard({
                   icon: '🔥', title: '連勝記録', theme: 'rose',
-                  desc: `同じ大会の中で連続してトップを取った回数（大会をまたいでは数えません ／ ${MIN_STREAK}連勝以上）`,
+                  desc: '同じ大会の中で連続してトップを取った回数（同大会のみ）',
                   emptyText: `${MIN_STREAK}連勝以上の記録がまだありません`,
                   rows: winStreakRanking.map(x => ({ key: `ws-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: `${x.length}`, unit: '連勝' })),
                 })}
