@@ -2780,73 +2780,75 @@ export default function Home() {
     return out;
   };
 
-  // 1卓（半荘）分の順位点（30/10/-10/-30）。同点は順位点を等分する（ゲーム内の計算ルールと同じ）
-  const calcUmaList = (scores: number[]): number[] => {
-    const idx = scores.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
-    const uma: number[] = new Array(scores.length).fill(0);
-    let i = 0;
-    while (i < idx.length) {
-      let j = i;
-      while (j < idx.length && scores[idx[j]] === scores[idx[i]]) j++;
-      let sum = 0;
-      for (let k = i; k < j; k++) sum += rule.uma[k] ?? 0;
-      for (let k = i; k < j; k++) uma[idx[k]] = sum / (j - i);
-      i = j;
-    }
-    return uma;
-  };
-
-  // 全半荘の記録（1人1半荘につき1件）。score は点（100点単位ではなく実点）、
-  // rawPt は素点ポイント =（実点 − 30000）÷ 1000、umaPt は順位点
-  type GameRec = { playerId: string; name: string; source: string; rank: number; score: number; rawPt: number; umaPt: number };
+  // 全半荘の記録（1人1半荘につき1件）。score は実点（100点単位ではなく点）。
+  // source は大会名（過去大会名 / 今大会）、seq はその大会の中での対局の順番（連勝の判定に使う）
+  type GameRec = { playerId: string; name: string; source: string; seq: number; rank: number; score: number };
   const gameRecs: GameRec[] = [];
   archives.forEach(a => a.hanchans.forEach(h => {
-    const umaList = calcUmaList(h.results.map(r => r.score));
-    h.results.forEach((r, i) => {
+    h.results.forEach(r => {
       const nm = nameOf(r.playerId, r.name);
       if (r.excluded || isKuroko(nm)) return;
-      gameRecs.push({
-        playerId: r.playerId, name: nm, source: a.name, rank: r.rank,
-        score: r.score * 100, rawPt: (r.score - rule.returnPoint) / 10, umaPt: umaList[i],
-      });
+      gameRecs.push({ playerId: r.playerId, name: nm, source: a.name, seq: h.no, rank: r.rank, score: r.score * 100 });
     });
   }));
   // 今大会（送信済みの卓のみ）。着順は卓内のスコア順
   seating.forEach(r => r.tables.forEach(t => {
     if (!t.isSubmitted) return;
-    const umaList = calcUmaList(t.players.map(p => p.score));
     const sorted = [...t.players].sort((a, b) => b.score - a.score);
-    t.players.forEach((pl, i) => {
+    t.players.forEach(pl => {
       const nm = nameOf(pl.playerId, pl.name);
       if (isKuroko(nm)) return;
       gameRecs.push({
-        playerId: pl.playerId, name: nm, source: '今大会',
+        playerId: pl.playerId, name: nm, source: '今大会', seq: r.round,
         rank: sorted.findIndex(sp => sp.playerId === pl.playerId) + 1,
-        score: pl.score * 100, rawPt: (pl.score - rule.returnPoint) / 10, umaPt: umaList[i],
+        score: pl.score * 100,
       });
     });
   }));
 
-  // 最高スコア / 最低スコア（1半荘ごと）
+  // 最高スコア（1半荘ごと）
   const topScoreRanking = assignRanks([...gameRecs].sort((x, y) => y.score - x.score).slice(0, DATA_TOP_N), x => x.score);
-  const lowScoreRanking = assignRanks([...gameRecs].sort((x, y) => x.score - y.score).slice(0, DATA_TOP_N), x => x.score);
+
+  // 連勝記録: 同じ大会の中で、連続してトップ（1着）を取った回数。大会をまたいでは数えない。
+  // 抜け番などで出場しなかった回戦は飛ばし、その選手が実際に打った対局の連続で数える。
+  // 1人につき最長の記録を1件だけ採用し、2連勝以上を表示する。
+  const MIN_STREAK = 2;
+  const streakBest = new Map<string, { playerId: string; name: string; source: string; length: number }>();
+  const gamesByPlayerTournament = new Map<string, GameRec[]>();
+  gameRecs.forEach(g => {
+    const key = `${g.playerId}__${g.source}`;
+    const arr = gamesByPlayerTournament.get(key);
+    if (arr) arr.push(g); else gamesByPlayerTournament.set(key, [g]);
+  });
+  gamesByPlayerTournament.forEach(games => {
+    games.sort((x, y) => x.seq - y.seq);
+    let run = 0;
+    games.forEach(g => {
+      run = g.rank === 1 ? run + 1 : 0;
+      const cur = streakBest.get(g.playerId);
+      if (run >= MIN_STREAK && (!cur || run > cur.length)) {
+        streakBest.set(g.playerId, { playerId: g.playerId, name: g.name, source: g.source, length: run });
+      }
+    });
+  });
+  const winStreakRanking = assignRanks(
+    Array.from(streakBest.values()).sort((x, y) => y.length - x.length).slice(0, DATA_TOP_N),
+    x => x.length,
+  );
 
   // 選手ごとの集計
-  type PlayerAgg = { playerId: string; name: string; games: number; top: number; second: number; last: number; rawSum: number; umaSum: number };
+  type PlayerAgg = { playerId: string; name: string; games: number; top: number; second: number; last: number };
   const aggMap = new Map<string, PlayerAgg>();
   gameRecs.forEach(g => {
-    const cur = aggMap.get(g.playerId) || { playerId: g.playerId, name: g.name, games: 0, top: 0, second: 0, last: 0, rawSum: 0, umaSum: 0 };
+    const cur = aggMap.get(g.playerId) || { playerId: g.playerId, name: g.name, games: 0, top: 0, second: 0, last: 0 };
     cur.games += 1;
     if (g.rank === 1) cur.top += 1;
     if (g.rank === 2) cur.second += 1;
     if (g.rank === 4) cur.last += 1;
-    cur.rawSum += g.rawPt;
-    cur.umaSum += g.umaPt;
     aggMap.set(g.playerId, cur);
   });
   const aggList = Array.from(aggMap.values());
   const rateEligible = aggList.filter(x => x.games >= MIN_GAMES_FOR_RATE);
-  const round1 = (v: number) => Math.round(v * 10) / 10;
 
   // 連対率（1着または2着の割合）／ラス回避率（4着でなかった割合）。8半荘以上が対象
   const rentaiRanking = assignRanks(
@@ -2856,15 +2858,6 @@ export default function Home() {
   const avoidLastRanking = assignRanks(
     rateEligible.map(x => ({ ...x, rate: (x.games - x.last) / x.games })).sort((x, y) => y.rate - x.rate || y.games - x.games).slice(0, DATA_TOP_N),
     x => x.rate,
-  );
-  // 順位点ランキング（順位点のみの通算合計）／素点ランキング（30000点からの上下ポイントの通算合計）
-  const umaTotalRanking = assignRanks(
-    aggList.map(x => ({ ...x, total: round1(x.umaSum) })).sort((x, y) => y.total - x.total || y.games - x.games).slice(0, DATA_TOP_N),
-    x => x.total,
-  );
-  const rawTotalRanking = assignRanks(
-    aggList.map(x => ({ ...x, total: round1(x.rawSum) })).sort((x, y) => y.total - x.total || y.games - x.games).slice(0, DATA_TOP_N),
-    x => x.total,
   );
 
   // データタブのランキングカード（全カード共通の見た目。高さも揃える）
@@ -2882,7 +2875,6 @@ export default function Home() {
     : n === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
     : n === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'
     : 'bg-slate-100 text-slate-500';
-  const signedPt = (v: number) => `${v > 0 ? '+' : ''}${v.toFixed(1)}`;
 
   const renderDataCard = (opts: { icon: string; title: string; desc: string; theme: keyof typeof DATA_THEMES; rows: DataRow[]; emptyText?: string }) => {
     const th = DATA_THEMES[opts.theme];
@@ -3327,9 +3319,10 @@ export default function Home() {
                   rows: topScoreRanking.map((x, i) => ({ key: `top-${x.playerId}-${x.source}-${i}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: x.score.toLocaleString(), unit: '点' })),
                 })}
                 {renderDataCard({
-                  icon: '📉', title: '最低スコア', theme: 'rose',
-                  desc: '1半荘あたりの最低スコア',
-                  rows: lowScoreRanking.map((x, i) => ({ key: `low-${x.playerId}-${x.source}-${i}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: x.score.toLocaleString(), unit: '点' })),
+                  icon: '🔥', title: '連勝記録', theme: 'rose',
+                  desc: `同じ大会の中で連続してトップを取った回数（大会をまたいでは数えません ／ ${MIN_STREAK}連勝以上）`,
+                  emptyText: `${MIN_STREAK}連勝以上の記録がまだありません`,
+                  rows: winStreakRanking.map(x => ({ key: `ws-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: `${x.length}`, unit: '連勝' })),
                 })}
                 {renderDataCard({
                   icon: '🥈', title: '連対率', theme: 'emerald',
@@ -3342,16 +3335,6 @@ export default function Home() {
                   desc: `全半荘のうちラス（4着）でなかった割合（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象 ／ 対象 ${rateEligible.length}名）`,
                   emptyText: `${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`,
                   rows: avoidLastRanking.map(x => ({ key: `al-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘中 ラス${x.last}回`, value: x.rate.toFixed(3), bar: x.rate })),
-                })}
-                {renderDataCard({
-                  icon: '🏅', title: '順位点ランキング', theme: 'indigo',
-                  desc: '順位点（30／10／−10／−30）のみの通算合計。素点は含みません',
-                  rows: umaTotalRanking.map(x => ({ key: `um-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘`, value: signedPt(x.total), unit: 'pt', valueClass: x.total < 0 ? 'text-red-500' : undefined })),
-                })}
-                {renderDataCard({
-                  icon: '💎', title: '素点ランキング', theme: 'slate',
-                  desc: '30,000点を基準とした素点の上下ポイント（1,000点＝1pt）の通算合計。順位点は含みません',
-                  rows: rawTotalRanking.map(x => ({ key: `rw-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘`, value: signedPt(x.total), unit: 'pt', valueClass: x.total < 0 ? 'text-red-500' : undefined })),
                 })}
               </div>
             )}
