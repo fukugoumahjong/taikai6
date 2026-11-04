@@ -3973,7 +3973,7 @@ export default function Home() {
                 </div>
                 <h2 className="text-2xl md:text-3xl font-black text-indigo-900 animate-pulse">卓組抽選中...</h2>
                 <p className="text-sm text-slate-500 mt-3 leading-relaxed">
-                  運営が卓組を確認しています。<br />大会が始まると、この画面に自動で卓組が表示されます。
+                  ただいま対局者及び席順がなるべく公平になるようランダムで生成しています。<br />しばらくお待ちください。
                 </p>
               </div>
             )}
