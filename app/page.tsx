@@ -258,6 +258,27 @@ const archiveTournamentNo = (name: string): number | null => {
 const SEPARATE_EVENT_KEYWORD = '年間チャンピオン';
 const SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT = false;
 const isSeparateEventArchive = (a: { name: string }) => a.name.includes(SEPARATE_EVENT_KEYWORD);
+// 最高位戦ルール以外の大会は、生涯ポイントでは「最高位戦ルールに換算した参考値」として合算する。
+// 換算 = （素点 − 持ち点）÷ 1000 ＋ 最高位戦ルールの順位点（30／10／−10／−30）。オカ・供託は考慮しない。
+// 持ち点が30000点以外のルールだけ、ここに登録する（登録が無いルールは30000点持ちとして換算）。
+const RULE_START_SCORE: Record<string, number> = { '日本プロ麻雀協会ルール': 25000 };
+const DEFAULT_START_SCORE = 30000;
+const SAIKOI_UMA = [30, 10, -10, -30];
+// 1半荘分（4名）のスコア（100点単位）から、最高位戦ルール換算のポイントを求める（同点は順位点を等分）
+const calcConvertedPoints = (scores100: number[], startScore: number): number[] => {
+  const idx = scores100.map((_, i) => i).sort((a, b) => scores100[b] - scores100[a]);
+  const out: number[] = new Array(scores100.length).fill(0);
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j < idx.length && scores100[idx[j]] === scores100[idx[i]]) j++;
+    let umaSum = 0;
+    for (let k = i; k < j; k++) umaSum += SAIKOI_UMA[k] ?? 0;
+    for (let k = i; k < j; k++) out[idx[k]] = (scores100[idx[k]] * 100 - startScore) / 1000 + umaSum / (j - i);
+    i = j;
+  }
+  return out;
+};
 // 既知の大会のルール。ここに載っている回は、保存されているルール名より優先する
 // （取り込み時にルール名を入れ忘れても、生涯ポイントに他ルールの大会が混ざらないようにするため）
 const RULE_NAME_BY_TOURNAMENT_NO: Record<number, string> = {
@@ -400,15 +421,21 @@ type LifetimeSummary = {
   games: number;
   dist: number[];      // 1着〜4着の回数
   rankSum: number;
-  point: number;       // 生涯ポイント（最高位戦ルールの大会のみ）
+  point: number;       // 生涯ポイント（最高位戦ルール以外の大会は、最高位戦ルールに換算した参考値を合算）
+  convertedPart: number; // 生涯ポイントのうち、他ルールの大会を換算して加えた分
   tournaments: number;
 };
 type LifetimeHistoryItem = {
   archiveId: string; name: string; ruleName: string; point: number; gameCount: number; rank: number;
   playerCount: number;     // その大会の参加人数（「◯人中」の表示用）
-  counted: boolean;        // 生涯ポイントに反映されるか（最高位戦ルール）
+  kind: 'actual' | 'converted' | 'excluded'; // actual=そのまま反映 / converted=最高位戦ルールに換算して反映 / excluded=反映しない
+  convertedPoint?: number; // kind が converted のとき、換算後のポイント（参考値）
   previousSeason: boolean; // 前季の大会か
 };
+
+// 生涯成績の表示範囲: all=全ルール（最高位戦ルール以外は換算した参考値を含む） / saikoi=最高位戦ルールの大会のみ
+type LifetimeScope = 'all' | 'saikoi';
+type LifetimeScopeData = Record<LifetimeScope, { summary: LifetimeSummary | null; history: LifetimeHistoryItem[]; groups: PlayerDetailHanchanGroup[] }>;
 
 const PlayerDetailModal = ({
   player,
@@ -420,9 +447,7 @@ const PlayerDetailModal = ({
   maxScore,
   hanchanGroups,
   upcoming,
-  lifetime,
-  lifetimeHistory,
-  lifetimeHanchanGroups,
+  lifetimeData,
   onClose,
 }: {
   player: Player;
@@ -434,9 +459,7 @@ const PlayerDetailModal = ({
   maxScore: { score: number; label: string } | null;
   hanchanGroups: PlayerDetailHanchanGroup[];
   upcoming?: UpcomingMatch[];
-  lifetime: LifetimeSummary | null;
-  lifetimeHistory: LifetimeHistoryItem[];
-  lifetimeHanchanGroups: PlayerDetailHanchanGroup[];
+  lifetimeData: LifetimeScopeData;
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
@@ -446,8 +469,14 @@ const PlayerDetailModal = ({
   const [openHanchan, setOpenHanchan] = useState<string | null>(null);
   // 個人成績のタブ（今季成績 / 生涯成績）
   const [tab, setTab] = useState<'season' | 'lifetime'>('season');
-  const showLifetime = tab === 'lifetime' && !!lifetime;
-  const headPoint = showLifetime ? lifetime!.point : player.totalPoint;
+  // 生涯成績の表示範囲（初期値は全ルール。「最高位戦ルールのみ」に切り替えられる）
+  const [lifeScope, setLifeScope] = useState<LifetimeScope>('all');
+  const lifetimeAny = lifetimeData.all.summary;
+  const lifetime = lifetimeData[lifeScope].summary;
+  const lifetimeHistory = lifetimeData[lifeScope].history;
+  const lifetimeHanchanGroups = lifetimeData[lifeScope].groups;
+  const showLifetime = tab === 'lifetime' && !!lifetimeAny;
+  const headPoint = showLifetime ? (lifetime?.point ?? 0) : player.totalPoint;
   const toggleHanchan = (key: string) => setOpenHanchan(prev => (prev === key ? null : key));
 
   // 半荘ごとの成績（大会ごとにプルダウン。対局をクリックすると同卓者が見られる）。今季・生涯の両タブで使う
@@ -531,7 +560,7 @@ const PlayerDetailModal = ({
               <PlayerLabel name={player.name} badgeClass="text-indigo-900" />
             </h2>
             <p className={`mt-2 text-2xl font-black tabular-nums ${headPoint > 0 ? 'text-emerald-300' : headPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
-              {fmtPt(headPoint)} <span className="text-sm font-bold text-indigo-200">{showLifetime ? `（生涯 ${lifetime!.games}半荘）` : `（今季 ${totalGames}半荘）`}</span>
+              {fmtPt(headPoint)} <span className="text-sm font-bold text-indigo-200">{showLifetime ? (lifeScope === 'all' ? `（生涯 ${lifetime?.games ?? 0}半荘・※換算の参考値）` : `（最高位戦ルール ${lifetime?.games ?? 0}半荘）`) : `（今季 ${totalGames}半荘）`}</span>
             </p>
             {maxScore && !showLifetime && (
               <p className="mt-2 text-xs font-bold text-indigo-200">
@@ -543,7 +572,7 @@ const PlayerDetailModal = ({
         </div>
 
         {/* タブ: 今季成績 / 生涯成績 */}
-        {lifetime && (
+        {lifetimeAny && (
           <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
             {([['season', '今季成績'], ['lifetime', '生涯成績']] as const).map(([k, label]) => (
               <button
@@ -636,7 +665,11 @@ const PlayerDetailModal = ({
                       <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
                         <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-20 text-right text-slate-500 tabular-nums">{count}回 ({pct}%)</span>
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                        <span className="inline-block w-7 text-right">{count}</span>
+                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                      </span>
                     </div>
                   );
                 })}
@@ -690,13 +723,25 @@ const PlayerDetailModal = ({
           )}
 
           {/* 生涯成績（今季より前の大会も含む） */}
-          {tab === 'lifetime' && lifetime && (
+          {tab === 'lifetime' && lifetimeAny && (
             <section className="rounded-xl border-2 border-rose-200 bg-rose-50/40 p-4">
               <h3 className="text-sm font-black text-rose-800 mb-3">🏅 生涯成績（全シーズン通算）</h3>
+              <div className="flex gap-1 p-1 bg-white/80 border border-rose-100 rounded-xl mb-4">
+                {([['all', '全ルール（換算込み）'], ['saikoi', '最高位戦ルールのみ']] as const).map(([k, label]) => (
+                  <button
+                    key={k}
+                    onClick={() => setLifeScope(k)}
+                    className={`flex-1 py-2 rounded-lg text-xs font-black transition ${lifeScope === k ? 'bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow' : 'text-slate-500 hover:bg-rose-50'}`}
+                  >{label}</button>
+                ))}
+              </div>
+              {lifetime ? (
+              <>
               <div className="grid grid-cols-3 gap-2 mb-4">
                 <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">生涯ポイント</div>
+                  <div className="text-[10px] font-bold text-slate-400">{lifeScope === 'all' ? <>生涯ポイント<span className="text-rose-500">※換算・参考</span></> : '最高位戦ルールのpt'}</div>
                   <div className={`text-lg font-black tabular-nums ${lifetime.point > 0 ? 'text-blue-600' : lifetime.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtPt(lifetime.point)}</div>
+                  {lifetime.convertedPart !== 0 && <div className="text-[9px] text-slate-400 leading-tight">うち他ルール換算分 {fmtPt(lifetime.convertedPart)}</div>}
                 </div>
                 <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
                   <div className="text-[10px] font-bold text-slate-400">半荘数</div>
@@ -707,6 +752,13 @@ const PlayerDetailModal = ({
                   <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games > 0 ? (lifetime.rankSum / lifetime.games).toFixed(2) : '-'}</div>
                 </div>
               </div>
+              {lifeScope === 'all' ? (
+                <p className="text-[11px] font-bold text-rose-700 bg-rose-100/60 border border-rose-200 rounded-lg px-3 py-2 mb-4 leading-relaxed">
+                  ※ 生涯ポイントは、最高位戦ルール以外の大会（第1回・第2回など）を最高位戦ルールに換算して合算した「あくまで参考の値」です。実際のポイントではありません。
+                </p>
+              ) : (
+                <p className="text-[11px] font-bold text-slate-600 bg-white/70 border border-slate-200 rounded-lg px-3 py-2 mb-4 leading-relaxed">最高位戦ルールの大会だけを集計しています（換算なし・実際のポイント）。年間チャンピオン戦のポイントは含みません（半荘数・着順分布には含みます）。</p>
+              )}
               <div className="space-y-2 mb-4">
                 {lifetime.dist.map((count, idx) => {
                   const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 100) : 0;
@@ -716,30 +768,46 @@ const PlayerDetailModal = ({
                       <div className="flex-1 h-4 bg-white rounded-full overflow-hidden border border-slate-100">
                         <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-20 text-right text-slate-500 tabular-nums">{count}回 ({pct}%)</span>
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                        <span className="inline-block w-7 text-right">{count}</span>
+                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                      </span>
                     </div>
                   );
                 })}
               </div>
               {lifetimeHistory.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold text-slate-500">大会別（{lifetimeHistory.length}大会）</p>
+                  <p className="text-[11px] font-bold text-slate-500">大会別（{lifetimeHistory.length}大会）<span className="font-normal text-slate-400">　ポイントはその大会のルールでの実際の値です（換算していません）</span></p>
                   {lifetimeHistory.map(h => (
                     <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-slate-100 px-3 py-2">
                       <span className="font-bold text-slate-700 w-12 flex-shrink-0">{h.name}</span>
                       <span className="flex-1 min-w-0 truncate text-[11px] text-slate-400">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
                       <span className="text-slate-500 whitespace-nowrap">{h.rank}位 / {h.playerCount}人中 <span className="text-slate-400">・{h.gameCount}戦</span></span>
-                      <span className={`font-black tabular-nums whitespace-nowrap ${!h.counted ? 'text-slate-400' : h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
-                      {!h.counted && <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap border border-slate-200 rounded px-1">加算なし</span>}
+                      <span className={`font-black tabular-nums whitespace-nowrap ${h.kind === 'excluded' ? 'text-slate-400' : h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+                      {h.kind === 'converted' && (
+                        <span className="text-[10px] font-bold text-rose-500 whitespace-nowrap border border-rose-200 rounded px-1">生涯へは換算 {fmtPt(h.convertedPoint ?? 0)}（参考）</span>
+                      )}
+                      {h.kind === 'excluded' && <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap border border-slate-200 rounded px-1">別大会・生涯pt加算なし</span>}
                     </div>
                   ))}
                 </div>
               )}
               <div className="mt-5">
-                <h4 className="text-sm font-black text-slate-700 mb-2">🀄 半荘ごとの成績（全大会）</h4>
+                <h4 className="text-sm font-black text-slate-700 mb-1">🀄 半荘ごとの成績（全大会）</h4>
+                <p className="text-[10px] text-slate-400 mb-2">各半荘のポイントは、その大会のルールでの実際の値です（最高位戦ルールへの換算はしていません）。</p>
                 {renderHanchanGroups(lifetimeHanchanGroups, 'lt-')}
               </div>
-              <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">生涯ポイントは最高位戦ルールで開催した大会のみ反映しています。「加算なし」の大会（他のルールの大会・年間チャンピオン戦）のポイントは参考表示で、生涯ポイントには含みません。着順分布・平均着順・半荘数は、それらも含めた全記録です。</p>
+              {lifeScope === 'all' ? (
+                <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">※ 生涯ポイントのうち、最高位戦ルール以外の大会の分は、最高位戦ルール（持ち点に対する素点差＋順位点 30／10／−10／−30、オカ・供託なし）に換算した「あくまで参考の値」です。年間チャンピオン戦などの別大会は生涯ポイントに含めません。各大会・各半荘に表示しているポイントは、すべてその大会のルールでの実際の値です。着順分布・平均着順・半荘数は、全ての大会の記録を含みます。</p>
+              ) : (
+                <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">※ 最高位戦ルールの大会のみの表示です。各大会・各半荘のポイントは実際の値です。</p>
+              )}
+              </>
+              ) : (
+                <p className="text-sm text-slate-400 text-center py-6">最高位戦ルールの大会の記録がありません。</p>
+              )}
             </section>
           )}
         </div>
@@ -2079,6 +2147,7 @@ export default function Home() {
     if (!archiveRoundTouched.current) setArchiveRoundNumber(tournamentNo);
   }, [tournamentNo]);
   const [archiveNotes, setArchiveNotes] = useState('');
+  const [lifetimeScope, setLifetimeScope] = useState<LifetimeScope>('all'); // 生涯成績一覧の表示範囲
   const [archiveRuleName, setArchiveRuleName] = useState(RULE_NAME); // この大会で使ったルール（生涯ポイントは最高位戦ルールのみ反映）
   const archiveRuleTouched = useRef(false);
   const [archiveNameSuffix, setArchiveNameSuffix] = useState(''); // 例: 年間チャンピオン戦（別大会として登録するとき）
@@ -2131,7 +2200,7 @@ export default function Home() {
     const ruleNameToSave = archiveRuleName.trim() || RULE_NAME;
     const validPenalties = penaltyRows.filter(p => p.name.trim() && p.point.trim());
     if (!window.confirm(isPrevSeason
-      ? `「${archiveDisplayName}」（${ruleNameToSave}）を、前季の過去大会として登録しますか？\n\n・最終成績: ${archivePreview.leaderboard.length}名\n・半荘ログ: ${archivePreview.hanchans.length}半荘\n・ペナルティ記録: ${validPenalties.length}件\n\n※今季の通算ポイントには加算されません。選手の新規登録もされません。\n※生涯成績には反映されます（生涯ポイントは最高位戦ルールの大会のみ）。`
+      ? `「${archiveDisplayName}」（${ruleNameToSave}）を、前季の過去大会として登録しますか？\n\n・最終成績: ${archivePreview.leaderboard.length}名\n・半荘ログ: ${archivePreview.hanchans.length}半荘\n・ペナルティ記録: ${validPenalties.length}件\n\n※今季の通算ポイントには加算されません。選手の新規登録もされません。\n※生涯成績には反映されます（最高位戦ルール以外の大会は、生涯ポイントには最高位戦ルールに換算した参考値として反映されます）。`
       : `「${archiveDisplayName}」を過去大会として登録しますか？\n\n・最終成績: ${archivePreview.leaderboard.length}名\n・半荘ログ: ${archivePreview.hanchans.length}半荘\n・ペナルティ記録: ${validPenalties.length}件\n・新規登録される選手: ${archivePreview.newNames.length}名\n\n登録すると、対象選手の今季成績（ポイント・半荘数）に加算されます。`)) return;
 
     setIsImportingArchive(true);
@@ -2457,8 +2526,9 @@ export default function Home() {
   // ----------------------------------------
   // 生涯成績（全シーズン通し）
   //  ・着順分布・平均着順・半荘数は、全ての大会（ルールを問わず）＋今大会の記録から集計する
-  //  ・生涯ポイントは「最高位戦ルール」で開催した大会のみ反映する
-  //      = 今季ポイント（選手データの通算ポイント）＋ 前季の大会のうち最高位戦ルールのものの最終成績ポイント
+  //  ・生涯ポイント = 今季ポイント（選手データの通算ポイント）＋ 前季の大会のポイント
+  //      最高位戦ルールの大会はそのままの最終成績ポイント、
+  //      それ以外のルールの大会は「最高位戦ルールに換算した参考値」を合算する（年間チャンピオン戦などの別大会は含めない）
   //  ・前季のみ参加の選手（選手登録されていない選手）は、名前で集計し、個人ページは作らない
   // ----------------------------------------
   const lifetimeKeyOf = (playerId: string, name: string) => {
@@ -2466,19 +2536,37 @@ export default function Home() {
     const byName = dbPlayers.find(p => p.name === name);
     return byName ? byName.id : playerId;
   };
-  const lifetimeRows: LifetimeSummary[] = (() => {
+  // 大会を最高位戦ルールに換算したときの、選手ごとの合計ポイント（ペナルティ込み）。参考値
+  const convertedArchivePoints = (a: TournamentArchive): Map<string, number> => {
+    const start = RULE_START_SCORE[effectiveArchiveRuleName(a)] ?? DEFAULT_START_SCORE;
+    const m = new Map<string, number>();
+    a.hanchans.forEach(h => {
+      const pts = calcConvertedPoints(h.results.map(r => r.score), start);
+      h.results.forEach((r, i) => {
+        if (r.excluded || isKuroko(nameOf(r.playerId, r.name))) return;
+        const k = lifetimeKeyOf(r.playerId, r.name);
+        m.set(k, (m.get(k) || 0) + pts[i]);
+      });
+    });
+    a.penalties.forEach(pn => {
+      const k = lifetimeKeyOf(pn.playerId, pn.name);
+      m.set(k, (m.get(k) || 0) + pn.point);
+    });
+    return m;
+  };
+  const buildLifetimeRows = (scope: LifetimeScope): LifetimeSummary[] => {
     const map = new Map<string, LifetimeSummary>();
     const touch = (playerId: string, rawName: string): LifetimeSummary => {
       const key = lifetimeKeyOf(playerId, rawName);
       let row = map.get(key);
       if (!row) {
         const db = dbPlayers.find(p => p.id === key);
-        row = { key, name: db?.name || rawName, registered: !!db, games: 0, dist: [0, 0, 0, 0], rankSum: 0, point: 0, tournaments: 0 };
+        row = { key, name: db?.name || rawName, registered: !!db, games: 0, dist: [0, 0, 0, 0], rankSum: 0, point: 0, convertedPart: 0, tournaments: 0 };
         map.set(key, row);
       }
       return row;
     };
-    archives.forEach(a => {
+    archives.filter(a => scope === 'all' || effectiveArchiveRuleName(a) === RULE_NAME).forEach(a => {
       const seen = new Set<string>();
       a.hanchans.forEach(h => h.results.forEach(r => {
         if (r.excluded || isKuroko(nameOf(r.playerId, r.name))) return;
@@ -2491,12 +2579,23 @@ export default function Home() {
         seen.add(row.key);
       }));
       seen.forEach(k => { map.get(k)!.tournaments += 1; });
-      // 前季の大会のうち、最高位戦ルールのものだけ生涯ポイントに反映（今季分は選手データの通算ポイントに入っている）
-      if (isPreviousSeasonArchive(a) && effectiveArchiveRuleName(a) === RULE_NAME && (SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT || !isSeparateEventArchive(a))) {
-        a.standings.forEach(st => {
-          if (isKuroko(nameOf(st.playerId, st.name))) return;
-          touch(st.playerId, st.name).point += st.totalPoint;
-        });
+      // 前季の大会を生涯ポイントに反映する（今季分は選手データの通算ポイントに入っている）
+      if (isPreviousSeasonArchive(a) && (SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT || !isSeparateEventArchive(a))) {
+        if (effectiveArchiveRuleName(a) === RULE_NAME) {
+          // 最高位戦ルールの大会: 最終成績のポイントをそのまま
+          a.standings.forEach(st => {
+            if (isKuroko(nameOf(st.playerId, st.name))) return;
+            touch(st.playerId, st.name).point += st.totalPoint;
+          });
+        } else if (scope === 'all') {
+          // それ以外のルールの大会: 最高位戦ルールに換算した参考値（「最高位戦ルールのみ」の表示では含めない）
+          convertedArchivePoints(a).forEach((v, k) => {
+            const row = map.get(k);
+            if (!row) return;
+            row.point += v;
+            row.convertedPart += v;
+          });
+        }
       }
     });
     // 今大会（送信済みの卓）
@@ -2518,16 +2617,21 @@ export default function Home() {
     });
     return Array.from(map.values())
       .filter(r => r.games > 0)
-      .map(r => ({ ...r, point: Math.round(r.point * 10) / 10 }))
+      .map(r => ({ ...r, point: Math.round(r.point * 10) / 10, convertedPart: Math.round(r.convertedPart * 10) / 10 }))
       .sort((a, b) => b.point - a.point || b.games - a.games);
-  })();
-  const getLifetimeSummary = (playerId: string): LifetimeSummary | null => lifetimeRows.find(r => r.key === playerId) || null;
+  };
+  const lifetimeRows = buildLifetimeRows('all');
+  const lifetimeRowsSaikoi = buildLifetimeRows('saikoi');
+  const getLifetimeSummary = (playerId: string, scope: LifetimeScope = 'all'): LifetimeSummary | null => (scope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).find(r => r.key === playerId) || null;
   // 指定選手の、全シーズン分の大会別成績（ルール名・ポイント・順位）。回数の若い順
-  const getLifetimeHistory = (playerId: string): LifetimeHistoryItem[] => {
+  const getLifetimeHistory = (playerId: string, scope: LifetimeScope = 'all'): LifetimeHistoryItem[] => {
     const list: (LifetimeHistoryItem & { sortKey: number })[] = [];
-    archives.forEach(a => {
+    archives.filter(a => scope === 'all' || effectiveArchiveRuleName(a) === RULE_NAME).forEach(a => {
       const st = a.standings.find(s => lifetimeKeyOf(s.playerId, s.name) === playerId);
       if (!st) return;
+      const separate = isSeparateEventArchive(a) && !SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT;
+      const isSaikoi = effectiveArchiveRuleName(a) === RULE_NAME;
+      const kind: 'actual' | 'converted' | 'excluded' = separate ? 'excluded' : (isSaikoi || !isPreviousSeasonArchive(a)) ? 'actual' : 'converted';
       list.push({
         archiveId: a.id,
         name: a.name,
@@ -2536,7 +2640,8 @@ export default function Home() {
         gameCount: st.gameCount,
         rank: st.rank,
         playerCount: a.standings.filter(x => !isKuroko(nameOf(x.playerId, x.name))).length,
-        counted: effectiveArchiveRuleName(a) === RULE_NAME && (SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT || !isSeparateEventArchive(a)),
+        kind,
+        convertedPoint: kind === 'converted' ? Math.round((convertedArchivePoints(a).get(playerId) || 0) * 10) / 10 : undefined,
         previousSeason: isPreviousSeasonArchive(a),
         sortKey: tournamentSortKey(a.name),
       });
@@ -2547,12 +2652,12 @@ export default function Home() {
   // 指定選手の半荘ごとの成績を、大会ごとにまとめ、時系列順（第N回の若い順→進行中の今大会が最後）に並べる。
   // 各半荘には同卓者全員のスコア・ポイントも含める（今大会成績タブと同様のクリック展開に使うため）。
   // 将来、大会が終わるたびに「今大会」がそのままここに1グループとして積み上がっていく想定。
-  const getPlayerHanchanGroups = (playerId: string, allSeasons = false) => {
+  const getPlayerHanchanGroups = (playerId: string, allSeasons = false, saikoiOnly = false) => {
     type TableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
     type Row = { rank: number; score: number; point: number; table: TableRow[] };
     const groups: { key: string; label: string; sortKey: number; rows: Row[] }[] = [];
 
-    (allSeasons ? archives : seasonArchives).forEach(a => {
+    (allSeasons ? archives : seasonArchives).filter(a => !saikoiOnly || effectiveArchiveRuleName(a) === RULE_NAME).forEach(a => {
       const rows: Row[] = [];
       // MMCの元データは新しい半荘から並んでいる（例: 51戦目→1戦目）ため、
       // 古い順（時系列順）に表示するために反転してから処理する
@@ -3177,10 +3282,18 @@ export default function Home() {
     );
   };
 
+  // タブボタン（ヘッダー用）。選択中は、タブごとの色のグラデーションに淡い光彩を付ける
+  const TAB_GRADIENTS: Record<string, string> = {
+    'bg-indigo-600': 'bg-gradient-to-b from-indigo-400 to-indigo-600',
+    'bg-teal-600': 'bg-gradient-to-b from-teal-400 to-teal-600',
+    'bg-amber-600': 'bg-gradient-to-b from-amber-400 to-amber-600',
+    'bg-fuchsia-600': 'bg-gradient-to-b from-fuchsia-400 to-fuchsia-600',
+    'bg-rose-600': 'bg-gradient-to-b from-rose-400 to-rose-600',
+  };
   const tabBtn = (key: typeof activeTab, label: string, color: string) => (
     <button
       onClick={() => setActiveTab(key)}
-      className={`px-3 lg:px-4 py-1.5 rounded-md font-bold text-[13px] whitespace-nowrap transition ${activeTab === key ? `${color} text-white shadow` : 'text-slate-300 hover:text-white hover:bg-slate-700/60'}`}
+      className={`px-3 lg:px-4 py-1.5 rounded-lg font-bold text-[13px] whitespace-nowrap transition ${activeTab === key ? `${TAB_GRADIENTS[color] || color} text-white shadow-md shadow-black/30 ring-1 ring-white/25` : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
     >{label}</button>
   );
 
@@ -3219,7 +3332,15 @@ export default function Home() {
   })();
 
   return (
-    <main className="min-h-screen bg-slate-100 text-slate-800 font-sans relative pb-28 md:pb-20">
+    <main
+      className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
+      style={{
+        backgroundColor: '#f1f5f9',
+        backgroundImage:
+          'radial-gradient(900px 340px at 50% -90px, rgba(99,102,241,0.15), transparent 70%), radial-gradient(640px 280px at 100% 0, rgba(217,70,239,0.08), transparent 70%)',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
       {/* スマホ向けの共通調整: 入力欄の自動ズーム防止（16px）、タップ時の青いハイライト抑止、横スクロールの慣性など */}
       <style>{`
         html { -webkit-text-size-adjust: 100%; }
@@ -3228,6 +3349,12 @@ export default function Home() {
           input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px !important; }
           .overflow-x-auto { -webkit-overflow-scrolling: touch; }
         }
+        /* 配色の仕上げ: やわらかい影・淡い枠線・細いスクロールバー */
+        main .shadow-sm { box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 12px 30px -16px rgba(30,41,99,.24); }
+        main .border-slate-200 { border-color: rgba(148,163,184,.34); }
+        main h2, main h3 { letter-spacing: .01em; }
+        ::selection { background: #c7d2fe; color: #1e1b4b; }
+        * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
@@ -3269,16 +3396,16 @@ export default function Home() {
       {/* ========== ヘッダー ==========
           スマホ: 1段目=タイトル+ログイン、2段目=横スクロールの操作ボタン。画面切替は下部ナビで行う
           PC    : 従来どおり1行（画面上部に固定） */}
-      <header className="bg-slate-900 text-white shadow-md relative md:sticky md:top-0 z-40">
+      <header className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 text-white shadow-lg shadow-indigo-950/25 relative md:sticky md:top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 md:h-16 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-2 md:gap-4 md:overflow-x-auto no-scrollbar">
           {/* タイトル */}
           <div className="order-1 md:order-none min-w-0 flex-1 md:flex-none md:flex-shrink-0 leading-tight mr-1">
-            <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap">{APP_TITLE}</h1>
-            <p className="text-[10px] text-slate-400 whitespace-nowrap">{RULE_NAME}</p>
+            <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">{APP_TITLE}</h1>
+            <p className="text-[10px] text-indigo-300/70 whitespace-nowrap">{RULE_NAME}</p>
           </div>
 
           {/* タブ（PCのみ。スマホは下部ナビ） */}
-          <nav className="hidden md:flex order-none flex-shrink-0 bg-slate-800 p-1 rounded-lg gap-0.5">
+          <nav className="hidden md:flex order-none flex-shrink-0 bg-white/5 ring-1 ring-white/10 backdrop-blur p-1 rounded-xl gap-0.5">
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '今季成績', 'bg-indigo-600')}
@@ -3295,7 +3422,7 @@ export default function Home() {
               href={RULES_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 text-xs md:text-[11px] font-bold bg-slate-800 hover:bg-indigo-600 text-slate-200 hover:text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+              className="flex-shrink-0 text-xs md:text-[11px] font-bold bg-white/10 hover:bg-indigo-500 ring-1 ring-white/10 text-slate-200 hover:text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
               title="大会規定（Google ドキュメント）を別タブで開きます"
             >
               📖 大会規定
@@ -3306,9 +3433,9 @@ export default function Home() {
             {/* 管理ツール */}
             {isAdmin && (
               <div className="flex-shrink-0 flex gap-2 items-center">
-                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={api.exportBackup} className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-                <label className="text-xs md:text-[11px] bg-slate-800 hover:bg-slate-700 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={api.exportBackup} className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
                 </label>
@@ -3322,15 +3449,15 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
-                      className="text-xs md:text-[11px] font-bold bg-teal-700 hover:bg-teal-600 text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+                      className="text-xs md:text-[11px] font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 shadow shadow-teal-950/40 text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
                       title="自分の個人成績と、この後の対局を見る"
                     >
                       👤 {loggedInPlayer.name}（個人成績）
                     </button>
-                    <button onClick={handlePlayerLogout} className="text-xs md:text-[11px] bg-slate-800 hover:bg-red-600 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                    <button onClick={handlePlayerLogout} className="text-xs md:text-[11px] bg-white/10 hover:bg-rose-600 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
                   </>
                 ) : (
-                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-[11px] bg-teal-600 hover:bg-teal-500 px-4 md:px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">
+                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-[11px] bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 shadow shadow-teal-950/40 px-4 md:px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">
                     🀄 選手ログイン
                   </button>
                 )}
@@ -3346,18 +3473,20 @@ export default function Home() {
                   {session.user?.name}{isAdmin && ' (管理者)'}
                 </span>
                 {isAdmin && <span className="sm:hidden text-[10px] font-bold bg-indigo-600 px-1.5 py-0.5 rounded">管理者</span>}
-                <button onClick={() => signOut()} className="text-xs md:text-[11px] bg-slate-800 hover:bg-red-600 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                <button onClick={() => signOut()} className="text-xs md:text-[11px] bg-white/10 hover:bg-rose-600 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-xs md:text-[11px] bg-indigo-600 hover:bg-indigo-500 px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="text-xs md:text-[11px] bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 shadow shadow-indigo-950/40 px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">Googleログイン</button>
             )}
           </div>
         </div>
+        {/* アクセントライン */}
+        <div className="h-[3px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-amber-400" />
       </header>
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-900/95 backdrop-blur border-t border-slate-700 shadow-[0_-4px_16px_rgba(0,0,0,0.25)]"
+        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-8px_24px_rgba(15,23,42,0.35)]"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="画面の切り替え"
       >
@@ -3611,10 +3740,23 @@ export default function Home() {
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-rose-600 via-red-600 to-orange-600 text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">🏅</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">生涯成績</h2>
-              <p className="text-xs md:text-sm text-rose-100 mt-1 leading-relaxed">今季より前の大会も含めた全記録です。生涯ポイントは最高位戦ルールで開催した大会のみ反映し、着順などの成績は全ての大会が対象です。</p>
+              <p className="text-xs md:text-sm text-rose-100 mt-1 leading-relaxed">
+                {lifetimeScope === 'all'
+                  ? '今季より前の大会も含めた全記録です。生涯ポイントは、最高位戦ルール以外の大会を最高位戦ルールに換算して合算した「あくまで参考の値」です。着順などの成績は全ての大会が対象です。'
+                  : '最高位戦ルールで開催した大会だけを集計しています。ポイントは実際の値です（換算なし）。年間チャンピオン戦のポイントは含みません。'}
+              </p>
+            </div>
+            <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200 shadow-sm">
+              {([['all', '全ルール（換算込み）'], ['saikoi', '最高位戦ルールのみ']] as const).map(([k, label]) => (
+                <button
+                  key={k}
+                  onClick={() => setLifetimeScope(k)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-black transition ${lifetimeScope === k ? 'bg-gradient-to-b from-rose-500 to-rose-600 text-white shadow-md shadow-rose-900/20' : 'text-slate-500 hover:bg-rose-50'}`}
+                >{label}</button>
+              ))}
             </div>
             <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-              {lifetimeRows.length === 0 ? (
+              {(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).length === 0 ? (
                 <p className="p-8 text-center text-sm text-slate-400">記録がまだありません。</p>
               ) : (
                 <div className="overflow-x-auto">
@@ -3623,7 +3765,7 @@ export default function Home() {
                       <tr>
                         <th className="p-2.5 text-center font-bold w-12">順位</th>
                         <th className="p-2.5 text-left font-bold">選手名</th>
-                        <th className="p-2.5 text-right font-bold">生涯pt</th>
+                        <th className="p-2.5 text-right font-bold whitespace-nowrap">生涯pt{lifetimeScope === 'all' && <span className="text-rose-300">※</span>}</th>
                         <th className="p-2.5 text-right font-bold">半荘</th>
                         <th className="p-2.5 text-right font-bold">平均着順</th>
                         <th className="p-2.5 text-right font-bold">1着</th>
@@ -3633,7 +3775,7 @@ export default function Home() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {lifetimeRows.map((r, i) => {
+                      {(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).map((r, i) => {
                         const pctOf = (n: number) => (r.games > 0 ? `${Math.round((n / r.games) * 100)}%` : '-');
                         return (
                           <tr
@@ -3648,7 +3790,8 @@ export default function Home() {
                             <td className="p-2.5 text-right tabular-nums text-slate-600">{(r.rankSum / r.games).toFixed(2)}</td>
                             {r.dist.map((n, idx) => (
                               <td key={idx} className="p-2.5 text-right tabular-nums text-slate-500 whitespace-nowrap">
-                                {n}<span className="text-[10px] text-slate-400 ml-1">({pctOf(n)})</span>
+                                <span className="inline-block w-6 text-right">{n}</span>
+                                <span className="inline-block w-12 text-right text-[10px] text-slate-400">({pctOf(n)})</span>
                               </td>
                             ))}
                           </tr>
@@ -3659,6 +3802,11 @@ export default function Home() {
                 </div>
               )}
             </div>
+            {lifetimeScope === 'all' ? (
+              <p className="text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 rounded-lg px-3 py-2 leading-relaxed">※ 生涯ptは、最高位戦ルール以外の大会（第1回・第2回など）を最高位戦ルールに換算して合算した、あくまで参考の値です。実際のポイントではありません。年間チャンピオン戦は含みません。</p>
+            ) : (
+              <p className="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">最高位戦ルールの大会のみの集計です（換算なし）。半荘数・着順分布には年間チャンピオン戦も含みますが、ポイントには含みません。</p>
+            )}
             <p className="text-[11px] text-slate-400 leading-relaxed px-1">選手名をタップすると個人成績が開きます（選手登録のある選手のみ）。前季のみ参加の選手は、この一覧にだけ表示されます。</p>
           </div>
         )}
@@ -3792,9 +3940,10 @@ export default function Home() {
               penalties={getPlayerPenalties(dp.id)}
               maxScore={getMaxScore(dp.id)}
               hanchanGroups={getPlayerHanchanGroups(dp.id)}
-              lifetime={getLifetimeSummary(dp.id)}
-              lifetimeHistory={getLifetimeHistory(dp.id)}
-              lifetimeHanchanGroups={getPlayerHanchanGroups(dp.id, true)}
+              lifetimeData={{
+                all: { summary: getLifetimeSummary(dp.id, 'all'), history: getLifetimeHistory(dp.id, 'all'), groups: getPlayerHanchanGroups(dp.id, true, false) },
+                saikoi: { summary: getLifetimeSummary(dp.id, 'saikoi'), history: getLifetimeHistory(dp.id, 'saikoi'), groups: getPlayerHanchanGroups(dp.id, true, true) },
+              }}
               upcoming={!isAdmin && dp.id === loggedInPlayerId ? getUpcomingMatches(dp.id) : undefined}
               onClose={() => setDetailModalPlayerId(null)}
             />
@@ -3847,7 +3996,7 @@ export default function Home() {
                         {archiveNameSuffix.includes(SEPARATE_EVENT_KEYWORD) && (
                           <p className="mb-2 text-[11px] font-bold text-amber-700">「{archiveNameSuffix.trim()}」は別大会として登録され、生涯ポイントには加算されません（着順分布・半荘数には含まれます）。</p>
                         )}
-                        <label className="block text-xs font-bold text-slate-600 mb-1">ルール名（生涯ポイントに反映されるのは「{RULE_NAME}」の大会のみ）</label>
+                        <label className="block text-xs font-bold text-slate-600 mb-1">ルール名（「{RULE_NAME}」以外は、生涯ポイントには最高位戦ルールに換算した参考値として反映されます）</label>
                         <input
                           list="archive-rule-names"
                           value={archiveRuleName}
