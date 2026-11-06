@@ -376,7 +376,7 @@ const ArchiveHistoryMini = ({
 };
 
 // 個人成績（モーダル）：通算成績・大会別成績・着順分布・半荘ごとの成績・対戦相性・ペナルティ履歴をまとめて表示
-type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number };
+type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
 type PlayerDetailHanchanGroup = { key: string; label: string; rows: PlayerDetailHanchanRow[] };
 // ログイン中の本人だけに見せる「この後の対局」
@@ -405,6 +405,7 @@ type LifetimeSummary = {
 };
 type LifetimeHistoryItem = {
   archiveId: string; name: string; ruleName: string; point: number; gameCount: number; rank: number;
+  playerCount: number;     // その大会の参加人数（「◯人中」の表示用）
   counted: boolean;        // 生涯ポイントに反映されるか（最高位戦ルール）
   previousSeason: boolean; // 前季の大会か
 };
@@ -421,6 +422,7 @@ const PlayerDetailModal = ({
   upcoming,
   lifetime,
   lifetimeHistory,
+  lifetimeHanchanGroups,
   onClose,
 }: {
   player: Player;
@@ -434,6 +436,7 @@ const PlayerDetailModal = ({
   upcoming?: UpcomingMatch[];
   lifetime: LifetimeSummary | null;
   lifetimeHistory: LifetimeHistoryItem[];
+  lifetimeHanchanGroups: PlayerDetailHanchanGroup[];
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
@@ -446,6 +449,73 @@ const PlayerDetailModal = ({
   const showLifetime = tab === 'lifetime' && !!lifetime;
   const headPoint = showLifetime ? lifetime!.point : player.totalPoint;
   const toggleHanchan = (key: string) => setOpenHanchan(prev => (prev === key ? null : key));
+
+  // 半荘ごとの成績（大会ごとにプルダウン。対局をクリックすると同卓者が見られる）。今季・生涯の両タブで使う
+  const renderHanchanGroups = (groups: PlayerDetailHanchanGroup[], prefix: string) => (
+    <>
+            {groups.length === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="space-y-2">
+                {groups.map(g0 => {
+                  const g = { ...g0, key: `${prefix}${g0.key}` };
+                  const isGroupOpen = !!openGroups[g.key];
+                  return (
+                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => toggleGroup(g.key)}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
+                      >
+                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
+                        <span className="text-xs text-slate-400 flex items-center gap-2">
+                          {g.rows.length}半荘
+                          <span className="font-bold">{isGroupOpen ? '▲' : '▼'}</span>
+                        </span>
+                      </button>
+                      {isGroupOpen && (
+                        <div className="divide-y divide-slate-100">
+                          {g.rows.map((r, i) => {
+                            const hKey = `${g.key}-${i}`;
+                            const isHOpen = openHanchan === hKey;
+                            return (
+                              <div key={hKey}>
+                                <button
+                                  onClick={() => toggleHanchan(hKey)}
+                                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left transition ${isHOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                >
+                                  <span className="text-slate-400 w-10">#{i + 1}</span>
+                                  <span className="text-slate-600 font-bold w-10">{r.rank}位</span>
+                                  <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
+                                  <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                                </button>
+                                {isHOpen && (
+                                  <div className="px-3 pb-3 pt-1 bg-white">
+                                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                      {r.table.map(tp => (
+                                        <div key={tp.playerId} className={`flex items-center justify-between px-3 py-1.5 text-xs ${(tp.isMe ?? tp.playerId === player.id) ? 'bg-indigo-50' : 'bg-white'}`}>
+                                          <span className="text-slate-600 font-bold truncate flex-1">
+                                            <span className="text-slate-400 font-mono mr-1.5">{tp.rank}位</span>
+                                            <PlayerLabel name={tp.name} />
+                                          </span>
+                                          <span className="text-slate-400 mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
+                                          <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(tp.point)}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+    </>
+  );
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-3 md:p-6" onClick={onClose}>
@@ -559,7 +629,7 @@ const PlayerDetailModal = ({
             ) : (
               <div className="space-y-2">
                 {rankDist.dist.map((count, idx) => {
-                  const pct = rankDist.total > 0 ? Math.round((count / rankDist.total) * 1000) / 10 : 0;
+                  const pct = rankDist.total > 0 ? Math.round((count / rankDist.total) * 100) : 0;
                   return (
                     <div key={idx} className="flex items-center gap-3 text-sm">
                       <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
@@ -577,66 +647,7 @@ const PlayerDetailModal = ({
           {/* 半荘ごとの成績（大会ごとにプルダウン。対局をクリックすると同卓者が見られる） */}
           <section>
             <h3 className="text-sm font-black text-slate-700 mb-3">🀄 半荘ごとの成績</h3>
-            {hanchanGroups.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
-            ) : (
-              <div className="space-y-2">
-                {hanchanGroups.map(g => {
-                  const isGroupOpen = !!openGroups[g.key];
-                  return (
-                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => toggleGroup(g.key)}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
-                      >
-                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
-                        <span className="text-xs text-slate-400 flex items-center gap-2">
-                          {g.rows.length}半荘
-                          <span className="font-bold">{isGroupOpen ? '▲' : '▼'}</span>
-                        </span>
-                      </button>
-                      {isGroupOpen && (
-                        <div className="divide-y divide-slate-100">
-                          {g.rows.map((r, i) => {
-                            const hKey = `${g.key}-${i}`;
-                            const isHOpen = openHanchan === hKey;
-                            return (
-                              <div key={hKey}>
-                                <button
-                                  onClick={() => toggleHanchan(hKey)}
-                                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left transition ${isHOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
-                                >
-                                  <span className="text-slate-400 w-10">#{i + 1}</span>
-                                  <span className="text-slate-600 font-bold w-10">{r.rank}位</span>
-                                  <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
-                                  <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
-                                </button>
-                                {isHOpen && (
-                                  <div className="px-3 pb-3 pt-1 bg-white">
-                                    <div className="border border-slate-200 rounded-lg overflow-hidden">
-                                      {r.table.map(tp => (
-                                        <div key={tp.playerId} className={`flex items-center justify-between px-3 py-1.5 text-xs ${tp.playerId === player.id ? 'bg-indigo-50' : 'bg-white'}`}>
-                                          <span className="text-slate-600 font-bold truncate flex-1">
-                                            <span className="text-slate-400 font-mono mr-1.5">{tp.rank}位</span>
-                                            <PlayerLabel name={tp.name} />
-                                          </span>
-                                          <span className="text-slate-400 mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
-                                          <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(tp.point)}</span>
-                                        </div>
-                                      ))}
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            {renderHanchanGroups(hanchanGroups, '')}
           </section>
 
           {/* 対戦相性 */}
@@ -698,7 +709,7 @@ const PlayerDetailModal = ({
               </div>
               <div className="space-y-2 mb-4">
                 {lifetime.dist.map((count, idx) => {
-                  const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 1000) / 10 : 0;
+                  const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 100) : 0;
                   return (
                     <div key={idx} className="flex items-center gap-3 text-sm">
                       <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
@@ -717,13 +728,17 @@ const PlayerDetailModal = ({
                     <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-slate-100 px-3 py-2">
                       <span className="font-bold text-slate-700 w-12 flex-shrink-0">{h.name}</span>
                       <span className="flex-1 min-w-0 truncate text-[11px] text-slate-400">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
-                      <span className="text-slate-400 whitespace-nowrap">{h.rank}位 ／ {h.gameCount}戦</span>
+                      <span className="text-slate-500 whitespace-nowrap">{h.rank}位 / {h.playerCount}人中 <span className="text-slate-400">・{h.gameCount}戦</span></span>
                       <span className={`font-black tabular-nums whitespace-nowrap ${!h.counted ? 'text-slate-400' : h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
                       {!h.counted && <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap border border-slate-200 rounded px-1">加算なし</span>}
                     </div>
                   ))}
                 </div>
               )}
+              <div className="mt-5">
+                <h4 className="text-sm font-black text-slate-700 mb-2">🀄 半荘ごとの成績（全大会）</h4>
+                {renderHanchanGroups(lifetimeHanchanGroups, 'lt-')}
+              </div>
               <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">生涯ポイントは最高位戦ルールで開催した大会のみ反映しています。「加算なし」の大会（他のルールの大会・年間チャンピオン戦）のポイントは参考表示で、生涯ポイントには含みません。着順分布・平均着順・半荘数は、それらも含めた全記録です。</p>
             </section>
           )}
@@ -2520,6 +2535,7 @@ export default function Home() {
         point: st.totalPoint,
         gameCount: st.gameCount,
         rank: st.rank,
+        playerCount: a.standings.filter(x => !isKuroko(nameOf(x.playerId, x.name))).length,
         counted: effectiveArchiveRuleName(a) === RULE_NAME && (SEPARATE_EVENT_COUNTS_FOR_LIFETIME_POINT || !isSeparateEventArchive(a)),
         previousSeason: isPreviousSeasonArchive(a),
         sortKey: tournamentSortKey(a.name),
@@ -2531,20 +2547,22 @@ export default function Home() {
   // 指定選手の半荘ごとの成績を、大会ごとにまとめ、時系列順（第N回の若い順→進行中の今大会が最後）に並べる。
   // 各半荘には同卓者全員のスコア・ポイントも含める（今大会成績タブと同様のクリック展開に使うため）。
   // 将来、大会が終わるたびに「今大会」がそのままここに1グループとして積み上がっていく想定。
-  const getPlayerHanchanGroups = (playerId: string) => {
-    type TableRow = { playerId: string; name: string; rank: number; score: number; point: number };
+  const getPlayerHanchanGroups = (playerId: string, allSeasons = false) => {
+    type TableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
     type Row = { rank: number; score: number; point: number; table: TableRow[] };
     const groups: { key: string; label: string; sortKey: number; rows: Row[] }[] = [];
 
-    seasonArchives.forEach(a => {
+    (allSeasons ? archives : seasonArchives).forEach(a => {
       const rows: Row[] = [];
       // MMCの元データは新しい半荘から並んでいる（例: 51戦目→1戦目）ため、
       // 古い順（時系列順）に表示するために反転してから処理する
       [...a.hanchans].reverse().forEach(h => {
-        const me = h.results.find(r => r.playerId === playerId);
+        // 全シーズン版は、選手登録前の前季データ（legacy:名前）も名前でひも付けて同じ選手として扱う
+        const isSame = (r: { playerId: string; name: string }) => (allSeasons ? lifetimeKeyOf(r.playerId, r.name) === playerId : r.playerId === playerId);
+        const me = h.results.find(isSame);
         if (!me || me.excluded) return;
         const table: TableRow[] = h.results
-          .map(r => ({ playerId: r.playerId, name: nameOf(r.playerId, r.name), rank: r.rank, score: r.score, point: r.point }))
+          .map(r => ({ playerId: r.playerId, name: nameOf(r.playerId, r.name), rank: r.rank, score: r.score, point: r.point, isMe: isSame(r) }))
           .sort((x, y) => x.rank - y.rank);
         rows.push({ rank: me.rank, score: me.score, point: me.point, table });
       });
@@ -2565,6 +2583,7 @@ export default function Home() {
           rank: sorted.findIndex(sp => sp.playerId === p.playerId) + 1,
           score: p.score,
           point: p.point,
+          isMe: p.playerId === playerId,
         }))
         .sort((x, y) => x.rank - y.rank);
       const rank = sorted.findIndex(sp => sp.playerId === playerId) + 1;
@@ -3030,7 +3049,9 @@ export default function Home() {
     h.results.forEach(r => {
       const nm = nameOf(r.playerId, r.name);
       if (r.excluded || isKuroko(nm)) return;
-      gameRecs.push({ playerId: r.playerId, name: nm, source: a.name, seq: -h.no, rank: r.rank, score: r.score * 100 });
+      // 選手登録前の前季データ（legacy:名前）も、登録済みの同名の選手と同じ選手として集計する
+      const key = lifetimeKeyOf(r.playerId, nm);
+      gameRecs.push({ playerId: key, name: dbPlayers.find(p => p.id === key)?.name || nm, source: a.name, seq: -h.no, rank: r.rank, score: r.score * 100 });
     });
   }));
   // 今大会（送信済みの卓のみ）。着順は卓内のスコア順
@@ -3550,7 +3571,7 @@ export default function Home() {
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-700 via-purple-700 to-indigo-800 text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">📊</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">データ</h2>
-              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去大会 {archives.length} 大会 ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
+              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去の全ての大会（{archives.length}大会）＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
             </div>
 
             {gameRecs.length === 0 ? (
@@ -3613,7 +3634,7 @@ export default function Home() {
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {lifetimeRows.map((r, i) => {
-                        const pctOf = (n: number) => (r.games > 0 ? `${Math.round((n / r.games) * 1000) / 10}%` : '-');
+                        const pctOf = (n: number) => (r.games > 0 ? `${Math.round((n / r.games) * 100)}%` : '-');
                         return (
                           <tr
                             key={r.key}
@@ -3773,6 +3794,7 @@ export default function Home() {
               hanchanGroups={getPlayerHanchanGroups(dp.id)}
               lifetime={getLifetimeSummary(dp.id)}
               lifetimeHistory={getLifetimeHistory(dp.id)}
+              lifetimeHanchanGroups={getPlayerHanchanGroups(dp.id, true)}
               upcoming={!isAdmin && dp.id === loggedInPlayerId ? getUpcomingMatches(dp.id) : undefined}
               onClose={() => setDetailModalPlayerId(null)}
             />
