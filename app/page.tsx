@@ -253,6 +253,17 @@ const archiveTournamentNo = (name: string): number | null => {
   const m = name.match(/第(\d+)回/);
   return m ? parseInt(m[1], 10) : null;
 };
+// 既知の大会のルール。ここに載っている回は、保存されているルール名より優先する
+// （取り込み時にルール名を入れ忘れても、生涯ポイントに他ルールの大会が混ざらないようにするため）
+const RULE_NAME_BY_TOURNAMENT_NO: Record<number, string> = {
+  1: '日本プロ麻雀協会ルール',
+  2: 'WRCルール',
+  3: RULE_NAME,
+};
+const effectiveArchiveRuleName = (a: { name: string; ruleName?: string }): string => {
+  const n = archiveTournamentNo(a.name);
+  return (n !== null && RULE_NAME_BY_TOURNAMENT_NO[n]) || a.ruleName || RULE_NAME;
+};
 // 前季（今季より前）の大会か
 const isPreviousSeasonArchive = (a: { name: string }) => {
   const n = archiveTournamentNo(a.name);
@@ -425,6 +436,10 @@ const PlayerDetailModal = ({
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const toggleGroup = (key: string) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
   const [openHanchan, setOpenHanchan] = useState<string | null>(null);
+  // 個人成績のタブ（今季成績 / 生涯成績）
+  const [tab, setTab] = useState<'season' | 'lifetime'>('season');
+  const showLifetime = tab === 'lifetime' && !!lifetime;
+  const headPoint = showLifetime ? lifetime!.point : player.totalPoint;
   const toggleHanchan = (key: string) => setOpenHanchan(prev => (prev === key ? null : key));
 
   return (
@@ -440,10 +455,10 @@ const PlayerDetailModal = ({
             <h2 className="text-2xl md:text-3xl font-black flex items-center">
               <PlayerLabel name={player.name} badgeClass="text-indigo-900" />
             </h2>
-            <p className={`mt-2 text-2xl font-black tabular-nums ${player.totalPoint > 0 ? 'text-emerald-300' : player.totalPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
-              {fmtPt(player.totalPoint)} <span className="text-sm font-bold text-indigo-200">（今季 {totalGames}半荘）</span>
+            <p className={`mt-2 text-2xl font-black tabular-nums ${headPoint > 0 ? 'text-emerald-300' : headPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
+              {fmtPt(headPoint)} <span className="text-sm font-bold text-indigo-200">{showLifetime ? `（生涯 ${lifetime!.games}半荘）` : `（今季 ${totalGames}半荘）`}</span>
             </p>
-            {maxScore && (
+            {maxScore && !showLifetime && (
               <p className="mt-2 text-xs font-bold text-indigo-200">
                 🎯 最高スコア <span className="text-white text-sm">{(maxScore.score * 100).toLocaleString()}点</span>（{maxScore.label}）
               </p>
@@ -452,8 +467,22 @@ const PlayerDetailModal = ({
           <button onClick={onClose} className="text-indigo-200 hover:text-white text-2xl leading-none font-bold px-2">✕</button>
         </div>
 
+        {/* タブ: 今季成績 / 生涯成績 */}
+        {lifetime && (
+          <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
+            {([['season', '今季成績'], ['lifetime', '生涯成績']] as const).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setTab(k)}
+                className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              >{label}</button>
+            ))}
+          </div>
+        )}
         {/* 本文 */}
         <div className="overflow-y-auto p-5 md:p-8 space-y-8">
+          {tab === 'season' && (
+          <>
           {/* この後の対局（ログイン中の本人のみ） */}
           {upcoming && (
             <section>
@@ -516,58 +545,6 @@ const PlayerDetailModal = ({
             )}
           </section>
 
-          {/* 生涯成績（今季より前の大会も含む） */}
-          {lifetime && (
-            <section className="rounded-xl border-2 border-rose-200 bg-rose-50/40 p-4">
-              <h3 className="text-sm font-black text-rose-800 mb-3">🏅 生涯成績（全シーズン通算）</h3>
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">生涯ポイント</div>
-                  <div className={`text-lg font-black tabular-nums ${lifetime.point > 0 ? 'text-blue-600' : lifetime.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtPt(lifetime.point)}</div>
-                </div>
-                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">半荘数</div>
-                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games}</div>
-                </div>
-                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">平均着順</div>
-                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games > 0 ? (lifetime.rankSum / lifetime.games).toFixed(2) : '-'}</div>
-                </div>
-              </div>
-              <div className="space-y-2 mb-4">
-                {lifetime.dist.map((count, idx) => {
-                  const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 1000) / 10 : 0;
-                  return (
-                    <div key={idx} className="flex items-center gap-3 text-sm">
-                      <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
-                      <div className="flex-1 h-4 bg-white rounded-full overflow-hidden border border-slate-100">
-                        <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="w-20 text-right text-slate-500 tabular-nums">{count}回 ({pct}%)</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {lifetimeHistory.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold text-slate-500">大会別（{lifetimeHistory.length}大会）</p>
-                  {lifetimeHistory.map(h => (
-                    <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-slate-100 px-3 py-2">
-                      <span className="font-bold text-slate-700 w-12 flex-shrink-0">{h.name}</span>
-                      <span className="flex-1 min-w-0 truncate text-[11px] text-slate-400">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
-                      <span className="text-slate-400 whitespace-nowrap">{h.rank}位 ／ {h.gameCount}戦</span>
-                      {h.counted || !h.previousSeason ? (
-                        <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
-                      ) : (
-                        <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">pt対象外</span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">生涯ポイントは最高位戦ルールで開催した大会のみ反映しています。着順分布・平均着順・半荘数は、他のルールの大会も含めた全記録です。</p>
-            </section>
-          )}
 
           {/* 着順分布 */}
           <section>
@@ -693,6 +670,61 @@ const PlayerDetailModal = ({
               </div>
             )}
           </section>
+          </>
+          )}
+
+          {/* 生涯成績（今季より前の大会も含む） */}
+          {tab === 'lifetime' && lifetime && (
+            <section className="rounded-xl border-2 border-rose-200 bg-rose-50/40 p-4">
+              <h3 className="text-sm font-black text-rose-800 mb-3">🏅 生涯成績（全シーズン通算）</h3>
+              <div className="grid grid-cols-3 gap-2 mb-4">
+                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
+                  <div className="text-[10px] font-bold text-slate-400">生涯ポイント</div>
+                  <div className={`text-lg font-black tabular-nums ${lifetime.point > 0 ? 'text-blue-600' : lifetime.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtPt(lifetime.point)}</div>
+                </div>
+                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
+                  <div className="text-[10px] font-bold text-slate-400">半荘数</div>
+                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games}</div>
+                </div>
+                <div className="bg-white rounded-lg border border-rose-100 p-2.5 text-center">
+                  <div className="text-[10px] font-bold text-slate-400">平均着順</div>
+                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games > 0 ? (lifetime.rankSum / lifetime.games).toFixed(2) : '-'}</div>
+                </div>
+              </div>
+              <div className="space-y-2 mb-4">
+                {lifetime.dist.map((count, idx) => {
+                  const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 1000) / 10 : 0;
+                  return (
+                    <div key={idx} className="flex items-center gap-3 text-sm">
+                      <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
+                      <div className="flex-1 h-4 bg-white rounded-full overflow-hidden border border-slate-100">
+                        <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-20 text-right text-slate-500 tabular-nums">{count}回 ({pct}%)</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {lifetimeHistory.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="text-[11px] font-bold text-slate-500">大会別（{lifetimeHistory.length}大会）</p>
+                  {lifetimeHistory.map(h => (
+                    <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-slate-100 px-3 py-2">
+                      <span className="font-bold text-slate-700 w-12 flex-shrink-0">{h.name}</span>
+                      <span className="flex-1 min-w-0 truncate text-[11px] text-slate-400">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
+                      <span className="text-slate-400 whitespace-nowrap">{h.rank}位 ／ {h.gameCount}戦</span>
+                      {h.counted || !h.previousSeason ? (
+                        <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap">pt対象外</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">生涯ポイントは最高位戦ルールで開催した大会のみ反映しています。着順分布・平均着順・半荘数は、他のルールの大会も含めた全記録です。</p>
+            </section>
+          )}
         </div>
       </div>
     </div>
@@ -2030,6 +2062,12 @@ export default function Home() {
   }, [tournamentNo]);
   const [archiveNotes, setArchiveNotes] = useState('');
   const [archiveRuleName, setArchiveRuleName] = useState(RULE_NAME); // この大会で使ったルール（生涯ポイントは最高位戦ルールのみ反映）
+  const archiveRuleTouched = useRef(false);
+  useEffect(() => {
+    if (archiveRuleTouched.current) return;
+    const n = parseInt(archiveRoundNumber, 10);
+    setArchiveRuleName((Number.isFinite(n) && RULE_NAME_BY_TOURNAMENT_NO[n]) || RULE_NAME);
+  }, [archiveRoundNumber]);
   const [archiveRawText, setArchiveRawText] = useState('');
   const [archivePreview, setArchivePreview] = useState<{
     leaderboard: ParsedLeaderboardRow[];
@@ -2169,7 +2207,7 @@ export default function Home() {
         archiveRoundTouched.current = false;
         setArchiveRoundNumber(tournamentNo);
       }
-      setArchiveNotes(''); setArchiveRawText(''); setArchivePreview(null); setPenaltyRows([]); setArchiveRuleName(RULE_NAME);
+      setArchiveNotes(''); setArchiveRawText(''); setArchivePreview(null); setPenaltyRows([]); archiveRuleTouched.current = false; setArchiveRuleName(RULE_NAME);
       setShowArchiveImport(false);
       alert('過去大会を登録しました。');
     } catch (err) {
@@ -2435,7 +2473,7 @@ export default function Home() {
       }));
       seen.forEach(k => { map.get(k)!.tournaments += 1; });
       // 前季の大会のうち、最高位戦ルールのものだけ生涯ポイントに反映（今季分は選手データの通算ポイントに入っている）
-      if (isPreviousSeasonArchive(a) && (a.ruleName || RULE_NAME) === RULE_NAME) {
+      if (isPreviousSeasonArchive(a) && effectiveArchiveRuleName(a) === RULE_NAME) {
         a.standings.forEach(st => {
           if (isKuroko(nameOf(st.playerId, st.name))) return;
           touch(st.playerId, st.name).point += st.totalPoint;
@@ -2474,11 +2512,11 @@ export default function Home() {
       list.push({
         archiveId: a.id,
         name: a.name,
-        ruleName: a.ruleName || RULE_NAME,
+        ruleName: effectiveArchiveRuleName(a),
         point: st.totalPoint,
         gameCount: st.gameCount,
         rank: st.rank,
-        counted: (a.ruleName || RULE_NAME) === RULE_NAME,
+        counted: effectiveArchiveRuleName(a) === RULE_NAME,
         previousSeason: isPreviousSeasonArchive(a),
         sortKey: tournamentSortKey(a.name),
       });
@@ -3780,7 +3818,7 @@ export default function Home() {
                         <input
                           list="archive-rule-names"
                           value={archiveRuleName}
-                          onChange={e => setArchiveRuleName(e.target.value)}
+                          onChange={e => { archiveRuleTouched.current = true; setArchiveRuleName(e.target.value); }}
                           placeholder={RULE_NAME}
                           className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm"
                         />
