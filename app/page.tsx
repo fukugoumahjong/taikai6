@@ -253,6 +253,84 @@ const archiveTournamentNo = (name: string): number | null => {
   const m = name.match(/第(\d+)回/);
   return m ? parseInt(m[1], 10) : null;
 };
+// ==========================================
+// ダークテーマ（ガラス調）。Tailwind の色クラスを、暗い配色に読み替えるCSSを生成する。
+// main[data-theme="dark"] のときだけ有効なので、ライトテーマ（従来の見た目）には影響しない。
+// ==========================================
+const THEME_FAMILIES: Record<string, { rgb: string; bright: string }> = {
+  indigo: { rgb: '99,102,241', bright: '#a5b4fc' },
+  blue: { rgb: '59,130,246', bright: '#93c5fd' },
+  sky: { rgb: '14,165,233', bright: '#7dd3fc' },
+  cyan: { rgb: '6,182,212', bright: '#67e8f9' },
+  teal: { rgb: '20,184,166', bright: '#5eead4' },
+  emerald: { rgb: '16,185,129', bright: '#6ee7b7' },
+  green: { rgb: '34,197,94', bright: '#86efac' },
+  lime: { rgb: '132,204,22', bright: '#bef264' },
+  yellow: { rgb: '234,179,8', bright: '#fde047' },
+  amber: { rgb: '245,158,11', bright: '#fcd34d' },
+  orange: { rgb: '249,115,22', bright: '#fdba74' },
+  red: { rgb: '239,68,68', bright: '#fca5a5' },
+  rose: { rgb: '244,63,94', bright: '#fda4af' },
+  pink: { rgb: '236,72,153', bright: '#f9a8d4' },
+  fuchsia: { rgb: '217,70,239', bright: '#f0abfc' },
+  violet: { rgb: '139,92,246', bright: '#c4b5fd' },
+  purple: { rgb: '168,85,247', bright: '#d8b4fe' },
+};
+const buildDarkThemeCss = (): string => {
+  const m = 'main[data-theme="dark"]';
+  const r: string[] = [];
+  // 土台（文字色・入力欄・選択肢・プレースホルダー）
+  r.push(`${m}{color:#e2e8f0}`);
+  r.push(`${m} *{border-color:rgba(255,255,255,.1)}`);
+  r.push(`${m} input:not([type="checkbox"]):not([type="radio"]),${m} select,${m} textarea{background-color:rgba(255,255,255,.06);color:#e2e8f0;border-color:rgba(255,255,255,.16)}`);
+  r.push(`${m} select option{background:#0f172a;color:#e2e8f0}`);
+  r.push(`${m} ::placeholder{color:#64748b}`);
+  r.push(`${m} *{scrollbar-color:rgba(148,163,184,.35) transparent}`);
+  r.push(`::selection{background:rgba(129,140,248,.45);color:#fff}`);
+  // 無彩色（白・グレー）: 面は半透明の白、文字は明るいグレー
+  r.push(`${m} .bg-white{background-color:rgba(15,23,42,.62)}`);
+  [90, 80, 70, 60, 50].forEach(o => r.push(`${m} .bg-white\\/${o}{background-color:rgba(15,23,42,.${o >= 70 ? 55 : 40})}`));
+  [[50, .05], [100, .07], [200, .11], [300, .17]].forEach(([sh, a]) => {
+    r.push(`${m} .bg-slate-${sh}{background-color:rgba(255,255,255,${a})}`);
+    r.push(`${m} .hover\\:bg-slate-${sh}:hover{background-color:rgba(255,255,255,${+((a as number) + .05).toFixed(2)})}`);
+  });
+  r.push(`${m} .bg-slate-800{background-color:rgba(255,255,255,.12)}`);
+  r.push(`${m} .bg-slate-900{background-color:rgba(255,255,255,.08)}`);
+  [['900', '#f8fafc'], ['800', '#f1f5f9'], ['700', '#dbe3ee'], ['600', '#b8c3d4'], ['500', '#94a3b8'], ['400', '#7b879c']].forEach(([sh, c]) => {
+    r.push(`${m} .text-slate-${sh}{color:${c}}`);
+  });
+  [['100', .07], ['200', .11], ['300', .18]].forEach(([sh, a]) => {
+    r.push(`${m} .border-slate-${sh}{border-color:rgba(255,255,255,${a})}`);
+    r.push(`${m} .divide-slate-${sh}>:not([hidden])~:not([hidden]){border-color:rgba(255,255,255,${a})}`);
+  });
+  // 色つき: 薄い面は「色の半透明」、文字は明るい色、枠は色の半透明、薄いグラデーションも半透明に
+  Object.entries(THEME_FAMILIES).forEach(([f, { rgb, bright }]) => {
+    [[50, .1], [100, .16], [200, .22], [300, .3]].forEach(([sh, a]) => {
+      r.push(`${m} .bg-${f}-${sh}{background-color:rgba(${rgb},${a})}`);
+      r.push(`${m} .hover\\:bg-${f}-${sh}:hover{background-color:rgba(${rgb},${+((a as number) + .07).toFixed(2)})}`);
+    });
+    [50, 100, 200].forEach(sh => {
+      r.push(`${m} .from-${f}-${sh}{--tw-gradient-from:rgba(${rgb},.2) var(--tw-gradient-from-position);--tw-gradient-to:rgba(${rgb},0) var(--tw-gradient-to-position)}`);
+      r.push(`${m} .via-${f}-${sh}{--tw-gradient-stops:var(--tw-gradient-from),rgba(${rgb},.12) var(--tw-gradient-via-position),var(--tw-gradient-to)}`);
+      r.push(`${m} .to-${f}-${sh}{--tw-gradient-to:rgba(${rgb},.07) var(--tw-gradient-to-position)}`);
+    });
+    [500, 600, 700, 800, 900].forEach(sh => r.push(`${m} .text-${f}-${sh}{color:${bright}}`));
+    [100, 200, 300].forEach(sh => r.push(`${m} .border-${f}-${sh}{border-color:rgba(${rgb},.34)}`));
+  });
+  // 無彩色系の薄いグラデーション（slate / zinc / gray 系）も半透明の白にする
+  ['slate', 'zinc', 'gray', 'stone', 'neutral'].forEach(f => {
+    [50, 100, 200].forEach(sh => {
+      r.push(`${m} .from-${f}-${sh}{--tw-gradient-from:rgba(255,255,255,.1) var(--tw-gradient-from-position);--tw-gradient-to:rgba(255,255,255,0) var(--tw-gradient-to-position)}`);
+      r.push(`${m} .to-${f}-${sh}{--tw-gradient-to:rgba(255,255,255,.04) var(--tw-gradient-to-position)}`);
+    });
+  });
+  // ガラス調のカード
+  r.push(`${m} .bg-white.rounded-2xl,${m} .bg-white.rounded-3xl{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 26px 50px -30px rgba(0,0,0,.9)}`);
+  r.push(`${m} .shadow-sm{box-shadow:0 20px 44px -28px rgba(0,0,0,.85)}`);
+  return r.join('\n');
+};
+const DARK_THEME_CSS = buildDarkThemeCss();
+
 // 年間チャンピオン戦などの「別大会」（名前に「年間チャンピオン」を含む記録）。
 // 通常の大会とは別に記録し、順位分布・半荘数には含めるが、生涯ポイントには加算しない（true にすると加算する）。
 const SEPARATE_EVENT_KEYWORD = '年間チャンピオン';
@@ -1155,6 +1233,21 @@ export default function Home() {
   const [timerState, setTimerState] = useState<TimerState>({ breakMinutes: DEFAULT_BREAK_MINUTES, startAts: {}, stamp: 0 });
   const [showTimerSettings, setShowTimerSettings] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false); // PC用ヘッダーの「管理」メニュー
+  // 表示テーマ（dark=ガラス調のダーク / light=従来の見た目）。ヘッダーのボタンでいつでも戻せる。選択は端末に保存
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem('taikai-theme');
+      if (saved === 'light' || saved === 'dark') setTheme(saved);
+    } catch { /* 保存できない環境では初期値のまま */ }
+  }, []);
+  const toggleTheme = () => {
+    setTheme(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      try { window.localStorage.setItem('taikai-theme', next); } catch { /* 保存できなくても切り替えは行う */ }
+      return next;
+    });
+  };
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   // タイマーを変更する共通関数（変更時刻を stamp に残し、他端末より新しい内容として扱えるようにする）
   const updateTimer = (fn: (prev: TimerState) => TimerState) =>
@@ -3296,7 +3389,7 @@ export default function Home() {
     return (
       <button
         onClick={() => setActiveTab(key)}
-        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? 'bg-white text-slate-900 shadow-lg shadow-black/25' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
+        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? '!bg-white !text-slate-900 shadow-lg shadow-black/25' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
       >
         {on && <span className={`w-1.5 h-1.5 rounded-full ${TAB_DOTS[color] || 'bg-indigo-500'}`} aria-hidden="true" />}
         {label}
@@ -3340,8 +3433,14 @@ export default function Home() {
 
   return (
     <main
+      data-theme={theme}
       className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
-      style={{
+      style={theme === 'dark' ? {
+        backgroundColor: '#05070f',
+        backgroundImage:
+          'radial-gradient(900px 420px at 12% -80px, rgba(99,102,241,0.30), transparent 70%), radial-gradient(760px 380px at 92% 0, rgba(217,70,239,0.20), transparent 70%), radial-gradient(900px 500px at 50% 115%, rgba(20,184,166,0.14), transparent 70%)',
+        backgroundRepeat: 'no-repeat',
+      } : {
         backgroundColor: '#f1f5f9',
         backgroundImage:
           'radial-gradient(900px 340px at 50% -90px, rgba(99,102,241,0.15), transparent 70%), radial-gradient(640px 280px at 100% 0, rgba(217,70,239,0.08), transparent 70%)',
@@ -3371,6 +3470,7 @@ export default function Home() {
         ::selection { background: #c7d2fe; color: #1e1b4b; }
         * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        ${DARK_THEME_CSS}
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
       
@@ -3520,6 +3620,12 @@ export default function Home() {
 
           {/* Auth Area */}
           <div className="order-2 flex-shrink-0 flex gap-2 items-center md:h-12">
+            <button
+              onClick={toggleTheme}
+              className="w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 text-sm leading-none flex items-center justify-center transition"
+              title={theme === 'dark' ? 'ライトテーマ（従来の見た目）に切り替え' : 'ダークテーマに切り替え'}
+              aria-label="表示テーマの切り替え"
+            >{theme === 'dark' ? '☀️' : '🌙'}</button>
             {session ? (
               <>
                 <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap hidden sm:inline">
