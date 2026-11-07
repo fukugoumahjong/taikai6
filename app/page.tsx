@@ -2422,7 +2422,8 @@ export default function Home() {
   // 選手名を後から変更しても、過去大会に保存されたスナップショット名ではなく
   // 常に「現在登録されている名前」で表示するためのヘルパー。
   // (選手が削除されていた場合のみ、インポート時点の名前にフォールバックする)
-  const nameOf = (playerId: string, fallback: string) => dbPlayers.find(p => p.id === playerId)?.name || fallback;
+  const dbNameById = new Map<string, string>(dbPlayers.map(p => [p.id, p.name]));
+  const nameOf = (playerId: string, fallback: string) => dbNameById.get(playerId) || fallback;
 
   // 「第N回」から回数を取り出すためのヘルパー（若い回数ほど小さい値になる。今大会は常に最後）
   const tournamentSortKey = (name: string) => {
@@ -2532,11 +2533,9 @@ export default function Home() {
   //      それ以外のルールの大会は「最高位戦ルールに換算した参考値」を合算する（年間チャンピオン戦などの別大会は含めない）
   //  ・前季のみ参加の選手（選手登録されていない選手）は、名前で集計し、個人ページは作らない
   // ----------------------------------------
-  const lifetimeKeyOf = (playerId: string, name: string) => {
-    if (dbPlayers.some(p => p.id === playerId)) return playerId;
-    const byName = dbPlayers.find(p => p.name === name);
-    return byName ? byName.id : playerId;
-  };
+  const dbIdByName = new Map<string, string>();
+  dbPlayers.forEach(p => { if (!dbIdByName.has(p.name)) dbIdByName.set(p.name, p.id); });
+  const lifetimeKeyOf = (playerId: string, name: string) => (dbNameById.has(playerId) ? playerId : (dbIdByName.get(name) ?? playerId));
   // 大会を最高位戦ルールに換算したときの、選手ごとの合計ポイント（ペナルティ込み）。参考値
   const convertedArchivePoints = (a: TournamentArchive): Map<string, number> => {
     const start = RULE_START_SCORE[effectiveArchiveRuleName(a)] ?? DEFAULT_START_SCORE;
@@ -2621,8 +2620,10 @@ export default function Home() {
       .map(r => ({ ...r, point: Math.round(r.point * 10) / 10, convertedPart: Math.round(r.convertedPart * 10) / 10 }))
       .sort((a, b) => b.point - a.point || b.games - a.games);
   };
-  const lifetimeRows = buildLifetimeRows('all');
-  const lifetimeRowsSaikoi = buildLifetimeRows('saikoi');
+  // 生涯成績の集計は、生涯成績タブか個人成績を開いているときだけ行う（入力のたびに走らせない）
+  const needLifetime = activeTab === 'lifetime' || !!detailModalPlayerId;
+  const lifetimeRows = needLifetime ? buildLifetimeRows('all') : [];
+  const lifetimeRowsSaikoi = needLifetime ? buildLifetimeRows('saikoi') : [];
   const getLifetimeSummary = (playerId: string, scope: LifetimeScope = 'all'): LifetimeSummary | null => (scope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).find(r => r.key === playerId) || null;
   // 指定選手の、全シーズン分の大会別成績（ルール名・ポイント・順位）。回数の若い順
   const getLifetimeHistory = (playerId: string, scope: LifetimeScope = 'all'): LifetimeHistoryItem[] => {
@@ -3151,7 +3152,8 @@ export default function Home() {
   // source は大会名（過去大会名 / 今大会）、seq はその大会の中での対局の順番（連勝の判定に使う）
   type GameRec = { playerId: string; name: string; source: string; seq: number; rank: number; score: number };
   const gameRecs: GameRec[] = [];
-  archives.forEach(a => a.hanchans.forEach(h => {
+  // データタブを開いているときだけ集計する
+  (activeTab === 'data' ? archives : []).forEach(a => a.hanchans.forEach(h => {
     h.results.forEach(r => {
       const nm = nameOf(r.playerId, r.name);
       if (r.excluded || isKuroko(nm)) return;
@@ -3161,7 +3163,7 @@ export default function Home() {
     });
   }));
   // 今大会（送信済みの卓のみ）。着順は卓内のスコア順
-  seating.forEach(r => r.tables.forEach(t => {
+  (activeTab === 'data' ? seating : []).forEach(r => r.tables.forEach(t => {
     if (!t.isSubmitted) return;
     const sorted = [...t.players].sort((a, b) => b.score - a.score);
     t.players.forEach(pl => {
@@ -3344,7 +3346,7 @@ export default function Home() {
       style={{
         backgroundColor: '#edf0ff',
         backgroundImage:
-          'radial-gradient(820px 460px at 6% -60px, rgba(99,102,241,0.34), transparent 70%), radial-gradient(740px 420px at 98% 2%, rgba(236,72,153,0.24), transparent 70%), radial-gradient(900px 520px at 50% 112%, rgba(34,211,238,0.28), transparent 70%), radial-gradient(520px 340px at 0% 72%, rgba(168,85,247,0.16), transparent 70%)',
+          'radial-gradient(900px 420px at 8% -60px, rgba(99,102,241,0.26), transparent 70%), radial-gradient(800px 380px at 98% 0, rgba(236,72,153,0.18), transparent 70%)',
         backgroundRepeat: 'no-repeat',
       }}
     >
@@ -3356,46 +3358,30 @@ export default function Home() {
           input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px !important; }
           .overflow-x-auto { -webkit-overflow-scrolling: touch; }
         }
-        /* 配色の仕上げ: やわらかい影・淡い枠線・細いスクロールバー */
-        /* ===== ネオン × ガラス（ライト） ===== */
-        main .shadow-sm { box-shadow: 0 0 0 1px rgba(129,140,248,.12), 0 14px 40px -18px rgba(99,102,241,.38); }
+        /* ===== ネオン × ガラス（軽量版）=====
+           ぼかし(backdrop-filter)・多重の影・属性セレクタ・文字の発光は、重くなるので使わない */
+        main .shadow-sm { box-shadow: 0 4px 14px -8px rgba(99,102,241,.35); }
         main .border-slate-200 { border-color: rgba(129,140,248,.24); }
-        main .bg-white { background-color: rgba(255,255,255,.66); }
-        /* 大きなカード: すりガラス＋ネオンのにじむ縁 */
+        main .bg-white { background-color: rgba(255,255,255,.74); }
         main .bg-white.rounded-2xl, main .bg-white.rounded-3xl {
-          background-color: rgba(255,255,255,.54);
-          backdrop-filter: blur(18px) saturate(1.7); -webkit-backdrop-filter: blur(18px) saturate(1.7);
-          border-color: rgba(255,255,255,.85);
-          box-shadow: 0 0 0 1px rgba(129,140,248,.16), 0 16px 48px -18px rgba(99,102,241,.40), 0 0 36px -14px rgba(217,70,239,.22), inset 0 1px 0 rgba(255,255,255,.95);
+          background-color: rgba(255,255,255,.68);
+          border-color: rgba(255,255,255,.92);
+          box-shadow: 0 0 0 1px rgba(129,140,248,.16), 0 6px 18px -10px rgba(99,102,241,.42);
         }
-        /* ポップアップは読みやすいよう、ほぼ不透明のガラス */
-        main .fixed.inset-0 .bg-white { background-color: rgba(255,255,255,.94); }
-        /* 入力欄 */
-        main input:not([type="checkbox"]):not([type="radio"]), main select, main textarea { background-color: rgba(255,255,255,.78); border-color: rgba(129,140,248,.34); }
-        /* ボタン: ネオンのグラデーションと発光 */
-        main button.bg-indigo-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #d946ef); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(139,92,246,.75), 0 0 20px rgba(139,92,246,.32); }
-        main button.bg-green-500:not([class*="from-"]):not(:disabled), main button.bg-emerald-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #34d399, #06b6d4); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(16,185,129,.75), 0 0 20px rgba(6,182,212,.30); }
-        main button.bg-teal-600:not([class*="from-"]):not(:disabled), main button.bg-teal-500:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #2dd4bf, #0ea5e9); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(20,184,166,.75), 0 0 20px rgba(14,165,233,.30); }
-        main button.bg-amber-500:not([class*="from-"]):not(:disabled), main button.bg-amber-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3), 0 8px 22px -6px rgba(249,115,22,.75), 0 0 20px rgba(251,191,36,.34); }
-        main button.bg-red-500:not([class*="from-"]):not(:disabled), main button.bg-red-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #fb7185, #e11d48); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(244,63,94,.75), 0 0 20px rgba(244,63,94,.30); }
-        main button:not(:disabled):hover { filter: saturate(1.18) brightness(1.04); }
-        /* 色つきバナー: ネオンの発光 */
-        main .rounded-2xl[class*="bg-gradient-to"] { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 20px 48px -16px rgba(99,102,241,.65), 0 0 40px -8px rgba(217,70,239,.28); }
-        /* 表の見出し: 濃紺にネオンの下線 */
-        main .bg-slate-900:not(header):not(nav) { background-image: linear-gradient(90deg, #0b1020, #1e1b4b 50%, #0b1020); box-shadow: inset 0 -2px 0 rgba(129,140,248,.95), 0 6px 18px -10px rgba(99,102,241,.7); }
-        /* ポイントの数字: ほんのり発光 */
-        main .text-blue-600 { text-shadow: 0 0 14px rgba(59,130,246,.32); }
-        main .text-red-600 { text-shadow: 0 0 14px rgba(244,63,94,.30); }
-        main .text-emerald-600, main .text-emerald-700 { text-shadow: 0 0 14px rgba(16,185,129,.30); }
+        main .fixed.inset-0 .bg-white { background-color: #fff; }
+        main input:not([type="checkbox"]):not([type="radio"]), main select, main textarea { background-color: rgba(255,255,255,.85); border-color: rgba(129,140,248,.34); }
+        /* ボタン: ネオンのグラデーション（影は1つだけ） */
+        main button.bg-indigo-600:not(:disabled) { background-image: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #d946ef); box-shadow: 0 4px 14px -4px rgba(139,92,246,.7); }
+        main button.bg-green-500:not(:disabled), main button.bg-emerald-600:not(:disabled) { background-image: linear-gradient(135deg, #34d399, #06b6d4); box-shadow: 0 4px 14px -4px rgba(16,185,129,.7); }
+        main button.bg-teal-600:not(:disabled), main button.bg-teal-500:not(:disabled) { background-image: linear-gradient(135deg, #2dd4bf, #0ea5e9); box-shadow: 0 4px 14px -4px rgba(20,184,166,.7); }
+        main button.bg-amber-500:not(:disabled), main button.bg-amber-600:not(:disabled) { background-image: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: 0 4px 14px -4px rgba(249,115,22,.7); }
+        main button.bg-red-500:not(:disabled), main button.bg-red-600:not(:disabled) { background-image: linear-gradient(135deg, #fb7185, #e11d48); box-shadow: 0 4px 14px -4px rgba(244,63,94,.7); }
+        main .bg-slate-900.rounded-t-2xl, main thead.bg-slate-900 { background-image: linear-gradient(90deg, #0b1020, #1e1b4b 50%, #0b1020); box-shadow: inset 0 -2px 0 rgba(129,140,248,.95); }
         main h2, main h3 { letter-spacing: .01em; }
-        main { font-feature-settings: "palt"; }
-        /* ボタン: 押したときの手応えと、主要ボタンのグラデーション */
-        main button, main label { transition: transform .12s ease, box-shadow .18s ease, background-color .18s ease, filter .18s ease; }
         main button:not(:disabled):active { transform: scale(.975); }
-        /* 入力欄: フォーカス時にやわらかい光彩 */
-        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.24), 0 0 20px rgba(99,102,241,.38); }
+        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.24); }
         ::selection { background: #c7d2fe; color: #1e1b4b; }
-        * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
+        html { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
@@ -3453,7 +3439,7 @@ export default function Home() {
 
           {/* タブ（PCのみ。スマホは下部ナビ） */}
           <div className="hidden md:flex order-4 h-11 items-center flex-shrink-0">
-          <nav className="flex flex-shrink-0 bg-white/[0.06] ring-1 ring-white/[0.12] backdrop-blur p-1 rounded-full gap-0.5">
+          <nav className="flex flex-shrink-0 bg-white/[0.06] ring-1 ring-white/[0.12] p-1 rounded-full gap-0.5">
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '今季成績', 'bg-indigo-600')}
@@ -3471,7 +3457,7 @@ export default function Home() {
               href={RULES_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
+              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
               title="大会規定（Google ドキュメント）を別タブで開きます"
             >
               📖 大会規定
@@ -3482,9 +3468,9 @@ export default function Home() {
             {/* 管理ツール */}
             {isAdmin && (
               <div className="md:hidden flex-shrink-0 flex gap-2 items-center">
-                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
                 </label>
@@ -3496,7 +3482,7 @@ export default function Home() {
               <div className="hidden md:block md:order-5 relative flex-shrink-0">
                 <button
                   onClick={() => setShowAdminMenu(v => !v)}
-                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 py-1.5 rounded-full transition whitespace-nowrap"
+                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 py-1.5 rounded-full transition whitespace-nowrap"
                   aria-expanded={showAdminMenu}
                 >⚙ 管理 {showAdminMenu ? '▴' : '▾'}</button>
                 {showAdminMenu && (
@@ -3565,7 +3551,7 @@ export default function Home() {
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
       <nav
-        className="md:hidden fixed inset-x-3 z-40 rounded-[1.4rem] bg-slate-950/85 backdrop-blur-xl ring-1 ring-white/[0.12] shadow-[0_14px_36px_rgba(2,6,23,0.5)]"
+        className="md:hidden fixed inset-x-3 z-40 rounded-[1.4rem] bg-slate-950/95 ring-1 ring-white/[0.12] shadow-[0_14px_36px_rgba(2,6,23,0.5)]"
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
         aria-label="画面の切り替え"
       >
