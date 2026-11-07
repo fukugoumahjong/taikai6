@@ -186,7 +186,7 @@ function NextRoundTimerBar({ round, startAt, seatText, isAdmin, onOpenSettings }
       ? 'from-amber-500 to-orange-600'
       : 'from-indigo-700 to-violet-700';
   return (
-    <div className={`sticky top-0 md:top-16 z-30 w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-1.5 sm:py-2.5 shadow-lg`}>
+    <div className={`sticky top-0 md:top-24 z-30 w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-1.5 sm:py-2.5 shadow-lg`}>
       <div className="text-[11px] sm:text-xs font-bold tracking-widest opacity-90">
         {started ? `${round}回戦 開始時刻です` : `次の回戦まで（${round}回戦）`}
       </div>
@@ -1154,6 +1154,7 @@ export default function Home() {
   // 次の回戦までのタイマー（休憩時間と、2回戦以降の開始時刻）
   const [timerState, setTimerState] = useState<TimerState>({ breakMinutes: DEFAULT_BREAK_MINUTES, startAts: {}, stamp: 0 });
   const [showTimerSettings, setShowTimerSettings] = useState(false);
+  const [showAdminMenu, setShowAdminMenu] = useState(false); // PC用ヘッダーの「管理」メニュー
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   // タイマーを変更する共通関数（変更時刻を stamp に残し、他端末より新しい内容として扱えるようにする）
   const updateTimer = (fn: (prev: TimerState) => TimerState) =>
@@ -3282,20 +3283,26 @@ export default function Home() {
     );
   };
 
-  // タブボタン（ヘッダー用）。選択中は、タブごとの色のグラデーションに淡い光彩を付ける
-  const TAB_GRADIENTS: Record<string, string> = {
-    'bg-indigo-600': 'bg-gradient-to-b from-indigo-400 to-indigo-600',
-    'bg-teal-600': 'bg-gradient-to-b from-teal-400 to-teal-600',
-    'bg-amber-600': 'bg-gradient-to-b from-amber-400 to-amber-600',
-    'bg-fuchsia-600': 'bg-gradient-to-b from-fuchsia-400 to-fuchsia-600',
-    'bg-rose-600': 'bg-gradient-to-b from-rose-400 to-rose-600',
+  // タブボタン（ヘッダー用）。選択中は白いカード調＋タブごとの色のドット、それ以外は控えめな文字
+  const TAB_DOTS: Record<string, string> = {
+    'bg-indigo-600': 'bg-gradient-to-br from-indigo-400 to-indigo-600',
+    'bg-teal-600': 'bg-gradient-to-br from-teal-400 to-emerald-500',
+    'bg-amber-600': 'bg-gradient-to-br from-amber-300 to-orange-500',
+    'bg-fuchsia-600': 'bg-gradient-to-br from-fuchsia-400 to-purple-600',
+    'bg-rose-600': 'bg-gradient-to-br from-rose-400 to-red-500',
   };
-  const tabBtn = (key: typeof activeTab, label: string, color: string) => (
-    <button
-      onClick={() => setActiveTab(key)}
-      className={`px-3 lg:px-4 py-1.5 rounded-lg font-bold text-[13px] whitespace-nowrap transition ${activeTab === key ? `${TAB_GRADIENTS[color] || color} text-white shadow-md shadow-black/30 ring-1 ring-white/25` : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
-    >{label}</button>
-  );
+  const tabBtn = (key: typeof activeTab, label: string, color: string) => {
+    const on = activeTab === key;
+    return (
+      <button
+        onClick={() => setActiveTab(key)}
+        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? 'bg-white text-slate-900 shadow-lg shadow-black/25' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
+      >
+        {on && <span className={`w-1.5 h-1.5 rounded-full ${TAB_DOTS[color] || 'bg-indigo-500'}`} aria-hidden="true" />}
+        {label}
+      </button>
+    );
+  };
 
   // スマホ用の下部ナビの項目
   const mobileNavItems: { key: typeof activeTab; icon: string; label: string; color: string }[] = [
@@ -3353,6 +3360,14 @@ export default function Home() {
         main .shadow-sm { box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 12px 30px -16px rgba(30,41,99,.24); }
         main .border-slate-200 { border-color: rgba(148,163,184,.34); }
         main h2, main h3 { letter-spacing: .01em; }
+        main { font-feature-settings: "palt"; }
+        /* ボタン: 押したときの手応えと、主要ボタンのグラデーション */
+        main button, main label { transition: transform .12s ease, box-shadow .18s ease, background-color .18s ease, filter .18s ease; }
+        main button:not(:disabled):active { transform: scale(.975); }
+        main button.bg-indigo-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(180deg, #6366f1, #4f46e5); box-shadow: 0 6px 16px -8px rgba(79,70,229,.7); }
+        main button.bg-green-500:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(180deg, #34d399, #10b981); box-shadow: 0 6px 16px -8px rgba(16,185,129,.7); }
+        /* 入力欄: フォーカス時にやわらかい光彩 */
+        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.22); }
         ::selection { background: #c7d2fe; color: #1e1b4b; }
         * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
@@ -3397,15 +3412,22 @@ export default function Home() {
           スマホ: 1段目=タイトル+ログイン、2段目=横スクロールの操作ボタン。画面切替は下部ナビで行う
           PC    : 従来どおり1行（画面上部に固定） */}
       <header className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 text-white shadow-lg shadow-indigo-950/25 relative md:sticky md:top-0 z-40">
-        <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 md:h-16 flex flex-wrap md:flex-nowrap items-center gap-x-3 gap-y-2 md:gap-4 md:overflow-x-auto no-scrollbar">
+        <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-x-4 md:gap-y-0">
           {/* タイトル */}
-          <div className="order-1 md:order-none min-w-0 flex-1 md:flex-none md:flex-shrink-0 leading-tight mr-1">
+          <div className="order-1 min-w-0 flex-1 mr-1 md:h-12 flex items-center gap-2.5">
+            <span className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 via-violet-500 to-fuchsia-500 flex items-center justify-center text-lg shadow-lg shadow-indigo-900/50 ring-1 ring-white/25" aria-hidden="true">🀄</span>
+            <div className="min-w-0 leading-tight">
             <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">{APP_TITLE}</h1>
             <p className="text-[10px] text-indigo-300/70 whitespace-nowrap">{RULE_NAME}</p>
+            </div>
           </div>
 
+          {/* 段区切り（PCのみ） */}
+          <div className="hidden md:block basis-full h-px bg-white/10 order-3" aria-hidden="true" />
+
           {/* タブ（PCのみ。スマホは下部ナビ） */}
-          <nav className="hidden md:flex order-none flex-shrink-0 bg-white/5 ring-1 ring-white/10 backdrop-blur p-1 rounded-xl gap-0.5">
+          <div className="hidden md:flex order-4 h-11 items-center flex-shrink-0">
+          <nav className="flex flex-shrink-0 bg-white/[0.06] ring-1 ring-white/[0.12] backdrop-blur p-1 rounded-full gap-0.5">
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '今季成績', 'bg-indigo-600')}
@@ -3414,6 +3436,7 @@ export default function Home() {
             {tabBtn('data', 'データ', 'bg-fuchsia-600')}
             {tabBtn('lifetime', '生涯成績', 'bg-rose-600')}
           </nav>
+          </div>
 
           {/* 操作ボタン（スマホでは2段目で横スクロール／PCでは1行に並ぶ） */}
           <div className="order-3 md:order-none w-full md:w-auto md:contents flex items-center gap-2 overflow-x-auto md:overflow-visible no-scrollbar pb-0.5 md:pb-0">
@@ -3422,42 +3445,72 @@ export default function Home() {
               href={RULES_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 text-xs md:text-[11px] font-bold bg-white/10 hover:bg-indigo-500 ring-1 ring-white/10 text-slate-200 hover:text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
               title="大会規定（Google ドキュメント）を別タブで開きます"
             >
               📖 大会規定
             </a>
 
-            <div className="hidden md:block md:flex-1" />
+            <div className="hidden md:block md:flex-1 md:order-5" />
 
             {/* 管理ツール */}
             {isAdmin && (
-              <div className="flex-shrink-0 flex gap-2 items-center">
-                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={api.exportBackup} className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-                <label className="text-xs md:text-[11px] bg-white/10 hover:bg-white/20 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+              <div className="md:hidden flex-shrink-0 flex gap-2 items-center">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
                 </label>
               </div>
             )}
 
+            {/* PC用: 管理ツールは「管理」メニューにまとめる（横幅を節約） */}
+            {isAdmin && (
+              <div className="hidden md:block md:order-5 relative flex-shrink-0">
+                <button
+                  onClick={() => setShowAdminMenu(v => !v)}
+                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 py-1.5 rounded-full transition whitespace-nowrap"
+                  aria-expanded={showAdminMenu}
+                >⚙ 管理 {showAdminMenu ? '▴' : '▾'}</button>
+                {showAdminMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowAdminMenu(false)} aria-hidden="true" />
+                    <div className="absolute right-0 top-full mt-2 w-52 z-50 rounded-xl bg-slate-900 ring-1 ring-white/15 shadow-2xl shadow-black/40 p-1.5 space-y-0.5">
+                      <button
+                        onClick={() => { setShowAdminMenu(false); setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }}
+                        className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
+                      >⏱ 休憩設定</button>
+                      <button
+                        onClick={() => { setShowAdminMenu(false); api.exportBackup(); }}
+                        className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
+                      >💾 バックアップ</button>
+                      <label className="block w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition cursor-pointer">
+                        📂 復元
+                        <input type="file" accept=".json" className="hidden" onChange={(e) => { setShowAdminMenu(false); handleDataImport(e); }} />
+                      </label>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {/* 選手ログイン（管理者以外向け） */}
             {!isAdmin && (
-              <div className="flex-shrink-0 flex gap-2 items-center">
+              <div className="md:order-5 flex-shrink-0 flex gap-2 items-center">
                 {loggedInPlayer ? (
                   <>
                     <button
                       onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
-                      className="text-xs md:text-[11px] font-bold bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 shadow shadow-teal-950/40 text-white px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap"
+                      className="text-xs md:text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-600 hover:brightness-110 shadow-lg shadow-emerald-900/30 ring-1 ring-white/20 text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
                       title="自分の個人成績と、この後の対局を見る"
                     >
                       👤 {loggedInPlayer.name}（個人成績）
                     </button>
-                    <button onClick={handlePlayerLogout} className="text-xs md:text-[11px] bg-white/10 hover:bg-rose-600 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                    <button onClick={handlePlayerLogout} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
                   </>
                 ) : (
-                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-[11px] bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 shadow shadow-teal-950/40 px-4 md:px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">
+                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-xs bg-gradient-to-r from-teal-400 to-emerald-500 hover:brightness-110 shadow-lg shadow-emerald-900/30 ring-1 ring-white/25 text-white px-4 md:px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">
                     🀄 選手ログイン
                   </button>
                 )}
@@ -3466,17 +3519,17 @@ export default function Home() {
           </div>
 
           {/* Auth Area */}
-          <div className="order-2 md:order-none flex-shrink-0 flex gap-2 items-center md:pl-3 md:ml-1 md:border-l md:border-slate-700">
+          <div className="order-2 flex-shrink-0 flex gap-2 items-center md:h-12">
             {session ? (
               <>
                 <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap hidden sm:inline">
                   {session.user?.name}{isAdmin && ' (管理者)'}
                 </span>
                 {isAdmin && <span className="sm:hidden text-[10px] font-bold bg-indigo-600 px-1.5 py-0.5 rounded">管理者</span>}
-                <button onClick={() => signOut()} className="text-xs md:text-[11px] bg-white/10 hover:bg-rose-600 ring-1 ring-white/10 px-3 md:px-2.5 py-2 md:py-1.5 rounded-md transition whitespace-nowrap">ログアウト</button>
+                <button onClick={() => signOut()} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-xs md:text-[11px] bg-gradient-to-r from-indigo-500 to-violet-500 hover:from-indigo-400 hover:to-violet-400 shadow shadow-indigo-950/40 px-3 py-2 md:py-1.5 rounded-md font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 hover:brightness-110 shadow-lg shadow-fuchsia-900/30 ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
             )}
           </div>
         </div>
@@ -3486,23 +3539,23 @@ export default function Home() {
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
       <nav
-        className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-slate-950/90 backdrop-blur-xl border-t border-white/10 shadow-[0_-8px_24px_rgba(15,23,42,0.35)]"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        className="md:hidden fixed inset-x-3 z-40 rounded-[1.4rem] bg-slate-950/85 backdrop-blur-xl ring-1 ring-white/[0.12] shadow-[0_14px_36px_rgba(2,6,23,0.5)]"
+        style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
         aria-label="画面の切り替え"
       >
-        <div className="grid" style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}>
+        <div className="grid p-1" style={{ gridTemplateColumns: `repeat(${mobileNavItems.length}, minmax(0, 1fr))` }}>
           {mobileNavItems.map(it => {
             const on = activeTab === it.key;
             return (
               <button
                 key={it.key}
                 onClick={() => { setActiveTab(it.key); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }); }}
-                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[56px] transition ${on ? 'text-white' : 'text-slate-400 active:text-white'}`}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] rounded-2xl transition ${on ? 'text-white bg-white/[0.12] ring-1 ring-white/15' : 'text-slate-400 active:text-white'}`}
                 aria-current={on ? 'page' : undefined}
               >
-                {on && <span className={`absolute top-0 inset-x-3 h-[3px] rounded-b-full ${it.color}`} />}
                 <span className="text-xl leading-none">{it.icon}</span>
                 <span className={`text-[10px] leading-none ${on ? 'font-black' : 'font-bold'}`}>{it.label}</span>
+                {on && <span className={`absolute bottom-0.5 w-4 h-[3px] rounded-full ${it.color}`} />}
               </button>
             );
           })}
