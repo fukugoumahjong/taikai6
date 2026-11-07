@@ -253,84 +253,6 @@ const archiveTournamentNo = (name: string): number | null => {
   const m = name.match(/第(\d+)回/);
   return m ? parseInt(m[1], 10) : null;
 };
-// ==========================================
-// ダークテーマ（ガラス調）。Tailwind の色クラスを、暗い配色に読み替えるCSSを生成する。
-// main[data-theme="dark"] のときだけ有効なので、ライトテーマ（従来の見た目）には影響しない。
-// ==========================================
-const THEME_FAMILIES: Record<string, { rgb: string; bright: string }> = {
-  indigo: { rgb: '99,102,241', bright: '#a5b4fc' },
-  blue: { rgb: '59,130,246', bright: '#93c5fd' },
-  sky: { rgb: '14,165,233', bright: '#7dd3fc' },
-  cyan: { rgb: '6,182,212', bright: '#67e8f9' },
-  teal: { rgb: '20,184,166', bright: '#5eead4' },
-  emerald: { rgb: '16,185,129', bright: '#6ee7b7' },
-  green: { rgb: '34,197,94', bright: '#86efac' },
-  lime: { rgb: '132,204,22', bright: '#bef264' },
-  yellow: { rgb: '234,179,8', bright: '#fde047' },
-  amber: { rgb: '245,158,11', bright: '#fcd34d' },
-  orange: { rgb: '249,115,22', bright: '#fdba74' },
-  red: { rgb: '239,68,68', bright: '#fca5a5' },
-  rose: { rgb: '244,63,94', bright: '#fda4af' },
-  pink: { rgb: '236,72,153', bright: '#f9a8d4' },
-  fuchsia: { rgb: '217,70,239', bright: '#f0abfc' },
-  violet: { rgb: '139,92,246', bright: '#c4b5fd' },
-  purple: { rgb: '168,85,247', bright: '#d8b4fe' },
-};
-const buildDarkThemeCss = (): string => {
-  const m = 'main[data-theme="dark"]';
-  const r: string[] = [];
-  // 土台（文字色・入力欄・選択肢・プレースホルダー）
-  r.push(`${m}{color:#e2e8f0}`);
-  r.push(`${m} *{border-color:rgba(255,255,255,.1)}`);
-  r.push(`${m} input:not([type="checkbox"]):not([type="radio"]),${m} select,${m} textarea{background-color:rgba(255,255,255,.06);color:#e2e8f0;border-color:rgba(255,255,255,.16)}`);
-  r.push(`${m} select option{background:#0f172a;color:#e2e8f0}`);
-  r.push(`${m} ::placeholder{color:#64748b}`);
-  r.push(`${m} *{scrollbar-color:rgba(148,163,184,.35) transparent}`);
-  r.push(`::selection{background:rgba(129,140,248,.45);color:#fff}`);
-  // 無彩色（白・グレー）: 面は半透明の白、文字は明るいグレー
-  r.push(`${m} .bg-white{background-color:rgba(15,23,42,.62)}`);
-  [90, 80, 70, 60, 50].forEach(o => r.push(`${m} .bg-white\\/${o}{background-color:rgba(15,23,42,.${o >= 70 ? 55 : 40})}`));
-  [[50, .05], [100, .07], [200, .11], [300, .17]].forEach(([sh, a]) => {
-    r.push(`${m} .bg-slate-${sh}{background-color:rgba(255,255,255,${a})}`);
-    r.push(`${m} .hover\\:bg-slate-${sh}:hover{background-color:rgba(255,255,255,${+((a as number) + .05).toFixed(2)})}`);
-  });
-  r.push(`${m} .bg-slate-800{background-color:rgba(255,255,255,.12)}`);
-  r.push(`${m} .bg-slate-900{background-color:rgba(255,255,255,.08)}`);
-  [['900', '#f8fafc'], ['800', '#f1f5f9'], ['700', '#dbe3ee'], ['600', '#b8c3d4'], ['500', '#94a3b8'], ['400', '#7b879c']].forEach(([sh, c]) => {
-    r.push(`${m} .text-slate-${sh}{color:${c}}`);
-  });
-  [['100', .07], ['200', .11], ['300', .18]].forEach(([sh, a]) => {
-    r.push(`${m} .border-slate-${sh}{border-color:rgba(255,255,255,${a})}`);
-    r.push(`${m} .divide-slate-${sh}>:not([hidden])~:not([hidden]){border-color:rgba(255,255,255,${a})}`);
-  });
-  // 色つき: 薄い面は「色の半透明」、文字は明るい色、枠は色の半透明、薄いグラデーションも半透明に
-  Object.entries(THEME_FAMILIES).forEach(([f, { rgb, bright }]) => {
-    [[50, .1], [100, .16], [200, .22], [300, .3]].forEach(([sh, a]) => {
-      r.push(`${m} .bg-${f}-${sh}{background-color:rgba(${rgb},${a})}`);
-      r.push(`${m} .hover\\:bg-${f}-${sh}:hover{background-color:rgba(${rgb},${+((a as number) + .07).toFixed(2)})}`);
-    });
-    [50, 100, 200].forEach(sh => {
-      r.push(`${m} .from-${f}-${sh}{--tw-gradient-from:rgba(${rgb},.2) var(--tw-gradient-from-position);--tw-gradient-to:rgba(${rgb},0) var(--tw-gradient-to-position)}`);
-      r.push(`${m} .via-${f}-${sh}{--tw-gradient-stops:var(--tw-gradient-from),rgba(${rgb},.12) var(--tw-gradient-via-position),var(--tw-gradient-to)}`);
-      r.push(`${m} .to-${f}-${sh}{--tw-gradient-to:rgba(${rgb},.07) var(--tw-gradient-to-position)}`);
-    });
-    [500, 600, 700, 800, 900].forEach(sh => r.push(`${m} .text-${f}-${sh}{color:${bright}}`));
-    [100, 200, 300].forEach(sh => r.push(`${m} .border-${f}-${sh}{border-color:rgba(${rgb},.34)}`));
-  });
-  // 無彩色系の薄いグラデーション（slate / zinc / gray 系）も半透明の白にする
-  ['slate', 'zinc', 'gray', 'stone', 'neutral'].forEach(f => {
-    [50, 100, 200].forEach(sh => {
-      r.push(`${m} .from-${f}-${sh}{--tw-gradient-from:rgba(255,255,255,.1) var(--tw-gradient-from-position);--tw-gradient-to:rgba(255,255,255,0) var(--tw-gradient-to-position)}`);
-      r.push(`${m} .to-${f}-${sh}{--tw-gradient-to:rgba(255,255,255,.04) var(--tw-gradient-to-position)}`);
-    });
-  });
-  // ガラス調のカード
-  r.push(`${m} .bg-white.rounded-2xl,${m} .bg-white.rounded-3xl{backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-color:rgba(255,255,255,.09);box-shadow:inset 0 1px 0 rgba(255,255,255,.06),0 26px 50px -30px rgba(0,0,0,.9)}`);
-  r.push(`${m} .shadow-sm{box-shadow:0 20px 44px -28px rgba(0,0,0,.85)}`);
-  return r.join('\n');
-};
-const DARK_THEME_CSS = buildDarkThemeCss();
-
 // 年間チャンピオン戦などの「別大会」（名前に「年間チャンピオン」を含む記録）。
 // 通常の大会とは別に記録し、順位分布・半荘数には含めるが、生涯ポイントには加算しない（true にすると加算する）。
 const SEPARATE_EVENT_KEYWORD = '年間チャンピオン';
@@ -1233,21 +1155,6 @@ export default function Home() {
   const [timerState, setTimerState] = useState<TimerState>({ breakMinutes: DEFAULT_BREAK_MINUTES, startAts: {}, stamp: 0 });
   const [showTimerSettings, setShowTimerSettings] = useState(false);
   const [showAdminMenu, setShowAdminMenu] = useState(false); // PC用ヘッダーの「管理」メニュー
-  // 表示テーマ（dark=ガラス調のダーク / light=従来の見た目）。ヘッダーのボタンでいつでも戻せる。選択は端末に保存
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
-  useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem('taikai-theme');
-      if (saved === 'light' || saved === 'dark') setTheme(saved);
-    } catch { /* 保存できない環境では初期値のまま */ }
-  }, []);
-  const toggleTheme = () => {
-    setTheme(prev => {
-      const next = prev === 'dark' ? 'light' : 'dark';
-      try { window.localStorage.setItem('taikai-theme', next); } catch { /* 保存できなくても切り替えは行う */ }
-      return next;
-    });
-  };
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   // タイマーを変更する共通関数（変更時刻を stamp に残し、他端末より新しい内容として扱えるようにする）
   const updateTimer = (fn: (prev: TimerState) => TimerState) =>
@@ -3389,7 +3296,7 @@ export default function Home() {
     return (
       <button
         onClick={() => setActiveTab(key)}
-        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? '!bg-white !text-slate-900 shadow-lg shadow-black/25' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
+        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? '!bg-white !text-slate-900 shadow-[0_0_22px_rgba(129,140,248,0.8)]' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
       >
         {on && <span className={`w-1.5 h-1.5 rounded-full ${TAB_DOTS[color] || 'bg-indigo-500'}`} aria-hidden="true" />}
         {label}
@@ -3433,17 +3340,11 @@ export default function Home() {
 
   return (
     <main
-      data-theme={theme}
       className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
-      style={theme === 'dark' ? {
-        backgroundColor: '#05070f',
+      style={{
+        backgroundColor: '#edf0ff',
         backgroundImage:
-          'radial-gradient(900px 420px at 12% -80px, rgba(99,102,241,0.30), transparent 70%), radial-gradient(760px 380px at 92% 0, rgba(217,70,239,0.20), transparent 70%), radial-gradient(900px 500px at 50% 115%, rgba(20,184,166,0.14), transparent 70%)',
-        backgroundRepeat: 'no-repeat',
-      } : {
-        backgroundColor: '#f1f5f9',
-        backgroundImage:
-          'radial-gradient(900px 340px at 50% -90px, rgba(99,102,241,0.15), transparent 70%), radial-gradient(640px 280px at 100% 0, rgba(217,70,239,0.08), transparent 70%)',
+          'radial-gradient(820px 460px at 6% -60px, rgba(99,102,241,0.34), transparent 70%), radial-gradient(740px 420px at 98% 2%, rgba(236,72,153,0.24), transparent 70%), radial-gradient(900px 520px at 50% 112%, rgba(34,211,238,0.28), transparent 70%), radial-gradient(520px 340px at 0% 72%, rgba(168,85,247,0.16), transparent 70%)',
         backgroundRepeat: 'no-repeat',
       }}
     >
@@ -3456,21 +3357,46 @@ export default function Home() {
           .overflow-x-auto { -webkit-overflow-scrolling: touch; }
         }
         /* 配色の仕上げ: やわらかい影・淡い枠線・細いスクロールバー */
-        main .shadow-sm { box-shadow: 0 1px 2px rgba(15,23,42,.05), 0 12px 30px -16px rgba(30,41,99,.24); }
-        main .border-slate-200 { border-color: rgba(148,163,184,.34); }
+        /* ===== ネオン × ガラス（ライト） ===== */
+        main .shadow-sm { box-shadow: 0 0 0 1px rgba(129,140,248,.12), 0 14px 40px -18px rgba(99,102,241,.38); }
+        main .border-slate-200 { border-color: rgba(129,140,248,.24); }
+        main .bg-white { background-color: rgba(255,255,255,.66); }
+        /* 大きなカード: すりガラス＋ネオンのにじむ縁 */
+        main .bg-white.rounded-2xl, main .bg-white.rounded-3xl {
+          background-color: rgba(255,255,255,.54);
+          backdrop-filter: blur(18px) saturate(1.7); -webkit-backdrop-filter: blur(18px) saturate(1.7);
+          border-color: rgba(255,255,255,.85);
+          box-shadow: 0 0 0 1px rgba(129,140,248,.16), 0 16px 48px -18px rgba(99,102,241,.40), 0 0 36px -14px rgba(217,70,239,.22), inset 0 1px 0 rgba(255,255,255,.95);
+        }
+        /* ポップアップは読みやすいよう、ほぼ不透明のガラス */
+        main .fixed.inset-0 .bg-white { background-color: rgba(255,255,255,.94); }
+        /* 入力欄 */
+        main input:not([type="checkbox"]):not([type="radio"]), main select, main textarea { background-color: rgba(255,255,255,.78); border-color: rgba(129,140,248,.34); }
+        /* ボタン: ネオンのグラデーションと発光 */
+        main button.bg-indigo-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #d946ef); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(139,92,246,.75), 0 0 20px rgba(139,92,246,.32); }
+        main button.bg-green-500:not([class*="from-"]):not(:disabled), main button.bg-emerald-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #34d399, #06b6d4); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(16,185,129,.75), 0 0 20px rgba(6,182,212,.30); }
+        main button.bg-teal-600:not([class*="from-"]):not(:disabled), main button.bg-teal-500:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #2dd4bf, #0ea5e9); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(20,184,166,.75), 0 0 20px rgba(14,165,233,.30); }
+        main button.bg-amber-500:not([class*="from-"]):not(:disabled), main button.bg-amber-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: inset 0 0 0 1px rgba(255,255,255,.3), 0 8px 22px -6px rgba(249,115,22,.75), 0 0 20px rgba(251,191,36,.34); }
+        main button.bg-red-500:not([class*="from-"]):not(:disabled), main button.bg-red-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(135deg, #fb7185, #e11d48); box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 8px 22px -6px rgba(244,63,94,.75), 0 0 20px rgba(244,63,94,.30); }
+        main button:not(:disabled):hover { filter: saturate(1.18) brightness(1.04); }
+        /* 色つきバナー: ネオンの発光 */
+        main .rounded-2xl[class*="bg-gradient-to"] { box-shadow: inset 0 0 0 1px rgba(255,255,255,.28), 0 20px 48px -16px rgba(99,102,241,.65), 0 0 40px -8px rgba(217,70,239,.28); }
+        /* 表の見出し: 濃紺にネオンの下線 */
+        main .bg-slate-900:not(header):not(nav) { background-image: linear-gradient(90deg, #0b1020, #1e1b4b 50%, #0b1020); box-shadow: inset 0 -2px 0 rgba(129,140,248,.95), 0 6px 18px -10px rgba(99,102,241,.7); }
+        /* ポイントの数字: ほんのり発光 */
+        main .text-blue-600 { text-shadow: 0 0 14px rgba(59,130,246,.32); }
+        main .text-red-600 { text-shadow: 0 0 14px rgba(244,63,94,.30); }
+        main .text-emerald-600, main .text-emerald-700 { text-shadow: 0 0 14px rgba(16,185,129,.30); }
         main h2, main h3 { letter-spacing: .01em; }
         main { font-feature-settings: "palt"; }
         /* ボタン: 押したときの手応えと、主要ボタンのグラデーション */
         main button, main label { transition: transform .12s ease, box-shadow .18s ease, background-color .18s ease, filter .18s ease; }
         main button:not(:disabled):active { transform: scale(.975); }
-        main button.bg-indigo-600:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(180deg, #6366f1, #4f46e5); box-shadow: 0 6px 16px -8px rgba(79,70,229,.7); }
-        main button.bg-green-500:not([class*="from-"]):not(:disabled) { background-image: linear-gradient(180deg, #34d399, #10b981); box-shadow: 0 6px 16px -8px rgba(16,185,129,.7); }
         /* 入力欄: フォーカス時にやわらかい光彩 */
-        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.22); }
+        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.24), 0 0 20px rgba(99,102,241,.38); }
         ::selection { background: #c7d2fe; color: #1e1b4b; }
         * { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-        ${DARK_THEME_CSS}
         .no-scrollbar::-webkit-scrollbar { display: none; }
       `}</style>
       
@@ -3545,7 +3471,7 @@ export default function Home() {
               href={RULES_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
+              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
               title="大会規定（Google ドキュメント）を別タブで開きます"
             >
               📖 大会規定
@@ -3556,9 +3482,9 @@ export default function Home() {
             {/* 管理ツール */}
             {isAdmin && (
               <div className="md:hidden flex-shrink-0 flex gap-2 items-center">
-                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
                 </label>
@@ -3570,7 +3496,7 @@ export default function Home() {
               <div className="hidden md:block md:order-5 relative flex-shrink-0">
                 <button
                   onClick={() => setShowAdminMenu(v => !v)}
-                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 py-1.5 rounded-full transition whitespace-nowrap"
+                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 backdrop-blur-sm px-3 py-1.5 rounded-full transition whitespace-nowrap"
                   aria-expanded={showAdminMenu}
                 >⚙ 管理 {showAdminMenu ? '▴' : '▾'}</button>
                 {showAdminMenu && (
@@ -3602,7 +3528,7 @@ export default function Home() {
                   <>
                     <button
                       onClick={() => setDetailModalPlayerId(loggedInPlayer.id)}
-                      className="text-xs md:text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-600 hover:brightness-110 shadow-lg shadow-emerald-900/30 ring-1 ring-white/20 text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
+                      className="text-xs md:text-xs font-bold bg-gradient-to-r from-teal-500 to-emerald-600 hover:brightness-110 shadow-[0_0_20px_rgba(45,212,191,0.55)] ring-1 ring-white/20 text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
                       title="自分の個人成績と、この後の対局を見る"
                     >
                       👤 {loggedInPlayer.name}（個人成績）
@@ -3610,7 +3536,7 @@ export default function Home() {
                     <button onClick={handlePlayerLogout} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
                   </>
                 ) : (
-                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-xs bg-gradient-to-r from-teal-400 to-emerald-500 hover:brightness-110 shadow-lg shadow-emerald-900/30 ring-1 ring-white/25 text-white px-4 md:px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">
+                  <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-xs bg-gradient-to-r from-teal-400 to-emerald-500 hover:brightness-110 shadow-[0_0_20px_rgba(45,212,191,0.55)] ring-1 ring-white/25 text-white px-4 md:px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">
                     🀄 選手ログイン
                   </button>
                 )}
@@ -3620,12 +3546,6 @@ export default function Home() {
 
           {/* Auth Area */}
           <div className="order-2 flex-shrink-0 flex gap-2 items-center md:h-12">
-            <button
-              onClick={toggleTheme}
-              className="w-8 h-8 rounded-full bg-white/[0.08] hover:bg-white/[0.18] ring-1 ring-white/15 text-slate-100 text-sm leading-none flex items-center justify-center transition"
-              title={theme === 'dark' ? 'ライトテーマ（従来の見た目）に切り替え' : 'ダークテーマに切り替え'}
-              aria-label="表示テーマの切り替え"
-            >{theme === 'dark' ? '☀️' : '🌙'}</button>
             {session ? (
               <>
                 <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap hidden sm:inline">
@@ -3635,12 +3555,12 @@ export default function Home() {
                 <button onClick={() => signOut()} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 hover:brightness-110 shadow-lg shadow-fuchsia-900/30 ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 hover:brightness-110 shadow-[0_0_20px_rgba(217,70,239,0.55)] ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
             )}
           </div>
         </div>
         {/* アクセントライン */}
-        <div className="h-[3px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-amber-400" />
+        <div className="h-[3px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-amber-400 shadow-[0_0_18px_rgba(217,70,239,0.85)]" />
       </header>
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
@@ -3656,7 +3576,7 @@ export default function Home() {
               <button
                 key={it.key}
                 onClick={() => { setActiveTab(it.key); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }); }}
-                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] rounded-2xl transition ${on ? 'text-white bg-white/[0.12] ring-1 ring-white/15' : 'text-slate-400 active:text-white'}`}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] rounded-2xl transition ${on ? 'text-white bg-white/[0.12] ring-1 ring-white/15 shadow-[0_0_18px_rgba(129,140,248,0.5)]' : 'text-slate-400 active:text-white'}`}
                 aria-current={on ? 'page' : undefined}
               >
                 <span className="text-xl leading-none">{it.icon}</span>
