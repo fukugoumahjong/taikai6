@@ -1370,15 +1370,10 @@ export default function Home() {
   const [showAdminMenu, setShowAdminMenu] = useState(false); // PC用ヘッダーの「管理」メニュー
   // 一般の画面に「卓組抽選中」を出すかどうか。管理者の「抽選」ボタンで切り替わる（見せかけのボタン。実際の卓組生成とは無関係）
   const [drawingAnnounced, setDrawingAnnounced] = useState(false);
-  // X（旧Twitter）への自動投稿。各回戦が終わったら、成績表の画像つきで投稿する（管理者の端末で動く）
-  const [xAutoPost, setXAutoPost] = useState(false);
-  // 投稿の記録（回戦 → ツイートID）。前の投稿への返信でつなぐ／二重投稿を防ぐために使う。id が空の回戦は「投稿せず済み扱い」
-  const [xPosts, setXPosts] = useState<{ round: number; id: string }[]>([]);
-  const [xFinalText, setXFinalText] = useState(''); // 全対局終了後の最終メッセージ（空なら雛形を使う）
-  const [xFinalImages, setXFinalImages] = useState(true);
-  const [xPosting, setXPosting] = useState(false);
-  const [xLog, setXLog] = useState('');
-  const [showSheet, setShowSheet] = useState(false);
+  // 成績表（Xへは手動で投稿する。表を画面に出してスクリーンショットを撮る）
+  const [showSheet, setShowSheet] = useState(true);
+  const [finalPostText, setFinalPostText] = useState(''); // 全対局終了後の最終メッセージ（空なら雛形）
+  const [copyMsg, setCopyMsg] = useState('');
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
   const [adminTourney, setAdminTourney] = useState(''); // 管理用データ: 5戦目以降ランキングの対象大会
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
@@ -1522,8 +1517,6 @@ export default function Home() {
     }
     setPlayerLimits(normalizePlayerLimits(current.playerLimits));
     setDrawingAnnounced(!!current.drawingAnnounced);
-    setXAutoPost(!!current.xAutoPost);
-    setXPosts(Array.isArray(current.xPosts) ? current.xPosts : []);
     if (current.timer) setTimerState(normalizeTimer(current.timer));
     if (current.seating) {
       // 旧データ互換: chonbo / mode が無いデータを補完
@@ -1562,8 +1555,8 @@ export default function Home() {
     // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
     // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
     if (!isAdmin && tournamentPhase !== 'playing') return;
-    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo, drawingAnnounced, xAutoPost, xPosts });
-  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, drawingAnnounced, xAutoPost, xPosts, isLoaded, isAdmin]);
+    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo, drawingAnnounced });
+  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, drawingAnnounced, isLoaded, isAdmin]);
 
   // 大会進行中は5秒おきに最新状態を確認し、次の2点だけ取り込む（入力中の内容を壊さないため）
   //  ① タイマー（休憩時間・開始時刻）…新しい方を採用
@@ -1578,17 +1571,6 @@ export default function Home() {
         const srv = normalizeTimer(current.timer);
         setTimerState(prev => (srv.stamp > prev.stamp ? srv : prev));
       }
-      // X投稿の状態: 投稿済みの回戦は、どの端末の分も合わせる（管理者以外の端末の古い値で上書きして、二重投稿にならないように）
-      if (Array.isArray(current.xPosts)) {
-        const srvPosts: { round: number; id: string }[] = current.xPosts;
-        setXPosts(prev => {
-          const map = new Map<number, { round: number; id: string }>(prev.map(pst => [pst.round, pst] as [number, { round: number; id: string }]));
-          let changed = false;
-          srvPosts.forEach(pst => { if (!map.has(pst.round)) { map.set(pst.round, pst); changed = true; } });
-          return changed ? Array.from(map.values()).sort((a, b) => a.round - b.round) : prev;
-        });
-      }
-      if (!isAdmin && typeof current.xAutoPost === 'boolean') setXAutoPost(current.xAutoPost);
       if (Array.isArray(current.seating)) {
         const server = current.seating as Round[];
         setSeating(prev => {
@@ -2100,9 +2082,7 @@ export default function Home() {
     `第${tournamentNo || '?'}回${APP_TITLE}\n全卓${roundNo}回戦が終了しました。\n優勝、通算上位3名：年間チャンピオン大会出場`;
   const xFinalDefaultText = () =>
     `第${tournamentNo || '?'}回${APP_TITLE}\n全${roundsCount}回戦が終了しました。\n優勝：\n優勝、通算上位3名：年間チャンピオン大会出場`;
-  const xFinalBody = xFinalText || xFinalDefaultText();
-  // 返信先: 直前に投稿したツイート（投稿せず済み扱いの回戦は飛ばす）
-  const xLastTweetId = (): string => [...xPosts].sort((a, b) => a.round - b.round).reverse().find(pst => pst.id)?.id || '';
+  const finalPostBody = finalPostText || xFinalDefaultText();
   const handleSaveSheetImages = async () => {
     let players = dbPlayers;
     try { players = await api.getPlayers(); setDbPlayers(players); } catch { /* 取得できなければ手元のデータで作る */ }
@@ -2124,70 +2104,19 @@ export default function Home() {
       }, i * 400);
     });
   };
-  // 接続確認（投稿はしない）
-  const handleVerifyX = async () => {
-    setXLog('接続を確認しています…');
-    try {
-      const res = await fetch('/api/x/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'verify' }) });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      setXLog(`✅ 接続できました。投稿先: @${data.username}（${data.name}）`);
-    } catch (e: any) {
-      setXLog(`❌ 接続できません: ${e?.message || e}`);
+  // 文面をクリップボードにコピー（Xへは手動で貼り付けて投稿する）
+  const copyText = async (text: string, label: string) => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        ok = document.execCommand('copy'); document.body.removeChild(ta);
+      } catch { ok = false; }
     }
+    setCopyMsg(ok ? `${label}をコピーしました` : 'コピーできませんでした。文面を選択して手動でコピーしてください。');
+    setTimeout(() => setCopyMsg(''), 2500);
   };
-  // Xに投稿する。
-  //   各回戦の投稿: 直前の投稿への「返信」でつなぐ（1回戦の投稿だけが元の投稿）。covered は、この投稿で「済み」にする回戦
-  //   最終メッセージ: 返信にせず、独立した投稿として出す
-  const postToX = async (opt: { text: string; attachImages: boolean; replyToId?: string; roundNo?: number; covered?: number[]; waitForScores?: boolean; label: string }) => {
-    if (xPosting) return;
-    setXPosting(true);
-    try {
-      // 他の端末で送信された最後の卓のポイントが反映されるのを少し待ってから、最新の選手データで作る
-      if (opt.waitForScores) await new Promise(resolve => setTimeout(resolve, 6000));
-      let images: string[] = [];
-      if (opt.attachImages) {
-        const players = await api.getPlayers();
-        setDbPlayers(players);
-        const rows = buildSheetRows(players);
-        if (rows.length === 0) throw new Error('成績表に載せる選手がいません。');
-        const roundNos = sheetRoundNos();
-        images = splitSheetPages(rows).map(pg => renderStandingsSheetCanvas(pg.rows, { roundNos, title: pageTitle(pg.label) }).toDataURL('image/png'));
-      }
-      const res = await fetch('/api/x/post', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'post', text: opt.text, images, replyToId: opt.replyToId || undefined }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
-      if (opt.roundNo) {
-        const covered = opt.covered && opt.covered.length > 0 ? opt.covered : [opt.roundNo];
-        setXPosts(prev => {
-          const map = new Map<number, { round: number; id: string }>(prev.map(pst => [pst.round, pst] as [number, { round: number; id: string }]));
-          covered.forEach(n => map.set(n, { round: n, id: n === opt.roundNo ? String(data.id || '') : '' }));
-          return Array.from(map.values()).sort((a, b) => a.round - b.round);
-        });
-      }
-      setXLog(`✅ ${opt.label}を投稿しました。${data.url ? ` ${data.url}` : ''}`);
-    } catch (e: any) {
-      setXLog(`❌ ${opt.label}の投稿に失敗しました: ${e?.message || e}`);
-    } finally {
-      setXPosting(false);
-    }
-  };
-  // 自動投稿: 管理者の端末で、回戦が終わったら投稿する（同じ回戦は1回だけ。失敗した回戦は自動では再送しない）
-  const xAttemptedRef = useRef<Set<number>>(new Set());
-  useEffect(() => {
-    if (!isAdmin || !xAutoPost || tournamentPhase !== 'playing' || xPosting) return;
-    const pending = seating.filter(isRoundFinished).map(r => r.round).filter(n => !xPosts.some(pst => pst.round === n) && !xAttemptedRef.current.has(n));
-    if (pending.length === 0) return;
-    const latest = Math.max(...pending);
-    // 自動投稿をオンにする前に終わっていた回戦までは投稿せず（連投防止）、いちばん新しい回戦の分だけ投稿する
-    pending.forEach(n => xAttemptedRef.current.add(n));
-    postToX({ text: xPostText(latest), attachImages: true, replyToId: xLastTweetId(), roundNo: latest, covered: pending, waitForScores: true, label: `${latest}回戦の終了` });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [seating, xAutoPost, tournamentPhase, xPosting, xPosts, isAdmin]);
 
   // 前の回戦が全て終了した瞬間に自動で卓組を決定
   useEffect(() => {
@@ -2393,7 +2322,7 @@ export default function Home() {
           alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
-        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); setXAutoPost(false); setXPosts([]); setXFinalText(''); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
+        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); setFinalPostText(''); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
@@ -5243,81 +5172,25 @@ export default function Home() {
                 </div>
                 )}
 
-                {/* ---- 成績表（リーグ戦と同じ形式）／ X への投稿（管理者用） ---- */}
+                {/* ---- 成績表（リーグ戦と同じ形式）。Xへは、この表を画面に出してスクリーンショットで手動投稿する（管理者用） ---- */}
                 {isAdmin && (
                   <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-base font-black text-slate-800">📋 成績表・X投稿</h3>
-                      <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">
-                        {showSheet ? '成績表を閉じる ▲' : '成績表を開く ▼'}
-                      </button>
-                    </div>
-
-                    <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 space-y-3">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
-                          <input type="checkbox" checked={xAutoPost} onChange={e => setXAutoPost(e.target.checked)} className="w-4 h-4" />
-                          <span className="text-sm font-black text-slate-700">各回戦の終了時に X へ自動投稿</span>
-                        </label>
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${xAutoPost ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{xAutoPost ? 'オン' : 'オフ'}</span>
-                        <button onClick={handleVerifyX} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">接続確認</button>
+                      <h3 className="text-base font-black text-slate-800">📋 成績表（Xポスト用）</h3>
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
-                          disabled={xPosting || latestFinishedRound() === 0}
-                          onClick={() => {
-                            const n = latestFinishedRound();
-                            const reply = xLastTweetId();
-                            if (n > 0 && window.confirm(`${n}回戦終了の投稿を、いま X に送信しますか？\n${reply ? '（直前の投稿への返信になります）' : '（スレッドの最初の投稿になります）'}\n\n${xPostText(n)}\n\n＋成績表の画像`)) {
-                              postToX({ text: xPostText(n), attachImages: true, replyToId: reply, roundNo: n, label: `${n}回戦の終了` });
-                            }
-                          }}
-                          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40"
-                        >{xPosting ? '投稿中…' : `${latestFinishedRound() > 0 ? latestFinishedRound() + '回戦終了分を' : ''}今すぐ投稿`}</button>
+                          onClick={() => copyText(xPostText(latestFinishedRound() || 1), '投稿文')}
+                          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white"
+                        >📝 {latestFinishedRound() > 0 ? `${latestFinishedRound()}回戦の` : ''}投稿文をコピー</button>
                         <button onClick={handleSaveSheetImages} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">🖼️ 画像を保存</button>
-                      </div>
-                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                        投稿文: 「{xPostText(latestFinishedRound() || 1).split('\n').join(' ／ ')}」＋成績表の画像（最新の4半荘分。18人以内なら1枚、それより多いと上位・下位の2枚）。
-                        1回戦の投稿から始めて、2回戦以降は<strong>直前の投稿への返信</strong>でつながります。
-                        自動投稿は、この画面を開いている<strong>管理者の端末</strong>で動きます（管理者の端末は1台だけで使ってください）。
-                      </p>
-                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                        <span>投稿済み: {xPosts.filter(pst => pst.id).length > 0 ? xPosts.filter(pst => pst.id).map(pst => `${pst.round}回戦`).join('→') : 'なし'}</span>
-                        {xPosts.length > 0 && (
-                          <button
-                            onClick={() => { if (window.confirm('投稿の記録を消して、次の投稿を「新しいスレッドの最初の投稿」にしますか？\n（Xに出した投稿は消えません）')) setXPosts([]); }}
-                            className="font-bold px-2 py-1 rounded-md bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
-                          >返信のつながりをリセット</button>
-                        )}
-                      </div>
-                      {xLog && <p className="text-xs font-bold text-slate-700 break-all">{xLog}</p>}
-                    </div>
-
-                    {/* 全対局が終わったあとの最終メッセージ（手動・返信ではない独立した投稿） */}
-                    <div className={`rounded-xl border p-3 space-y-2 ${allRoundsFinished ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60 opacity-70'}`}>
-                      <p className="text-sm font-black text-slate-700">🏆 最終メッセージ（手動で投稿）</p>
-                      <p className="text-[11px] text-slate-500">{allRoundsFinished ? '全ての対局が終わりました。内容を確認して投稿してください。返信ではなく、独立した新しい投稿になります。' : '全ての対局が終わると、ここから投稿できます。'}</p>
-                      <textarea
-                        value={xFinalBody}
-                        onChange={e => setXFinalText(e.target.value)}
-                        disabled={!allRoundsFinished}
-                        rows={5}
-                        className="w-full p-2.5 border rounded-lg bg-white text-sm leading-relaxed"
-                      />
-                      <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
-                          <input type="checkbox" checked={xFinalImages} onChange={e => setXFinalImages(e.target.checked)} disabled={!allRoundsFinished} className="w-4 h-4" />
-                          成績表の画像も付ける
-                        </label>
-                        <span className={`text-[11px] font-bold tabular-nums ${xWeightedLength(xFinalBody) > 280 ? 'text-red-600' : 'text-slate-400'}`}>{xWeightedLength(xFinalBody)} / 280</span>
-                        <button
-                          disabled={!allRoundsFinished || xPosting || !xFinalBody.trim() || xWeightedLength(xFinalBody) > 280}
-                          onClick={() => {
-                            if (!window.confirm(`次の内容を、返信ではない新しい投稿として X に送信しますか？\n\n${xFinalBody}${xFinalImages ? '\n\n＋成績表の画像' : ''}`)) return;
-                            postToX({ text: xFinalBody, attachImages: xFinalImages, label: '最終メッセージ' });
-                          }}
-                          className="text-xs font-bold px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40"
-                        >{xPosting ? '投稿中…' : '最終メッセージを投稿'}</button>
+                        <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">{showSheet ? '閉じる ▲' : '開く ▼'}</button>
                       </div>
                     </div>
+                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                      各回戦が終わったら、下の成績表を画面に出してスクリーンショットを撮り、「投稿文をコピー」の文面と一緒にXへ投稿してください（2回戦以降は、前の投稿への返信でつなぐと見やすくなります）。
+                      成績表は最新の4半荘分で、18人以内なら1枚、それより多いと上位・下位の2枚です。
+                    </p>
+                    {copyMsg && <p className="text-xs font-bold text-emerald-700">{copyMsg}</p>}
 
                     {showSheet && (() => {
                       const rows = buildSheetRows();
@@ -5330,10 +5203,26 @@ export default function Home() {
                               <StandingsSheetTable rows={pg.rows} roundNos={roundNos} title={pageTitle(pg.label)} />
                             </React.Fragment>
                           ))}
-                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今季の通算、TOTALは今大会の全回戦の合計です。表示する回戦は最新の4半荘までです。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
+                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今季の通算、TOTALは今大会の全回戦の合計です。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
                         </div>
                       );
                     })()}
+
+                    {/* 全対局が終わったあとの最終メッセージ（文面を整えてコピーし、Xへ新しい投稿として手動で投稿する） */}
+                    <div className={`rounded-xl border p-3 space-y-2 ${allRoundsFinished ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60'}`}>
+                      <p className="text-sm font-black text-slate-700">🏆 最終メッセージの文面{allRoundsFinished ? '' : '（全対局が終わったら使います）'}</p>
+                      <textarea
+                        value={finalPostBody}
+                        onChange={e => setFinalPostText(e.target.value)}
+                        rows={5}
+                        className="w-full p-2.5 border rounded-lg bg-white text-sm leading-relaxed"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <button onClick={() => copyText(finalPostBody, '最終メッセージ')} className="text-xs font-bold px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white">📝 最終メッセージをコピー</button>
+                        <span className={`text-[11px] font-bold tabular-nums ${xWeightedLength(finalPostBody) > 280 ? 'text-red-600' : 'text-slate-400'}`}>{xWeightedLength(finalPostBody)} / 280</span>
+                        <span className="text-[11px] text-slate-400">最終メッセージは、返信ではなく新しい投稿にします。</span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
