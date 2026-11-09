@@ -413,6 +413,210 @@ type UpcomingMatch = {
   opponents?: { name: string; wind: string }[];
 };
 
+// ==========================================
+// 成績表（最高位戦のリーグ戦と同じ形式）。管理者画面に表示し、画像にして X に投稿する
+//   列: 順位 / 選手名 / ポイント（今季通算）/ 対局数 / 各回戦（得失点・着順・合計点）/ TOTAL（今大会）/ 開始時点（今大会の前までのポイント）
+//   ・順位・ポイント・対局数は今季の通算。黒子・プロは載せない
+//   ・順位の数字: 4位まで緑、8位まで青、それ以下は黒。ポイントがマイナスの選手は赤
+// ==========================================
+type SheetRound = { raw: number; rank: number; total: number } | null;
+type SheetRow = { rank: number; name: string; point: number; games: number; rounds: SheetRound[]; total: number; start: number };
+const SHEET = {
+  yellow: '#ffffcc',   // 各回戦の欄
+  blue: '#c9e4f2',     // TOTAL
+  border: '#bdbdbd',
+  green: '#1b9a43',
+  blueText: '#1f5fd1',
+  red: '#e11d1d',
+  text: '#111111',
+};
+const sheetRankColor = (rank: number, point: number) =>
+  point < 0 ? SHEET.red : rank <= 4 ? SHEET.green : rank <= 8 ? SHEET.blueText : SHEET.text;
+const fmt1 = (v: number) => (Math.round(v * 10) / 10).toFixed(1);
+const sheetNumColor = (v: number) => (v < 0 ? SHEET.red : SHEET.text);
+// 1卓分のスコアから、順位点（同点は等分）を選手ごとに返す
+const tableUmaShares = (scores: number[], uma: number[]): number[] => {
+  const idx = scores.map((_, i) => i).sort((a, b) => scores[b] - scores[a]);
+  const out: number[] = new Array(scores.length).fill(0);
+  let i = 0;
+  while (i < idx.length) {
+    let j = i;
+    while (j < idx.length && scores[idx[j]] === scores[idx[i]]) j++;
+    let sum = 0;
+    for (let k = i; k < j; k++) sum += uma[k] ?? 0;
+    for (let k = i; k < j; k++) out[idx[k]] = sum / (j - i);
+    i = j;
+  }
+  return out;
+};
+// X の文字数（日本語などは2文字分）の目安
+const xWeightedLength = (t: string) => Array.from(t).reduce((n, ch) => n + (ch.charCodeAt(0) <= 0x10ff ? 1 : 2), 0);
+
+// 成績表を画像（canvas）に描く
+const renderStandingsSheetCanvas = (rows: SheetRow[], opt: { roundNos: number[]; title: string }): HTMLCanvasElement => {
+  const scale = 1.5;
+  const rc = opt.roundNos.length; // 表示する回戦の数（最新の4半荘まで）
+  const W = { rank: 52, name: 184, point: 88, games: 62, raw: 66, rk: 48, tot: 70, total: 86, start: 90 };
+  const roundW = W.raw + W.rk + W.tot;
+  const width = W.rank + W.name + W.point + W.games + roundW * rc + W.total + W.start;
+  const titleH = 46, hr = 28, rowH = 32;
+  const height = titleH + hr * 3 + rowH * rows.length + 8;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.round(width * scale);
+  canvas.height = Math.round(height * scale);
+  const ctx = canvas.getContext('2d')!;
+  ctx.scale(scale, scale);
+  const font = '"Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  // タイトル
+  ctx.fillStyle = '#111111';
+  ctx.font = `bold 21px ${font}`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText(opt.title, 8, titleH / 2);
+
+  const cell = (x: number, y: number, w: number, h: number, o: { fill?: string; text?: string; align?: 'left' | 'center' | 'right'; color?: string; bold?: boolean; size?: number }) => {
+    ctx.fillStyle = o.fill || '#ffffff';
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = SHEET.border;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+    if (o.text !== undefined && o.text !== '') {
+      ctx.fillStyle = o.color || SHEET.text;
+      ctx.font = `${o.bold ? 'bold ' : ''}${o.size || 15}px ${font}`;
+      ctx.textBaseline = 'middle';
+      const align = o.align || 'center';
+      ctx.textAlign = align;
+      const tx = align === 'left' ? x + 8 : align === 'right' ? x + w - 8 : x + w / 2;
+      ctx.fillText(o.text, tx, y + h / 2 + 1);
+    }
+  };
+
+  let y = titleH;
+  // ヘッダー（3段）
+  let x = 0;
+  const head = (w: number, label: string, fill?: string) => { cell(x, y, w, hr * 3, { text: label, fill, bold: true, size: 15 }); x += w; };
+  head(W.rank, '順位'); head(W.name, '選手名'); head(W.point, 'ポイント'); head(W.games, '対局数');
+  cell(x, y, roundW * rc, hr, { text: opt.title.split(' ')[0], bold: true, size: 15 });
+  for (let r = 0; r < rc; r++) {
+    const rx = x + roundW * r;
+    cell(rx, y + hr, roundW, hr, { text: `${opt.roundNos[r]}回戦`, size: 14 });
+    cell(rx, y + hr * 2, W.raw, hr, { text: '得失点', size: 13 });
+    cell(rx + W.raw, y + hr * 2, W.rk, hr, { text: '着順', size: 13 });
+    cell(rx + W.raw + W.rk, y + hr * 2, W.tot, hr, { text: '合計点', size: 13 });
+  }
+  x += roundW * rc;
+  head(W.total, 'TOTAL', SHEET.blue); head(W.start, '開始時点');
+  y += hr * 3;
+
+  // 本体
+  rows.forEach(row => {
+    let cx = 0;
+    cell(cx, y, W.rank, rowH, { text: String(row.rank), bold: true, color: sheetRankColor(row.rank, row.point) }); cx += W.rank;
+    cell(cx, y, W.name, rowH, { text: row.name, bold: true, align: 'left' }); cx += W.name;
+    cell(cx, y, W.point, rowH, { text: fmt1(row.point), bold: true, align: 'right', color: sheetNumColor(row.point) }); cx += W.point;
+    cell(cx, y, W.games, rowH, { text: String(row.games), align: 'right' }); cx += W.games;
+    for (let r = 0; r < rc; r++) {
+      const d = row.rounds[opt.roundNos[r] - 1];
+      cell(cx, y, W.raw, rowH, { fill: SHEET.yellow, text: d ? fmt1(d.raw) : '', align: 'right', color: d ? sheetNumColor(d.raw) : undefined }); cx += W.raw;
+      cell(cx, y, W.rk, rowH, { fill: SHEET.yellow, text: d ? String(d.rank) : '' }); cx += W.rk;
+      cell(cx, y, W.tot, rowH, { fill: SHEET.yellow, text: d ? fmt1(d.total) : '', align: 'right', bold: true, color: d ? sheetNumColor(d.total) : undefined }); cx += W.tot;
+    }
+    cell(cx, y, W.total, rowH, { fill: SHEET.blue, text: fmt1(row.total), align: 'right', color: sheetNumColor(row.total) }); cx += W.total;
+    cell(cx, y, W.start, rowH, { text: fmt1(row.start), align: 'right', bold: true, color: sheetNumColor(row.start) });
+    y += rowH;
+  });
+  return canvas;
+};
+
+// 成績表（画面表示用）
+const StandingsSheetTable = ({ rows, roundNos, title }: { rows: SheetRow[]; roundNos: number[]; title: string }) => {
+  const th = 'border px-2 py-1 text-center font-bold bg-white whitespace-nowrap';
+  const td = 'border px-2 py-1 whitespace-nowrap';
+  const bc = { borderColor: SHEET.border };
+  return (
+    <div>
+      <p className="text-sm font-black text-slate-700 mb-1.5">{title}</p>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
+        <table className="border-collapse text-[13px] text-slate-900" style={{ color: SHEET.text }}>
+          <thead>
+            <tr>
+              <th rowSpan={3} className={th} style={bc}>順位</th>
+              <th rowSpan={3} className={th} style={bc}>選手名</th>
+              <th rowSpan={3} className={th} style={bc}>ポイント</th>
+              <th rowSpan={3} className={th} style={bc}>対局数</th>
+              <th colSpan={roundNos.length * 3} className={th} style={bc}>{title.split(' ')[0]}</th>
+              <th rowSpan={3} className={th} style={{ ...bc, background: SHEET.blue }}>TOTAL</th>
+              <th rowSpan={3} className={th} style={bc}>開始時点</th>
+            </tr>
+            <tr>
+              {roundNos.map(n => <th key={n} colSpan={3} className={th} style={bc}>{n}回戦</th>)}
+            </tr>
+            <tr>
+              {roundNos.map(n => (
+                <React.Fragment key={n}>
+                  <th className={`${th} text-[11px]`} style={bc}>得失点</th>
+                  <th className={`${th} text-[11px]`} style={bc}>着順</th>
+                  <th className={`${th} text-[11px]`} style={bc}>合計点</th>
+                </React.Fragment>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(row => (
+              <tr key={row.name + row.rank}>
+                <td className={`${td} text-center font-black`} style={{ ...bc, color: sheetRankColor(row.rank, row.point) }}>{row.rank}</td>
+                <td className={`${td} font-bold`} style={bc}>{row.name}</td>
+                <td className={`${td} text-right font-bold tabular-nums`} style={{ ...bc, color: sheetNumColor(row.point) }}>{fmt1(row.point)}</td>
+                <td className={`${td} text-right tabular-nums`} style={bc}>{row.games}</td>
+                {roundNos.map(n => {
+                  const d = row.rounds[n - 1];
+                  return (
+                    <React.Fragment key={n}>
+                      <td className={`${td} text-right tabular-nums`} style={{ ...bc, background: SHEET.yellow, color: d ? sheetNumColor(d.raw) : undefined }}>{d ? fmt1(d.raw) : ''}</td>
+                      <td className={`${td} text-center tabular-nums`} style={{ ...bc, background: SHEET.yellow }}>{d ? d.rank : ''}</td>
+                      <td className={`${td} text-right font-bold tabular-nums`} style={{ ...bc, background: SHEET.yellow, color: d ? sheetNumColor(d.total) : undefined }}>{d ? fmt1(d.total) : ''}</td>
+                    </React.Fragment>
+                  );
+                })}
+                <td className={`${td} text-right tabular-nums`} style={{ ...bc, background: SHEET.blue, color: sheetNumColor(row.total) }}>{fmt1(row.total)}</td>
+                <td className={`${td} text-right font-bold tabular-nums`} style={{ ...bc, color: sheetNumColor(row.start) }}>{fmt1(row.start)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// 管理用データの順位表（軽く表示するため簡素な作り）
+type AdminRow = { rank: number; name: string; value: string; sub?: string };
+const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string; desc: string; rows: AdminRow[]; extra?: React.ReactNode; emptyText?: string }) => (
+  <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+    <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+      <h4 className="text-sm font-black text-slate-800">{title}</h4>
+      <p className="text-[11px] text-slate-400 leading-snug">{desc}</p>
+      {extra && <div className="mt-2">{extra}</div>}
+    </div>
+    {rows.length === 0 ? (
+      <p className="px-3 py-4 text-center text-xs text-slate-400">{emptyText || 'データがありません。'}</p>
+    ) : (
+      <ol className="divide-y divide-slate-100">
+        {rows.map((r, i) => (
+          <li key={`${r.name}-${i}`} className="flex items-center gap-2 px-3 py-1.5 text-sm">
+            <span className="w-6 text-right font-black text-slate-400 tabular-nums">{r.rank}</span>
+            <span className="flex-1 min-w-0 truncate font-bold text-slate-700"><PlayerLabel name={r.name} /></span>
+            {r.sub && <span className="text-[11px] text-slate-400 whitespace-nowrap">{r.sub}</span>}
+            <span className={`w-20 text-right font-black tabular-nums ${r.value.startsWith('-') ? 'text-red-600' : 'text-slate-800'}`}>{r.value}</span>
+          </li>
+        ))}
+      </ol>
+    )}
+  </section>
+);
+
 // 生涯成績（全シーズン通し）の表示用
 type LifetimeSummary = {
   key: string;        // 選手ID（選手登録の無い前季のみの選手は legacy:名前）
@@ -1166,6 +1370,17 @@ export default function Home() {
   const [showAdminMenu, setShowAdminMenu] = useState(false); // PC用ヘッダーの「管理」メニュー
   // 一般の画面に「卓組抽選中」を出すかどうか。管理者の「抽選」ボタンで切り替わる（見せかけのボタン。実際の卓組生成とは無関係）
   const [drawingAnnounced, setDrawingAnnounced] = useState(false);
+  // X（旧Twitter）への自動投稿。各回戦が終わったら、成績表の画像つきで投稿する（管理者の端末で動く）
+  const [xAutoPost, setXAutoPost] = useState(false);
+  // 投稿の記録（回戦 → ツイートID）。前の投稿への返信でつなぐ／二重投稿を防ぐために使う。id が空の回戦は「投稿せず済み扱い」
+  const [xPosts, setXPosts] = useState<{ round: number; id: string }[]>([]);
+  const [xFinalText, setXFinalText] = useState(''); // 全対局終了後の最終メッセージ（空なら雛形を使う）
+  const [xFinalImages, setXFinalImages] = useState(true);
+  const [xPosting, setXPosting] = useState(false);
+  const [xLog, setXLog] = useState('');
+  const [showSheet, setShowSheet] = useState(false);
+  const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
+  const [adminTourney, setAdminTourney] = useState(''); // 管理用データ: 5戦目以降ランキングの対象大会
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
   // タイマーを変更する共通関数（変更時刻を stamp に残し、他端末より新しい内容として扱えるようにする）
   const updateTimer = (fn: (prev: TimerState) => TimerState) =>
@@ -1307,6 +1522,8 @@ export default function Home() {
     }
     setPlayerLimits(normalizePlayerLimits(current.playerLimits));
     setDrawingAnnounced(!!current.drawingAnnounced);
+    setXAutoPost(!!current.xAutoPost);
+    setXPosts(Array.isArray(current.xPosts) ? current.xPosts : []);
     if (current.timer) setTimerState(normalizeTimer(current.timer));
     if (current.seating) {
       // 旧データ互換: chonbo / mode が無いデータを補完
@@ -1345,8 +1562,8 @@ export default function Home() {
     // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
     // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
     if (!isAdmin && tournamentPhase !== 'playing') return;
-    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo, drawingAnnounced });
-  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, drawingAnnounced, isLoaded, isAdmin]);
+    api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo, drawingAnnounced, xAutoPost, xPosts });
+  }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, drawingAnnounced, xAutoPost, xPosts, isLoaded, isAdmin]);
 
   // 大会進行中は5秒おきに最新状態を確認し、次の2点だけ取り込む（入力中の内容を壊さないため）
   //  ① タイマー（休憩時間・開始時刻）…新しい方を採用
@@ -1361,6 +1578,17 @@ export default function Home() {
         const srv = normalizeTimer(current.timer);
         setTimerState(prev => (srv.stamp > prev.stamp ? srv : prev));
       }
+      // X投稿の状態: 投稿済みの回戦は、どの端末の分も合わせる（管理者以外の端末の古い値で上書きして、二重投稿にならないように）
+      if (Array.isArray(current.xPosts)) {
+        const srvPosts: { round: number; id: string }[] = current.xPosts;
+        setXPosts(prev => {
+          const map = new Map<number, { round: number; id: string }>(prev.map(pst => [pst.round, pst] as [number, { round: number; id: string }]));
+          let changed = false;
+          srvPosts.forEach(pst => { if (!map.has(pst.round)) { map.set(pst.round, pst); changed = true; } });
+          return changed ? Array.from(map.values()).sort((a, b) => a.round - b.round) : prev;
+        });
+      }
+      if (!isAdmin && typeof current.xAutoPost === 'boolean') setXAutoPost(current.xAutoPost);
       if (Array.isArray(current.seating)) {
         const server = current.seating as Round[];
         setSeating(prev => {
@@ -1822,6 +2050,145 @@ export default function Home() {
 
   const isRoundFinished = (r: Round) => !r.isPending && r.tables.length > 0 && r.tables.every(t => t.isSubmitted);
 
+  // ----------------------------------------
+  // 成績表（リーグ戦と同じ形式）と、Xへの投稿
+  // ----------------------------------------
+  // 成績表の行を作る。順位・ポイント・対局数は今季の通算。黒子・プロは載せない。ポイントは players（最新の選手データ）から
+  const buildSheetRows = (players: Player[] = dbPlayers): SheetRow[] => {
+    const targets = players
+      .filter(pl => !isKuroko(pl.name) && !isPro(pl.name) && getTotalGames(pl.id) > 0)
+      .sort((a, b) => b.totalPoint - a.totalPoint);
+    // 今大会の回戦ごとの成績（送信済みの卓のみ）。得失点 = 合計点 − 順位点（チョンボなどは得失点に含む）
+    const perRound = new Map<string, SheetRound[]>();
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted || r.round < 1 || r.round > roundsCount) return;
+      const scores = t.players.map(pl => pl.score);
+      const shares = tableUmaShares(scores, rule.uma);
+      const sortedScores = [...scores].sort((a, b) => b - a);
+      t.players.forEach((pl, i) => {
+        const arr = perRound.get(pl.playerId) || (new Array(roundsCount).fill(null) as SheetRound[]);
+        arr[r.round - 1] = { raw: pl.point - shares[i], rank: sortedScores.indexOf(pl.score) + 1, total: pl.point };
+        perRound.set(pl.playerId, arr);
+      });
+    }));
+    let prevRank = 0;
+    return targets.map((pl, i) => {
+      const rank = i > 0 && targets[i - 1].totalPoint === pl.totalPoint ? prevRank : i + 1;
+      prevRank = rank;
+      const rounds = perRound.get(pl.id) || (new Array(roundsCount).fill(null) as SheetRound[]);
+      const total = rounds.reduce((sum, d) => sum + (d ? d.total : 0), 0);
+      return { rank, name: pl.name, point: Math.round(pl.totalPoint * 10) / 10, games: getTotalGames(pl.id), rounds, total: Math.round(total * 10) / 10, start: Math.round((pl.totalPoint - total) * 10) / 10 };
+    });
+  };
+  // 18人以内なら1ページ。それより多いときは、上位半分・下位半分の2ページに分ける
+  const splitSheetPages = (rows: SheetRow[]): { label: string; rows: SheetRow[] }[] => {
+    if (rows.length <= 18) return [{ label: '', rows }];
+    const half = Math.ceil(rows.length / 2);
+    return [{ label: '上位', rows: rows.slice(0, half) }, { label: '下位', rows: rows.slice(half) }].filter(pg => pg.rows.length > 0);
+  };
+  const sheetTitle = () => `第${tournamentNo || '?'}回 ${APP_TITLE} 成績表`;
+  const pageTitle = (label: string) => `${sheetTitle()}${label ? `（${label}）` : ''}`;
+  const latestFinishedRound = (): number => seating.filter(isRoundFinished).reduce((m, r) => Math.max(m, r.round), 0);
+  const allRoundsFinished = seating.length > 0 && seating.length >= roundsCount && seating.every(isRoundFinished);
+  // 成績表に出す回戦: 終わった回戦のうち最新の4つまで（横に長くなりすぎないように）
+  const sheetRoundNos = (): number[] => {
+    const latest = Math.min(Math.max(latestFinishedRound(), 1), Math.max(roundsCount, 1));
+    const from = Math.max(1, latest - 3);
+    return Array.from({ length: latest - from + 1 }, (_, i) => from + i);
+  };
+  const xPostText = (roundNo: number) =>
+    `第${tournamentNo || '?'}回${APP_TITLE}\n全卓${roundNo}回戦が終了しました。\n優勝、通算上位3名：年間チャンピオン大会出場`;
+  const xFinalDefaultText = () =>
+    `第${tournamentNo || '?'}回${APP_TITLE}\n全${roundsCount}回戦が終了しました。\n優勝：\n優勝、通算上位3名：年間チャンピオン大会出場`;
+  const xFinalBody = xFinalText || xFinalDefaultText();
+  // 返信先: 直前に投稿したツイート（投稿せず済み扱いの回戦は飛ばす）
+  const xLastTweetId = (): string => [...xPosts].sort((a, b) => a.round - b.round).reverse().find(pst => pst.id)?.id || '';
+  const handleSaveSheetImages = async () => {
+    let players = dbPlayers;
+    try { players = await api.getPlayers(); setDbPlayers(players); } catch { /* 取得できなければ手元のデータで作る */ }
+    const rows = buildSheetRows(players);
+    if (rows.length === 0) { alert('成績表に載せる選手がいません。'); return; }
+    const roundNos = sheetRoundNos();
+    splitSheetPages(rows).forEach((pg, i) => {
+      const canvas = renderStandingsSheetCanvas(pg.rows, { roundNos, title: pageTitle(pg.label) });
+      setTimeout(() => {
+        canvas.toBlob(blob => {
+          if (!blob) return;
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `standings_${tournamentNo}_${pg.label === '' ? 'all' : pg.label === '上位' ? 'top' : 'bottom'}.png`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 2000);
+        }, 'image/png');
+      }, i * 400);
+    });
+  };
+  // 接続確認（投稿はしない）
+  const handleVerifyX = async () => {
+    setXLog('接続を確認しています…');
+    try {
+      const res = await fetch('/api/x/post', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'verify' }) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setXLog(`✅ 接続できました。投稿先: @${data.username}（${data.name}）`);
+    } catch (e: any) {
+      setXLog(`❌ 接続できません: ${e?.message || e}`);
+    }
+  };
+  // Xに投稿する。
+  //   各回戦の投稿: 直前の投稿への「返信」でつなぐ（1回戦の投稿だけが元の投稿）。covered は、この投稿で「済み」にする回戦
+  //   最終メッセージ: 返信にせず、独立した投稿として出す
+  const postToX = async (opt: { text: string; attachImages: boolean; replyToId?: string; roundNo?: number; covered?: number[]; waitForScores?: boolean; label: string }) => {
+    if (xPosting) return;
+    setXPosting(true);
+    try {
+      // 他の端末で送信された最後の卓のポイントが反映されるのを少し待ってから、最新の選手データで作る
+      if (opt.waitForScores) await new Promise(resolve => setTimeout(resolve, 6000));
+      let images: string[] = [];
+      if (opt.attachImages) {
+        const players = await api.getPlayers();
+        setDbPlayers(players);
+        const rows = buildSheetRows(players);
+        if (rows.length === 0) throw new Error('成績表に載せる選手がいません。');
+        const roundNos = sheetRoundNos();
+        images = splitSheetPages(rows).map(pg => renderStandingsSheetCanvas(pg.rows, { roundNos, title: pageTitle(pg.label) }).toDataURL('image/png'));
+      }
+      const res = await fetch('/api/x/post', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'post', text: opt.text, images, replyToId: opt.replyToId || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      if (opt.roundNo) {
+        const covered = opt.covered && opt.covered.length > 0 ? opt.covered : [opt.roundNo];
+        setXPosts(prev => {
+          const map = new Map<number, { round: number; id: string }>(prev.map(pst => [pst.round, pst] as [number, { round: number; id: string }]));
+          covered.forEach(n => map.set(n, { round: n, id: n === opt.roundNo ? String(data.id || '') : '' }));
+          return Array.from(map.values()).sort((a, b) => a.round - b.round);
+        });
+      }
+      setXLog(`✅ ${opt.label}を投稿しました。${data.url ? ` ${data.url}` : ''}`);
+    } catch (e: any) {
+      setXLog(`❌ ${opt.label}の投稿に失敗しました: ${e?.message || e}`);
+    } finally {
+      setXPosting(false);
+    }
+  };
+  // 自動投稿: 管理者の端末で、回戦が終わったら投稿する（同じ回戦は1回だけ。失敗した回戦は自動では再送しない）
+  const xAttemptedRef = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    if (!isAdmin || !xAutoPost || tournamentPhase !== 'playing' || xPosting) return;
+    const pending = seating.filter(isRoundFinished).map(r => r.round).filter(n => !xPosts.some(pst => pst.round === n) && !xAttemptedRef.current.has(n));
+    if (pending.length === 0) return;
+    const latest = Math.max(...pending);
+    // 自動投稿をオンにする前に終わっていた回戦までは投稿せず（連投防止）、いちばん新しい回戦の分だけ投稿する
+    pending.forEach(n => xAttemptedRef.current.add(n));
+    postToX({ text: xPostText(latest), attachImages: true, replyToId: xLastTweetId(), roundNo: latest, covered: pending, waitForScores: true, label: `${latest}回戦の終了` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seating, xAutoPost, tournamentPhase, xPosting, xPosts, isAdmin]);
+
   // 前の回戦が全て終了した瞬間に自動で卓組を決定
   useEffect(() => {
     if (!isLoaded) return;
@@ -2026,7 +2393,7 @@ export default function Home() {
           alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
-        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
+        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); setXAutoPost(false); setXPosts([]); setXFinalText(''); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
@@ -3174,7 +3541,7 @@ export default function Home() {
 
   // 全半荘の記録（1人1半荘につき1件）。score は実点（100点単位ではなく点）。
   // source は大会名（過去大会名 / 今大会）、seq はその大会の中での対局の順番（連勝の判定に使う）
-  type GameRec = { playerId: string; name: string; source: string; seq: number; rank: number; score: number };
+  type GameRec = { playerId: string; name: string; source: string; seq: number; rank: number; score: number; point: number };
   const gameRecs: GameRec[] = [];
   // データタブを開いているときだけ集計する
   (activeTab === 'data' ? archives : []).forEach(a => a.hanchans.forEach(h => {
@@ -3183,7 +3550,7 @@ export default function Home() {
       if (r.excluded || isKuroko(nm)) return;
       // 選手登録前の前季データ（legacy:名前）も、登録済みの同名の選手と同じ選手として集計する
       const key = lifetimeKeyOf(r.playerId, nm);
-      gameRecs.push({ playerId: key, name: dbPlayers.find(p => p.id === key)?.name || nm, source: a.name, seq: -h.no, rank: r.rank, score: r.score * 100 });
+      gameRecs.push({ playerId: key, name: dbPlayers.find(p => p.id === key)?.name || nm, source: a.name, seq: -h.no, rank: r.rank, score: r.score * 100, point: r.point });
     });
   }));
   // 今大会（送信済みの卓のみ）。着順は卓内のスコア順
@@ -3197,6 +3564,7 @@ export default function Home() {
         playerId: pl.playerId, name: nm, source: '今大会', seq: r.round,
         rank: sorted.findIndex(sp => sp.playerId === pl.playerId) + 1,
         score: pl.score * 100,
+        point: pl.point,
       });
     });
   }));
@@ -3254,6 +3622,66 @@ export default function Home() {
     rateEligible.map(x => ({ ...x, rate: (x.games - x.last) / x.games })).sort((x, y) => y.rate - x.rate || y.games - x.games).slice(0, DATA_TOP_N),
     x => x.rate,
   );
+
+  // ===== 管理用データ（管理者のみ・上位10名まで） =====
+  const ADMIN_TOP_N = 10;
+  const adminOn = isAdmin && activeTab === 'data';
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const toAdminRows = <T,>(sorted: T[], valueOf: (x: T) => number, make: (x: T) => { name: string; value: string; sub?: string }): AdminRow[] =>
+    assignRanks(sorted.slice(0, ADMIN_TOP_N), valueOf).map(x => ({ rank: x.rankNo, ...make(x) }));
+  // 選手ごとの集計: 素点 =（スコア − 30000点）÷ 1000、順位点 = ポイント − 素点（順位点・オカ・供託など）、着順の回数
+  const adminAgg = new Map<string, { name: string; raw: number; uma: number; games: number; counts: number[] }>();
+  if (adminOn) {
+    gameRecs.forEach(g => {
+      const cur = adminAgg.get(g.playerId) || { name: g.name, raw: 0, uma: 0, games: 0, counts: [0, 0, 0, 0] };
+      const raw = (g.score - 30000) / 1000;
+      cur.raw += raw;
+      cur.uma += g.point - raw;
+      cur.games += 1;
+      if (g.rank >= 1 && g.rank <= 4) cur.counts[g.rank - 1] += 1;
+      adminAgg.set(g.playerId, cur);
+    });
+  }
+  const adminList = Array.from(adminAgg.values()).map(x => ({ ...x, raw: r1(x.raw), uma: r1(x.uma) }));
+  const adminLow: AdminRow[] = adminOn
+    ? toAdminRows([...gameRecs].sort((x, y) => x.score - y.score), x => x.score, x => ({ name: x.name, value: `${x.score.toLocaleString()}点`, sub: x.source }))
+    : [];
+  const adminRaw: AdminRow[] = adminOn
+    ? toAdminRows([...adminList].sort((x, y) => y.raw - x.raw || y.games - x.games), x => x.raw, x => ({ name: x.name, value: fmtPt(x.raw), sub: `${x.games}半荘` }))
+    : [];
+  const adminUma: AdminRow[] = adminOn
+    ? toAdminRows([...adminList].sort((x, y) => y.uma - x.uma || y.games - x.games), x => x.uma, x => ({ name: x.name, value: fmtPt(x.uma), sub: `${x.games}半荘` }))
+    : [];
+  // 順位別率（1位率〜4位率）: 8半荘以上の選手が対象。率の高い順
+  const adminRates: AdminRow[][] = [0, 1, 2, 3].map(k => adminOn
+    ? toAdminRows(
+        adminList.filter(x => x.games >= MIN_GAMES_FOR_RATE).sort((x, y) => y.counts[k] / y.games - x.counts[k] / x.games || y.games - x.games),
+        x => x.counts[k] / x.games,
+        x => ({ name: x.name, value: `${Math.round((x.counts[k] / x.games) * 100)}%`, sub: `${x.counts[k]}回 / ${x.games}半荘` }))
+    : []);
+  // 各大会の5戦目以降ランキング: その大会で5戦目以降に積み上げたポイント（5半荘以上出場した選手が対象）
+  const adminTourneyNames: string[] = adminOn
+    ? Array.from(new Set(gameRecs.map(g => g.source))).sort((a, b) => tournamentSortKey(a) - tournamentSortKey(b))
+    : [];
+  const adminTourneySel = adminTourneyNames.includes(adminTourney) ? adminTourney : (adminTourneyNames[adminTourneyNames.length - 1] || '');
+  const adminFifth: AdminRow[] = (() => {
+    if (!adminOn || !adminTourneySel) return [];
+    const byPlayer = new Map<string, { name: string; games: GameRec[] }>();
+    gameRecs.filter(g => g.source === adminTourneySel).forEach(g => {
+      const cur = byPlayer.get(g.playerId) || { name: g.name, games: [] };
+      cur.games.push(g);
+      byPlayer.set(g.playerId, cur);
+    });
+    const list = Array.from(byPlayer.values())
+      .filter(x => x.games.length >= 5)
+      .map(x => {
+        const ordered = [...x.games].sort((a, b) => a.seq - b.seq);
+        const late = ordered.slice(4);
+        return { name: x.name, total: r1(late.reduce((sum, g) => sum + g.point, 0)), n: ordered.length, lateN: late.length };
+      })
+      .sort((a, b) => b.total - a.total || b.lateN - a.lateN);
+    return toAdminRows(list, x => x.total, x => ({ name: x.name, value: fmtPt(x.total), sub: `${x.n}半荘中 5戦目以降${x.lateN}戦` }));
+  })();
 
   // データタブのランキングカード（全カード共通の見た目。高さも揃える）
   type DataRow = { key: string; rankNo: number; name: string; sub: string; value: string; unit?: string; valueClass?: string; bar?: number };
@@ -3818,6 +4246,49 @@ export default function Home() {
                   emptyText: `${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`,
                   rows: avoidLastRanking.map(x => ({ key: `al-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘中 ラス${x.last}回`, value: x.rate.toFixed(3), bar: x.rate })),
                 })}
+              </div>
+            )}
+
+            {/* 管理用データ（管理者のみ。上位10名まで） */}
+            {isAdmin && gameRecs.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <h3 className="text-base font-black text-slate-800">🛠️ 管理用データ</h3>
+                  <span className="text-[11px] text-slate-400">管理者のみに表示・上位{ADMIN_TOP_N}名まで・過去の全大会＋今大会の記録</span>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
+                  <AdminRankList title="💎 素点ランキング" desc="素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の通算合計。順位点は含みません" rows={adminRaw} />
+                  <AdminRankList title="🏅 順位点ランキング" desc="ポイントから素点を引いた分（順位点・オカ・供託など）の通算合計。素点は含みません" rows={adminUma} />
+                  <AdminRankList
+                    title="📊 順位別率ランキング"
+                    desc={`各順位になった割合の高い順（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象）`}
+                    rows={adminRates[adminRateRank]}
+                    emptyText={`${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`}
+                    extra={
+                      <div className="flex gap-1">
+                        {['1位率', '2位率', '3位率', '4位率'].map((label, k) => (
+                          <button
+                            key={label}
+                            onClick={() => setAdminRateRank(k)}
+                            className={`flex-1 py-1 rounded-md text-xs font-bold transition ${adminRateRank === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    }
+                  />
+                  <AdminRankList
+                    title="⏩ 各大会の5戦目以降ランキング"
+                    desc="その大会の5戦目以降に積み上げたポイントの合計（その大会で5半荘以上出場した選手が対象）"
+                    rows={adminFifth}
+                    emptyText="この大会に、5半荘以上出場した選手はいません。"
+                    extra={
+                      <select value={adminTourneySel} onChange={e => setAdminTourney(e.target.value)} className="w-full p-1.5 border rounded-md bg-white text-xs font-bold">
+                        {adminTourneyNames.map(n => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    }
+                  />
+                </div>
               </div>
             )}
           </div>
@@ -4770,6 +5241,100 @@ export default function Home() {
                     ))}
                   </p>
                 </div>
+                )}
+
+                {/* ---- 成績表（リーグ戦と同じ形式）／ X への投稿（管理者用） ---- */}
+                {isAdmin && (
+                  <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-base font-black text-slate-800">📋 成績表・X投稿</h3>
+                      <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">
+                        {showSheet ? '成績表を閉じる ▲' : '成績表を開く ▼'}
+                      </button>
+                    </div>
+
+                    <div className="rounded-xl border border-sky-100 bg-sky-50/60 p-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={xAutoPost} onChange={e => setXAutoPost(e.target.checked)} className="w-4 h-4" />
+                          <span className="text-sm font-black text-slate-700">各回戦の終了時に X へ自動投稿</span>
+                        </label>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${xAutoPost ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-500'}`}>{xAutoPost ? 'オン' : 'オフ'}</span>
+                        <button onClick={handleVerifyX} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">接続確認</button>
+                        <button
+                          disabled={xPosting || latestFinishedRound() === 0}
+                          onClick={() => {
+                            const n = latestFinishedRound();
+                            const reply = xLastTweetId();
+                            if (n > 0 && window.confirm(`${n}回戦終了の投稿を、いま X に送信しますか？\n${reply ? '（直前の投稿への返信になります）' : '（スレッドの最初の投稿になります）'}\n\n${xPostText(n)}\n\n＋成績表の画像`)) {
+                              postToX({ text: xPostText(n), attachImages: true, replyToId: reply, roundNo: n, label: `${n}回戦の終了` });
+                            }
+                          }}
+                          className="text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white disabled:opacity-40"
+                        >{xPosting ? '投稿中…' : `${latestFinishedRound() > 0 ? latestFinishedRound() + '回戦終了分を' : ''}今すぐ投稿`}</button>
+                        <button onClick={handleSaveSheetImages} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">🖼️ 画像を保存</button>
+                      </div>
+                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                        投稿文: 「{xPostText(latestFinishedRound() || 1).split('\n').join(' ／ ')}」＋成績表の画像（最新の4半荘分。18人以内なら1枚、それより多いと上位・下位の2枚）。
+                        1回戦の投稿から始めて、2回戦以降は<strong>直前の投稿への返信</strong>でつながります。
+                        自動投稿は、この画面を開いている<strong>管理者の端末</strong>で動きます（管理者の端末は1台だけで使ってください）。
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                        <span>投稿済み: {xPosts.filter(pst => pst.id).length > 0 ? xPosts.filter(pst => pst.id).map(pst => `${pst.round}回戦`).join('→') : 'なし'}</span>
+                        {xPosts.length > 0 && (
+                          <button
+                            onClick={() => { if (window.confirm('投稿の記録を消して、次の投稿を「新しいスレッドの最初の投稿」にしますか？\n（Xに出した投稿は消えません）')) setXPosts([]); }}
+                            className="font-bold px-2 py-1 rounded-md bg-white border border-slate-200 hover:bg-slate-50 text-slate-600"
+                          >返信のつながりをリセット</button>
+                        )}
+                      </div>
+                      {xLog && <p className="text-xs font-bold text-slate-700 break-all">{xLog}</p>}
+                    </div>
+
+                    {/* 全対局が終わったあとの最終メッセージ（手動・返信ではない独立した投稿） */}
+                    <div className={`rounded-xl border p-3 space-y-2 ${allRoundsFinished ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60 opacity-70'}`}>
+                      <p className="text-sm font-black text-slate-700">🏆 最終メッセージ（手動で投稿）</p>
+                      <p className="text-[11px] text-slate-500">{allRoundsFinished ? '全ての対局が終わりました。内容を確認して投稿してください。返信ではなく、独立した新しい投稿になります。' : '全ての対局が終わると、ここから投稿できます。'}</p>
+                      <textarea
+                        value={xFinalBody}
+                        onChange={e => setXFinalText(e.target.value)}
+                        disabled={!allRoundsFinished}
+                        rows={5}
+                        className="w-full p-2.5 border rounded-lg bg-white text-sm leading-relaxed"
+                      />
+                      <div className="flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
+                          <input type="checkbox" checked={xFinalImages} onChange={e => setXFinalImages(e.target.checked)} disabled={!allRoundsFinished} className="w-4 h-4" />
+                          成績表の画像も付ける
+                        </label>
+                        <span className={`text-[11px] font-bold tabular-nums ${xWeightedLength(xFinalBody) > 280 ? 'text-red-600' : 'text-slate-400'}`}>{xWeightedLength(xFinalBody)} / 280</span>
+                        <button
+                          disabled={!allRoundsFinished || xPosting || !xFinalBody.trim() || xWeightedLength(xFinalBody) > 280}
+                          onClick={() => {
+                            if (!window.confirm(`次の内容を、返信ではない新しい投稿として X に送信しますか？\n\n${xFinalBody}${xFinalImages ? '\n\n＋成績表の画像' : ''}`)) return;
+                            postToX({ text: xFinalBody, attachImages: xFinalImages, label: '最終メッセージ' });
+                          }}
+                          className="text-xs font-bold px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white disabled:opacity-40"
+                        >{xPosting ? '投稿中…' : '最終メッセージを投稿'}</button>
+                      </div>
+                    </div>
+
+                    {showSheet && (() => {
+                      const rows = buildSheetRows();
+                      if (rows.length === 0) return <p className="text-sm text-slate-400">成績表に載せる選手がいません。</p>;
+                      const roundNos = sheetRoundNos();
+                      return (
+                        <div className="space-y-5">
+                          {splitSheetPages(rows).map(pg => (
+                            <React.Fragment key={pg.label || 'all'}>
+                              <StandingsSheetTable rows={pg.rows} roundNos={roundNos} title={pageTitle(pg.label)} />
+                            </React.Fragment>
+                          ))}
+                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今季の通算、TOTALは今大会の全回戦の合計です。表示する回戦は最新の4半荘までです。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
+                        </div>
+                      );
+                    })()}
+                  </div>
                 )}
 
                 {/* ---- 管理者用ツール ---- */}
