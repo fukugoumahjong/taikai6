@@ -415,8 +415,8 @@ type UpcomingMatch = {
 
 // ==========================================
 // 成績表（最高位戦のリーグ戦と同じ形式）。管理者画面に表示し、画像にして X に投稿する
-//   列: 順位 / 選手名 / ポイント（今季通算）/ 対局数 / 各回戦（得失点・着順・合計点）/ TOTAL（今大会）/ 開始時点（今大会の前までのポイント）
-//   ・順位・ポイント・対局数は今季の通算。黒子・プロは載せない
+//   列: 順位 / 選手名 / ポイント（今大会の合計）/ 対局数（今大会）/ 各回戦（得失点・着順・合計点）/ TOTAL（表示している回戦の合計）/ 開始時点（表示している回戦より前までのポイント）
+//   ・順位・ポイント・対局数は今大会の成績（今大会に出場していない選手・黒子・プロは載せない）
 //   ・順位の数字: 4位まで緑、8位まで青、それ以下は黒。ポイントがマイナスの選手は赤
 // ==========================================
 type SheetRound = { raw: number; rank: number; total: number } | null;
@@ -2035,11 +2035,10 @@ export default function Home() {
   // ----------------------------------------
   // 成績表（リーグ戦と同じ形式）と、Xへの投稿
   // ----------------------------------------
-  // 成績表の行を作る。順位・ポイント・対局数は今季の通算。黒子・プロは載せない。ポイントは players（最新の選手データ）から
-  const buildSheetRows = (players: Player[] = dbPlayers): SheetRow[] => {
-    const targets = players
-      .filter(pl => !isKuroko(pl.name) && !isPro(pl.name) && getTotalGames(pl.id) > 0)
-      .sort((a, b) => b.totalPoint - a.totalPoint);
+  // 成績表の行を作る（今大会の成績）。
+  //   載せる選手: 今大会に出場している選手のみ（黒子・プロ・出場試合数を限定された選手は載せない）
+  //   順位・ポイント・対局数: 今大会の合計。TOTAL: 表示している回戦（roundNos）の合計。開始時点: ポイント − TOTAL（表示している回戦より前までのポイント）
+  const buildSheetRows = (roundNos: number[]): SheetRow[] => {
     // 今大会の回戦ごとの成績（送信済みの卓のみ）。得失点 = 合計点 − 順位点（チョンボなどは得失点に含む）
     const perRound = new Map<string, SheetRound[]>();
     seating.forEach(r => r.tables.forEach(t => {
@@ -2053,13 +2052,24 @@ export default function Home() {
         perRound.set(pl.playerId, arr);
       });
     }));
+    const entrantIds = new Set<string>([...entryPlayerIds, ...Array.from(perRound.keys())]);
+    const base = Array.from(entrantIds)
+      .map(id => {
+        const pl = dbPlayers.find(x => x.id === id);
+        if (!pl || isKuroko(pl.name) || isPro(pl.name) || isLimitedPlayer(id)) return null;
+        const rounds = perRound.get(id) || (new Array(roundsCount).fill(null) as SheetRound[]);
+        const point = rounds.reduce((sum, d) => sum + (d ? d.total : 0), 0);
+        const shown = roundNos.reduce((sum, n) => sum + (rounds[n - 1] ? rounds[n - 1]!.total : 0), 0);
+        return { name: pl.name, rounds, point, shown, games: rounds.filter(d => d).length };
+      })
+      .filter((x): x is { name: string; rounds: SheetRound[]; point: number; shown: number; games: number } => x !== null)
+      .sort((a, b) => b.point - a.point || a.name.localeCompare(b.name, 'ja'));
     let prevRank = 0;
-    return targets.map((pl, i) => {
-      const rank = i > 0 && targets[i - 1].totalPoint === pl.totalPoint ? prevRank : i + 1;
+    return base.map((x, i) => {
+      const rank = i > 0 && Math.round(base[i - 1].point * 10) === Math.round(x.point * 10) ? prevRank : i + 1;
       prevRank = rank;
-      const rounds = perRound.get(pl.id) || (new Array(roundsCount).fill(null) as SheetRound[]);
-      const total = rounds.reduce((sum, d) => sum + (d ? d.total : 0), 0);
-      return { rank, name: pl.name, point: Math.round(pl.totalPoint * 10) / 10, games: getTotalGames(pl.id), rounds, total: Math.round(total * 10) / 10, start: Math.round((pl.totalPoint - total) * 10) / 10 };
+      const r1 = (v: number) => Math.round(v * 10) / 10;
+      return { rank, name: x.name, point: r1(x.point), games: x.games, rounds: x.rounds, total: r1(x.shown), start: r1(x.point - x.shown) };
     });
   };
   // 18人以内なら1ページ。それより多いときは、上位半分・下位半分の2ページに分ける
@@ -2084,11 +2094,9 @@ export default function Home() {
     `第${tournamentNo || '?'}回${APP_TITLE}\n全${roundsCount}回戦が終了しました。\n優勝：\n優勝、通算上位3名：年間チャンピオン大会出場`;
   const finalPostBody = finalPostText || xFinalDefaultText();
   const handleSaveSheetImages = async () => {
-    let players = dbPlayers;
-    try { players = await api.getPlayers(); setDbPlayers(players); } catch { /* 取得できなければ手元のデータで作る */ }
-    const rows = buildSheetRows(players);
-    if (rows.length === 0) { alert('成績表に載せる選手がいません。'); return; }
     const roundNos = sheetRoundNos();
+    const rows = buildSheetRows(roundNos);
+    if (rows.length === 0) { alert('成績表に載せる選手がいません。'); return; }
     splitSheetPages(rows).forEach((pg, i) => {
       const canvas = renderStandingsSheetCanvas(pg.rows, { roundNos, title: pageTitle(pg.label) });
       setTimeout(() => {
@@ -5193,9 +5201,9 @@ export default function Home() {
                     {copyMsg && <p className="text-xs font-bold text-emerald-700">{copyMsg}</p>}
 
                     {showSheet && (() => {
-                      const rows = buildSheetRows();
-                      if (rows.length === 0) return <p className="text-sm text-slate-400">成績表に載せる選手がいません。</p>;
                       const roundNos = sheetRoundNos();
+                      const rows = buildSheetRows(roundNos);
+                      if (rows.length === 0) return <p className="text-sm text-slate-400">成績表に載せる選手がいません。</p>;
                       return (
                         <div className="space-y-5">
                           {splitSheetPages(rows).map(pg => (
@@ -5203,7 +5211,7 @@ export default function Home() {
                               <StandingsSheetTable rows={pg.rows} roundNos={roundNos} title={pageTitle(pg.label)} />
                             </React.Fragment>
                           ))}
-                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今季の通算、TOTALは今大会の全回戦の合計です。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
+                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今大会の成績です（今大会に出場していない選手は載せていません）。TOTALは表示している回戦の合計、開始時点は表示している回戦より前までのポイントです。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
                         </div>
                       );
                     })()}
