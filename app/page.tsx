@@ -415,12 +415,12 @@ type UpcomingMatch = {
 
 // ==========================================
 // 成績表（最高位戦のリーグ戦と同じ形式）。管理者画面に表示し、画像にして X に投稿する
-//   列: 順位 / 選手名 / ポイント（今大会の合計）/ 対局数（今大会）/ 各回戦（得失点・着順・合計点）/ TOTAL（表示している回戦の合計）/ 開始時点（表示している回戦より前までのポイント）
+//   列: 順位 / 選手名 / ポイント（今大会の合計）/ 対局数（今大会）/ 各回戦（得失点・着順・合計点）/ TOTAL（表示している回戦の合計）
 //   ・順位・ポイント・対局数は今大会の成績（今大会に出場していない選手・黒子・プロは載せない）
 //   ・順位の数字: 4位まで緑、8位まで青、それ以下は黒。ポイントがマイナスの選手は赤
 // ==========================================
 type SheetRound = { raw: number; rank: number; total: number } | null;
-type SheetRow = { rank: number; name: string; point: number; games: number; rounds: SheetRound[]; total: number; start: number };
+type SheetRow = { rank: number; name: string; point: number; games: number; rounds: SheetRound[]; total: number };
 const SHEET = {
   yellow: '#ffffcc',   // 各回戦の欄
   blue: '#c9e4f2',     // TOTAL
@@ -456,9 +456,9 @@ const xWeightedLength = (t: string) => Array.from(t).reduce((n, ch) => n + (ch.c
 const renderStandingsSheetCanvas = (rows: SheetRow[], opt: { roundNos: number[]; title: string }): HTMLCanvasElement => {
   const scale = 1.5;
   const rc = opt.roundNos.length; // 表示する回戦の数（最新の4半荘まで）
-  const W = { rank: 52, name: 184, point: 88, games: 62, raw: 66, rk: 48, tot: 70, total: 86, start: 90 };
+  const W = { rank: 52, name: 184, point: 88, games: 62, raw: 66, rk: 48, tot: 70, total: 86 };
   const roundW = W.raw + W.rk + W.tot;
-  const width = W.rank + W.name + W.point + W.games + roundW * rc + W.total + W.start;
+  const width = W.rank + W.name + W.point + W.games + roundW * rc + W.total;
   const titleH = 46, hr = 28, rowH = 32;
   const height = titleH + hr * 3 + rowH * rows.length + 8;
   const canvas = document.createElement('canvas');
@@ -507,7 +507,7 @@ const renderStandingsSheetCanvas = (rows: SheetRow[], opt: { roundNos: number[];
     cell(rx + W.raw + W.rk, y + hr * 2, W.tot, hr, { text: '合計点', size: 13 });
   }
   x += roundW * rc;
-  head(W.total, 'TOTAL', SHEET.blue); head(W.start, '開始時点');
+  head(W.total, 'TOTAL', SHEET.blue);
   y += hr * 3;
 
   // 本体
@@ -523,8 +523,7 @@ const renderStandingsSheetCanvas = (rows: SheetRow[], opt: { roundNos: number[];
       cell(cx, y, W.rk, rowH, { fill: SHEET.yellow, text: d ? String(d.rank) : '' }); cx += W.rk;
       cell(cx, y, W.tot, rowH, { fill: SHEET.yellow, text: d ? fmt1(d.total) : '', align: 'right', bold: true, color: d ? sheetNumColor(d.total) : undefined }); cx += W.tot;
     }
-    cell(cx, y, W.total, rowH, { fill: SHEET.blue, text: fmt1(row.total), align: 'right', color: sheetNumColor(row.total) }); cx += W.total;
-    cell(cx, y, W.start, rowH, { text: fmt1(row.start), align: 'right', bold: true, color: sheetNumColor(row.start) });
+    cell(cx, y, W.total, rowH, { fill: SHEET.blue, text: fmt1(row.total), align: 'right', color: sheetNumColor(row.total) });
     y += rowH;
   });
   return canvas;
@@ -548,7 +547,6 @@ const StandingsSheetTable = ({ rows, roundNos, title }: { rows: SheetRow[]; roun
               <th rowSpan={3} className={th} style={bc}>対局数</th>
               <th colSpan={roundNos.length * 3} className={th} style={bc}>{title.split(' ')[0]}</th>
               <th rowSpan={3} className={th} style={{ ...bc, background: SHEET.blue }}>TOTAL</th>
-              <th rowSpan={3} className={th} style={bc}>開始時点</th>
             </tr>
             <tr>
               {roundNos.map(n => <th key={n} colSpan={3} className={th} style={bc}>{n}回戦</th>)}
@@ -581,7 +579,6 @@ const StandingsSheetTable = ({ rows, roundNos, title }: { rows: SheetRow[]; roun
                   );
                 })}
                 <td className={`${td} text-right tabular-nums`} style={{ ...bc, background: SHEET.blue, color: sheetNumColor(row.total) }}>{fmt1(row.total)}</td>
-                <td className={`${td} text-right font-bold tabular-nums`} style={{ ...bc, color: sheetNumColor(row.start) }}>{fmt1(row.start)}</td>
               </tr>
             ))}
           </tbody>
@@ -1372,7 +1369,6 @@ export default function Home() {
   const [drawingAnnounced, setDrawingAnnounced] = useState(false);
   // 成績表（Xへは手動で投稿する。表を画面に出してスクリーンショットを撮る）
   const [showSheet, setShowSheet] = useState(true);
-  const [finalPostText, setFinalPostText] = useState(''); // 全対局終了後の最終メッセージ（空なら雛形）
   const [copyMsg, setCopyMsg] = useState('');
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
   const [adminTourney, setAdminTourney] = useState(''); // 管理用データ: 5戦目以降ランキングの対象大会
@@ -2037,7 +2033,7 @@ export default function Home() {
   // ----------------------------------------
   // 成績表の行を作る（今大会の成績）。
   //   載せる選手: 今大会に出場している選手のみ（黒子・プロ・出場試合数を限定された選手は載せない）
-  //   順位・ポイント・対局数: 今大会の合計。TOTAL: 表示している回戦（roundNos）の合計。開始時点: ポイント − TOTAL（表示している回戦より前までのポイント）
+  //   順位・ポイント・対局数: 今大会の合計。TOTAL: 表示している回戦（roundNos）の合計
   const buildSheetRows = (roundNos: number[]): SheetRow[] => {
     // 今大会の回戦ごとの成績（送信済みの卓のみ）。得失点 = 合計点 − 順位点（チョンボなどは得失点に含む）
     const perRound = new Map<string, SheetRound[]>();
@@ -2069,7 +2065,7 @@ export default function Home() {
       const rank = i > 0 && Math.round(base[i - 1].point * 10) === Math.round(x.point * 10) ? prevRank : i + 1;
       prevRank = rank;
       const r1 = (v: number) => Math.round(v * 10) / 10;
-      return { rank, name: x.name, point: r1(x.point), games: x.games, rounds: x.rounds, total: r1(x.shown), start: r1(x.point - x.shown) };
+      return { rank, name: x.name, point: r1(x.point), games: x.games, rounds: x.rounds, total: r1(x.shown) };
     });
   };
   // 18人以内なら1ページ。それより多いときは、上位半分・下位半分の2ページに分ける
@@ -2081,18 +2077,16 @@ export default function Home() {
   const sheetTitle = () => `第${tournamentNo || '?'}回 ${APP_TITLE} 成績表`;
   const pageTitle = (label: string) => `${sheetTitle()}${label ? `（${label}）` : ''}`;
   const latestFinishedRound = (): number => seating.filter(isRoundFinished).reduce((m, r) => Math.max(m, r.round), 0);
-  const allRoundsFinished = seating.length > 0 && seating.length >= roundsCount && seating.every(isRoundFinished);
-  // 成績表に出す回戦: 終わった回戦のうち最新の4つまで（横に長くなりすぎないように）
+  // 成績表に出す回戦: 入力が始まっている回戦のうち最新の4つまで（横に長くなりすぎないように）
   const sheetRoundNos = (): number[] => {
-    const latest = Math.min(Math.max(latestFinishedRound(), 1), Math.max(roundsCount, 1));
+    // 1卓でも送信済みの回戦を含める（全卓が終わる前でも、入力済みの卓の分が出るように）
+    const latestStarted = seating.filter(r => r.tables.some(t => t.isSubmitted)).reduce((m, r) => Math.max(m, r.round), 0);
+    const latest = Math.min(Math.max(latestStarted, 1), Math.max(roundsCount, 1));
     const from = Math.max(1, latest - 3);
     return Array.from({ length: latest - from + 1 }, (_, i) => from + i);
   };
   const xPostText = (roundNo: number) =>
     `第${tournamentNo || '?'}回${APP_TITLE}\n全卓${roundNo}回戦が終了しました。\n優勝、通算上位3名：年間チャンピオン大会出場`;
-  const xFinalDefaultText = () =>
-    `第${tournamentNo || '?'}回${APP_TITLE}\n全${roundsCount}回戦が終了しました。\n優勝：\n優勝、通算上位3名：年間チャンピオン大会出場`;
-  const finalPostBody = finalPostText || xFinalDefaultText();
   const handleSaveSheetImages = async () => {
     const roundNos = sheetRoundNos();
     const rows = buildSheetRows(roundNos);
@@ -2330,7 +2324,7 @@ export default function Home() {
           alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
-        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); setFinalPostText(''); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
+        setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
         await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
@@ -5211,26 +5205,10 @@ export default function Home() {
                               <StandingsSheetTable rows={pg.rows} roundNos={roundNos} title={pageTitle(pg.label)} />
                             </React.Fragment>
                           ))}
-                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今大会の成績です（今大会に出場していない選手は載せていません）。TOTALは表示している回戦の合計、開始時点は表示している回戦より前までのポイントです。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
+                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今大会の成績です（今大会に出場していない選手は載せていません）。TOTALは表示している回戦の合計です。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
                         </div>
                       );
                     })()}
-
-                    {/* 全対局が終わったあとの最終メッセージ（文面を整えてコピーし、Xへ新しい投稿として手動で投稿する） */}
-                    <div className={`rounded-xl border p-3 space-y-2 ${allRoundsFinished ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200 bg-slate-50/60'}`}>
-                      <p className="text-sm font-black text-slate-700">🏆 最終メッセージの文面{allRoundsFinished ? '' : '（全対局が終わったら使います）'}</p>
-                      <textarea
-                        value={finalPostBody}
-                        onChange={e => setFinalPostText(e.target.value)}
-                        rows={5}
-                        className="w-full p-2.5 border rounded-lg bg-white text-sm leading-relaxed"
-                      />
-                      <div className="flex flex-wrap items-center gap-3">
-                        <button onClick={() => copyText(finalPostBody, '最終メッセージ')} className="text-xs font-bold px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white">📝 最終メッセージをコピー</button>
-                        <span className={`text-[11px] font-bold tabular-nums ${xWeightedLength(finalPostBody) > 280 ? 'text-red-600' : 'text-slate-400'}`}>{xWeightedLength(finalPostBody)} / 280</span>
-                        <span className="text-[11px] text-slate-400">最終メッセージは、返信ではなく新しい投稿にします。</span>
-                      </div>
-                    </div>
                   </div>
                 )}
 
