@@ -3566,12 +3566,22 @@ export default function Home() {
     x => x.rate,
   );
 
-  // ===== 管理用データ（管理者のみ・上位10名まで） =====
+  // ===== 管理用データ（管理者のみ・上位10名＋同点全表示） =====
   const ADMIN_TOP_N = 10;
   const adminOn = isAdmin && activeTab === 'data';
   const r1 = (v: number) => Math.round(v * 10) / 10;
   const toAdminRows = <T,>(sorted: T[], valueOf: (x: T) => number, make: (x: T) => { name: string; value: string; sub?: string }): AdminRow[] =>
     assignRanks(sorted.slice(0, ADMIN_TOP_N), valueOf).map(x => ({ rank: x.rankNo, ...make(x) }));
+  
+  // 過去の同点（すべての着順）をすべて表示するため、TOP10の境界で同点の選手がいれば全員含める
+  const toAdminRowsAllTies = <T,>(sorted: T[], valueOf: (x: T) => number, make: (x: T) => { name: string; value: string; sub?: string }): AdminRow[] => {
+    const ranked = assignRanks(sorted, valueOf);
+    if (ranked.length <= ADMIN_TOP_N) return ranked.map(x => ({ rank: x.rankNo, ...make(x) }));
+    const cutoffRank = ranked[ADMIN_TOP_N - 1].rankNo;
+    const filtered = ranked.filter(x => x.rankNo <= cutoffRank);
+    return filtered.map(x => ({ rank: x.rankNo, ...make(x) }));
+  };
+
   // 選手ごとの集計: 素点 =（スコア − 30000点）÷ 1000、順位点 = ポイント − 素点（順位点・オカ・供託など）、着順の回数
   const adminAgg = new Map<string, { name: string; raw: number; uma: number; games: number; counts: number[] }>();
   if (adminOn) {
@@ -3587,44 +3597,246 @@ export default function Home() {
   }
   const adminList = Array.from(adminAgg.values()).map(x => ({ ...x, raw: r1(x.raw), uma: r1(x.uma) }));
   const adminLow: AdminRow[] = adminOn
-    ? toAdminRows([...gameRecs].sort((x, y) => x.score - y.score), x => x.score, x => ({ name: x.name, value: `${x.score.toLocaleString()}点`, sub: x.source }))
+    ? toAdminRowsAllTies([...gameRecs].sort((x, y) => x.score - y.score), x => x.score, x => ({ name: x.name, value: `${x.score.toLocaleString()}点`, sub: x.source }))
     : [];
   const adminRaw: AdminRow[] = adminOn
-    ? toAdminRows([...adminList].sort((x, y) => y.raw - x.raw || y.games - x.games), x => x.raw, x => ({ name: x.name, value: fmtPt(x.raw), sub: `${x.games}半荘` }))
+    ? toAdminRowsAllTies([...adminList].sort((x, y) => y.raw - x.raw || y.games - x.games), x => x.raw, x => ({ name: x.name, value: fmtPt(x.raw), sub: `${x.games}半荘` }))
     : [];
   const adminUma: AdminRow[] = adminOn
-    ? toAdminRows([...adminList].sort((x, y) => y.uma - x.uma || y.games - x.games), x => x.uma, x => ({ name: x.name, value: fmtPt(x.uma), sub: `${x.games}半荘` }))
+    ? toAdminRowsAllTies([...adminList].sort((x, y) => y.uma - x.uma || y.games - x.games), x => x.uma, x => ({ name: x.name, value: fmtPt(x.uma), sub: `${x.games}半荘` }))
     : [];
   // 順位別率（1位率〜4位率）: 8半荘以上の選手が対象。率の高い順
   const adminRates: AdminRow[][] = [0, 1, 2, 3].map(k => adminOn
-    ? toAdminRows(
+    ? toAdminRowsAllTies(
         adminList.filter(x => x.games >= MIN_GAMES_FOR_RATE).sort((x, y) => y.counts[k] / y.games - x.counts[k] / x.games || y.games - x.games),
         x => x.counts[k] / x.games,
         x => ({ name: x.name, value: `${Math.round((x.counts[k] / x.games) * 100)}%`, sub: `${x.counts[k]}回 / ${x.games}半荘` }))
     : []);
-  // 各大会の5戦目以降ランキング: その大会で5戦目以降に積み上げたポイント（5半荘以上出場した選手が対象）
-  const adminTourneyNames: string[] = adminOn
-    ? Array.from(new Set(gameRecs.map(g => g.source))).sort((a, b) => tournamentSortKey(a) - tournamentSortKey(b))
-    : [];
-  const adminTourneySel = adminTourneyNames.includes(adminTourney) ? adminTourney : (adminTourneyNames[adminTourneyNames.length - 1] || '');
-  const adminFifth: AdminRow[] = (() => {
-    if (!adminOn || !adminTourneySel) return [];
-    const byPlayer = new Map<string, { name: string; games: GameRec[] }>();
-    gameRecs.filter(g => g.source === adminTourneySel).forEach(g => {
-      const cur = byPlayer.get(g.playerId) || { name: g.name, games: [] };
-      cur.games.push(g);
-      byPlayer.set(g.playerId, cur);
+
+  // 全半荘を時系列順に厳密に並べたデータ
+  const timeRecs: { playerId: string; name: string; source: string; globalSeq: number; rank: number; score: number; point: number }[] = [];
+  if (adminOn) {
+    let seqCounter = 0;
+    [...archives].sort((a, b) => tournamentSortKey(a.name) - tournamentSortKey(b.name)).forEach(a => {
+      [...a.hanchans].sort((x, y) => x.no - y.no).forEach(h => {
+        seqCounter++;
+        h.results.forEach(r => {
+          const nm = nameOf(r.playerId, r.name);
+          if (r.excluded || isKuroko(nm)) return;
+          const key = lifetimeKeyOf(r.playerId, nm);
+          timeRecs.push({ playerId: key, name: dbPlayers.find(p => p.id === key)?.name || nm, source: a.name, globalSeq: seqCounter, rank: r.rank, score: r.score * 100, point: r.point });
+        });
+      });
     });
-    const list = Array.from(byPlayer.values())
-      .filter(x => x.games.length >= 5)
-      .map(x => {
-        const ordered = [...x.games].sort((a, b) => a.seq - b.seq);
-        const late = ordered.slice(4);
-        return { name: x.name, total: r1(late.reduce((sum, g) => sum + g.point, 0)), n: ordered.length, lateN: late.length };
-      })
-      .sort((a, b) => b.total - a.total || b.lateN - a.lateN);
-    return toAdminRows(list, x => x.total, x => ({ name: x.name, value: fmtPt(x.total), sub: `${x.n}半荘中 5戦目以降${x.lateN}戦` }));
+    [...seating].sort((a, b) => a.round - b.round).forEach(r => {
+      r.tables.forEach(t => {
+        if (!t.isSubmitted) return;
+        seqCounter++;
+        const sorted = [...t.players].sort((a, b) => b.score - a.score);
+        t.players.forEach(pl => {
+          const nm = nameOf(pl.playerId, pl.name);
+          if (isKuroko(nm)) return;
+          timeRecs.push({
+            playerId: pl.playerId, name: nm, source: `第${tournamentNo || ''}回 ${r.round}回戦`, globalSeq: seqCounter,
+            rank: sorted.findIndex(sp => sp.playerId === pl.playerId) + 1,
+            score: pl.score * 100, point: pl.point,
+          });
+        });
+      });
+    });
+  }
+  const playerGamesMap = new Map<string, typeof timeRecs>();
+  timeRecs.forEach(g => {
+    let arr = playerGamesMap.get(g.playerId);
+    if (!arr) { arr = []; playerGamesMap.set(g.playerId, arr); }
+    arr.push(g);
+  });
+  playerGamesMap.forEach(arr => arr.sort((a, b) => a.globalSeq - b.globalSeq));
+
+  // 1. 5戦目以降ランキング（通算）
+  const adminFifth: AdminRow[] = (() => {
+    if (!adminOn) return [];
+    const list = Array.from(playerGamesMap.entries()).map(([pid, games]) => {
+      const late = games.slice(4);
+      const total = r1(late.reduce((s, g) => s + g.point, 0));
+      return { name: games[0]?.name || '不明', total, gamesCount: games.length, lateCount: late.length };
+    }).filter(x => x.gamesCount >= 5);
+    return toAdminRowsAllTies(list.sort((a, b) => b.total - a.total || b.gamesCount - a.gamesCount), x => x.total, x => ({ name: x.name, value: fmtPt(x.total), sub: `全${x.gamesCount}戦中 5戦目以降${x.lateCount}戦` }));
   })();
+
+  // 2. 通算の1戦目ランキング
+  const adminFirstGame: AdminRow[] = (() => {
+    if (!adminOn) return [];
+    const playerFirsts = new Map<string, { name: string; points: number[]; count: number }>();
+    const byTourney = new Map<string, typeof timeRecs>();
+    timeRecs.forEach(g => {
+      const arr = byTourney.get(g.source) || [];
+      arr.push(g);
+      byTourney.set(g.source, arr);
+    });
+    byTourney.forEach((tourneyGames) => {
+      const firstsInTourney = new Map<string, typeof timeRecs[0]>();
+      tourneyGames.forEach(g => {
+        const existing = firstsInTourney.get(g.playerId);
+        if (!existing || g.globalSeq < existing.globalSeq) firstsInTourney.set(g.playerId, g);
+      });
+      firstsInTourney.forEach((g, pid) => {
+        let cur = playerFirsts.get(pid);
+        if (!cur) { cur = { name: g.name, points: [], count: 0 }; playerFirsts.set(pid, cur); }
+        cur.points.push(g.point);
+        cur.count += 1;
+      });
+    });
+    const list = Array.from(playerFirsts.values()).map(x => ({
+      name: x.name,
+      avg: r1(x.points.reduce((a, b) => a + b, 0) / x.points.length),
+      count: x.count,
+    }));
+    return toAdminRowsAllTies(list.sort((a, b) => b.avg - a.avg || b.count - a.count), x => x.avg, x => ({ name: x.name, value: fmtPt(x.avg), sub: `${x.count}大会（平均pt）` }));
+  })();
+
+  // 3. 通算の最終戦ランキング
+  const adminLastGame: AdminRow[] = (() => {
+    if (!adminOn) return [];
+    const playerLasts = new Map<string, { name: string; points: number[]; count: number }>();
+    const byTourney = new Map<string, typeof timeRecs>();
+    timeRecs.forEach(g => {
+      const arr = byTourney.get(g.source) || [];
+      arr.push(g);
+      byTourney.set(g.source, arr);
+    });
+    byTourney.forEach((tourneyGames) => {
+      const lastsInTourney = new Map<string, typeof timeRecs[0]>();
+      tourneyGames.forEach(g => {
+        const existing = lastsInTourney.get(g.playerId);
+        if (!existing || g.globalSeq > existing.globalSeq) lastsInTourney.set(g.playerId, g);
+      });
+      lastsInTourney.forEach((g, pid) => {
+        let cur = playerLasts.get(pid);
+        if (!cur) { cur = { name: g.name, points: [], count: 0 }; playerLasts.set(pid, cur); }
+        cur.points.push(g.point);
+        cur.count += 1;
+      });
+    });
+    const list = Array.from(playerLasts.values()).map(x => ({
+      name: x.name,
+      avg: r1(x.points.reduce((a, b) => a + b, 0) / x.points.length),
+      count: x.count,
+    }));
+    return toAdminRowsAllTies(list.sort((a, b) => b.avg - a.avg || b.count - a.count), x => x.avg, x => ({ name: x.name, value: fmtPt(x.avg), sub: `${x.count}大会（平均pt）` }));
+  })();
+
+  // 5. 連勝・連敗ランキング（連敗＝連続4着/ラス） / 8. 連続連対 / 9. 連続ラス回避
+  const streakMaxMap = new Map<string, { name: string; maxLen: number }>();
+  const loseStreakMaxMap = new Map<string, { name: string; maxLen: number }>();
+  const rentaiStreakMap = new Map<string, { name: string; maxLen: number }>();
+  const avoidLastStreakMap = new Map<string, { name: string; maxLen: number }>();
+
+  playerGamesMap.forEach((games, pid) => {
+    let winRun = 0, maxWin = 0;
+    let loseRun = 0, maxLose = 0;
+    let rentaiRun = 0, maxRentai = 0;
+    let avoidRun = 0, maxAvoid = 0;
+    games.forEach(g => {
+      winRun = g.rank === 1 ? winRun + 1 : 0;
+      if (winRun > maxWin) maxWin = winRun;
+
+      loseRun = g.rank === 4 ? loseRun + 1 : 0;
+      if (loseRun > maxLose) maxLose = loseRun;
+
+      rentaiRun = g.rank <= 2 ? rentaiRun + 1 : 0;
+      if (rentaiRun > maxRentai) maxRentai = rentaiRun;
+
+      avoidRun = g.rank <= 3 ? avoidRun + 1 : 0;
+      if (avoidRun > maxAvoid) maxAvoid = avoidRun;
+    });
+    const name = games[0]?.name || '不明';
+    if (maxWin >= 2) streakMaxMap.set(pid, { name, maxLen: maxWin });
+    if (maxLose >= 2) loseStreakMaxMap.set(pid, { name, maxLen: maxLose });
+    if (maxRentai >= 2) rentaiStreakMap.set(pid, { name, maxLen: maxRentai });
+    if (maxAvoid >= 2) avoidLastStreakMap.set(pid, { name, maxLen: maxAvoid });
+  });
+
+  const adminWinStreak: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    Array.from(streakMaxMap.values()).sort((a, b) => b.maxLen - a.maxLen),
+    x => x.maxLen,
+    x => ({ name: x.name, value: `${x.maxLen}連勝`, sub: '最大連続1着' })
+  ) : [];
+
+  const adminLoseStreak: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    Array.from(loseStreakMaxMap.values()).sort((a, b) => b.maxLen - a.maxLen),
+    x => x.maxLen,
+    x => ({ name: x.name, value: `${x.maxLen}連敗`, sub: '最大連続4着(ラス)' })
+  ) : [];
+
+  const adminRentaiStreak: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    Array.from(rentaiStreakMap.values()).sort((a, b) => b.maxLen - a.maxLen),
+    x => x.maxLen,
+    x => ({ name: x.name, value: `${x.maxLen}連続`, sub: '最大連続連対(1・2着)' })
+  ) : [];
+
+  const adminAvoidLastStreak: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    Array.from(avoidLastStreakMap.values()).sort((a, b) => b.maxLen - a.maxLen),
+    x => x.maxLen,
+    x => ({ name: x.name, value: `${x.maxLen}連続`, sub: '最大連続ラス回避(1~3着)' })
+  ) : [];
+
+  // 6 & 7. 通算相性いいランキング / 相性悪いランキング（同卓時のポイント合計）
+  const pairPointMap = new Map<string, { p1Name: string; p2Name: string; sumPoint: number; games: number }>();
+  if (adminOn) {
+    archives.forEach(a => {
+      a.hanchans.forEach(h => {
+        const validResults = h.results.filter(r => !r.excluded && !isKuroko(nameOf(r.playerId, r.name)));
+        for (let i = 0; i < validResults.length; i++) {
+          for (let j = 0; j < validResults.length; j++) {
+            if (i === j) continue;
+            const r1 = validResults[i];
+            const r2 = validResults[j];
+            const id1 = lifetimeKeyOf(r1.playerId, r1.name);
+            const id2 = lifetimeKeyOf(r2.playerId, r2.name);
+            const key = `${id1}__${id2}`;
+            const name1 = dbPlayers.find(p => p.id === id1)?.name || r1.name;
+            const name2 = dbPlayers.find(p => p.id === id2)?.name || r2.name;
+            let cur = pairPointMap.get(key);
+            if (!cur) { cur = { p1Name: name1, p2Name: name2, sumPoint: 0, games: 0 }; pairPointMap.set(key, cur); }
+            cur.sumPoint += r1.point;
+            cur.games += 1;
+          }
+        }
+      });
+    });
+    seating.forEach(r => {
+      r.tables.forEach(t => {
+        if (!t.isSubmitted) return;
+        const validPlayers = t.players.filter(p => !isKuroko(p.name));
+        for (let i = 0; i < validPlayers.length; i++) {
+          for (let j = 0; j < validPlayers.length; j++) {
+            if (i === j) continue;
+            const p1 = validPlayers[i];
+            const p2 = validPlayers[j];
+            const key = `${p1.playerId}__${p2.playerId}`;
+            let cur = pairPointMap.get(key);
+            if (!cur) { cur = { p1Name: p1.name, p2Name: p2.name, sumPoint: 0, games: 0 }; pairPointMap.set(key, cur); }
+            cur.sumPoint += p1.point;
+            cur.games += 1;
+          }
+        }
+      });
+    });
+  }
+  const pairList = Array.from(pairPointMap.values()).map(x => ({ ...x, sumPoint: r1(x.sumPoint) }));
+  const adminBestChemistry: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    [...pairList].sort((a, b) => b.sumPoint - a.sumPoint || b.games - a.games),
+    x => x.sumPoint,
+    x => ({ name: `${x.p1Name} ⇒ 対 ${x.p2Name}`, value: fmtPt(x.sumPoint), sub: `${x.games}戦同卓` })
+  ) : [];
+
+  const adminWorstChemistry: AdminRow[] = adminOn ? toAdminRowsAllTies(
+    [...pairList].sort((a, b) => a.sumPoint - b.sumPoint || b.games - a.games),
+    x => x.sumPoint,
+    x => ({ name: x.p1Name === x.p2Name ? x.p1Name : `${x.p1Name} ⇒ 対 ${x.p2Name}`, value: fmtPt(x.sumPoint), sub: `${x.games}戦同卓` })
+  ) : [];
+
 
   // データタブのランキングカード（全カード共通の見た目。高さも揃える）
   type DataRow = { key: string; rankNo: number; name: string; sub: string; value: string; unit?: string; valueClass?: string; bar?: number };
@@ -4192,17 +4404,17 @@ export default function Home() {
               </div>
             )}
 
-            {/* 管理用データ（管理者のみ。上位10名まで） */}
+            {/* 管理用データ（管理者のみ。上位10名＋同点全表示） */}
             {isAdmin && gameRecs.length > 0 && (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h3 className="text-base font-black text-slate-800">🛠️ 管理用データ</h3>
-                  <span className="text-[11px] text-slate-400">管理者のみに表示・上位{ADMIN_TOP_N}名まで・過去の全大会＋今大会の記録</span>
+                  <span className="text-[11px] text-slate-400">管理者のみに表示・過去の全大会＋今大会の記録（同点全表示）</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
-                  <AdminRankList title="💎 素点ランキング" desc="素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の通算合計。順位点は含みません" rows={adminRaw} />
-                  <AdminRankList title="🏅 順位点ランキング" desc="ポイントから素点を引いた分（順位点・オカ・供託など）の通算合計。素点は含みません" rows={adminUma} />
+                  <AdminRankList title="💎 素点ランキング" desc="素点ポイントの通算合計" rows={adminRaw} />
+                  <AdminRankList title="🏅 順位点ランキング" desc="ポイントから素点を引いた分の通算合計" rows={adminUma} />
                   <AdminRankList
                     title="📊 順位別率ランキング"
                     desc={`各順位になった割合の高い順（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象）`}
@@ -4220,17 +4432,15 @@ export default function Home() {
                       </div>
                     }
                   />
-                  <AdminRankList
-                    title="⏩ 各大会の5戦目以降ランキング"
-                    desc="その大会の5戦目以降に積み上げたポイントの合計（その大会で5半荘以上出場した選手が対象）"
-                    rows={adminFifth}
-                    emptyText="この大会に、5半荘以上出場した選手はいません。"
-                    extra={
-                      <select value={adminTourneySel} onChange={e => setAdminTourney(e.target.value)} className="w-full p-1.5 border rounded-md bg-white text-xs font-bold">
-                        {adminTourneyNames.map(n => <option key={n} value={n}>{n}</option>)}
-                      </select>
-                    }
-                  />
+                  <AdminRankList title="⏩ 通算の5戦目以降ランキング" desc="全大会を通じた5戦目以降（5半荘目以降）のポイント合計（5半荘以上出場した選手が対象）" rows={adminFifth} emptyText="5半荘以上出場した選手がいません。" />
+                  <AdminRankList title="🎯 通算の1戦目ランキング" desc="各大会・今大会の初戦（1戦目）のポイント平均" rows={adminFirstGame} emptyText="データがありません。" />
+                  <AdminRankList title="🏁 通算の最終戦ランキング" desc="各大会・今大会の最後の半荘のポイント平均" rows={adminLastGame} emptyText="データがありません。" />
+                  <AdminRankList title="🔥 連勝ランキング" desc="最大連続1着回数" rows={adminWinStreak} emptyText="2連勝以上の記録がありません。" />
+                  <AdminRankList title="💧 連敗ランキング" desc="最大連続4着(ラス)回数" rows={adminLoseStreak} emptyText="2連敗以上の記録がありません。" />
+                  <AdminRankList title="🤝 通算相性いいランキング" desc="特定選手と同卓した時の自分のポイント合計（ベスト相性ペア）" rows={adminBestChemistry} emptyText="データがありません。" />
+                  <AdminRankList title="⚡ 通算相性悪いランキング" desc="特定選手と同卓した時の自分のポイント合計（ワースト相性ペア）" rows={adminWorstChemistry} emptyText="データがありません。" />
+                  <AdminRankList title="🥈 連続連対記録" desc="最大連続連対(1・2着)回数" rows={adminRentaiStreak} emptyText="2連続連対以上の記録がありません。" />
+                  <AdminRankList title="🛡️ 連続ラス回避記録" desc="最大連続ラス回避(1~3着)回数" rows={adminAvoidLastStreak} emptyText="2連続ラス回避以上の記録がありません。" />
                 </div>
               </div>
             )}
