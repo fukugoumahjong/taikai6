@@ -3664,7 +3664,7 @@ export default function Home() {
     return toAdminRowsAllTies(list.sort((a, b) => b.total - a.total || b.gamesCount - a.gamesCount), x => x.total, x => ({ name: x.name, value: fmtPt(x.total), sub: `全${x.gamesCount}戦中 5戦目以降${x.lateCount}戦` }));
   })();
 
-  // 2. 通算の1戦目ランキング
+// 2. 通算の1戦目ランキング
   const adminFirstGame: AdminRow[] = (() => {
     if (!adminOn) return [];
     const playerFirsts = new Map<string, { name: string; points: number[]; count: number }>();
@@ -3689,10 +3689,10 @@ export default function Home() {
     });
     const list = Array.from(playerFirsts.values()).map(x => ({
       name: x.name,
-      avg: r1(x.points.reduce((a, b) => a + b, 0) / x.points.length),
+      sum: r1(x.points.reduce((a, b) => a + b, 0)),
       count: x.count,
     }));
-    return toAdminRowsAllTies(list.sort((a, b) => b.avg - a.avg || b.count - a.count), x => x.avg, x => ({ name: x.name, value: fmtPt(x.avg), sub: `${x.count}大会（平均pt）` }));
+    return toAdminRowsAllTies(list.sort((a, b) => b.sum - a.sum || b.count - a.count), x => x.sum, x => ({ name: x.name, value: fmtPt(x.sum), sub: `${x.count}大会（合計pt）` }));
   })();
 
   // 3. 通算の最終戦ランキング
@@ -3720,10 +3720,10 @@ export default function Home() {
     });
     const list = Array.from(playerLasts.values()).map(x => ({
       name: x.name,
-      avg: r1(x.points.reduce((a, b) => a + b, 0) / x.points.length),
+      sum: r1(x.points.reduce((a, b) => a + b, 0)),
       count: x.count,
     }));
-    return toAdminRowsAllTies(list.sort((a, b) => b.avg - a.avg || b.count - a.count), x => x.avg, x => ({ name: x.name, value: fmtPt(x.avg), sub: `${x.count}大会（平均pt）` }));
+    return toAdminRowsAllTies(list.sort((a, b) => b.sum - a.sum || b.count - a.count), x => x.sum, x => ({ name: x.name, value: fmtPt(x.sum), sub: `${x.count}大会（合計pt）` }));
   })();
 
   // 5. 連勝・連敗ランキング（連敗＝連続4着/ラス） / 8. 連続連対 / 9. 連続ラス回避
