@@ -103,10 +103,14 @@ type PlayerLimit = { rounds: number[] };
 
 // 次の大会の参加選手の事前登録（今の大会が進行中・終了後でも、先に登録しておける）。
 // 保存先は、現在の大会（id='current'）とは別の行（id='next_entry'）なので、現在の大会をリセットしても消えない。
-type NextEntry = { no: string; playerIds: string[] };
+type NextEntry = { no: string; playerIds: string[]; limits?: Record<string, PlayerLimit>; roundsCount?: number };
 const normalizeNextEntry = (raw: any): NextEntry | null => {
   if (!raw || !Array.isArray(raw.playerIds)) return null;
-  return { no: String(raw.no ?? ''), playerIds: raw.playerIds.filter((x: any) => typeof x === 'string') };
+  const ids: string[] = raw.playerIds.filter((x: any) => typeof x === 'string');
+  const limits = normalizePlayerLimits(raw.limits);
+  Object.keys(limits).forEach(id => { if (!ids.includes(id)) delete limits[id]; }); // 登録されていない選手の限定は捨てる
+  const rc = Math.floor(Number(raw.roundsCount));
+  return { no: String(raw.no ?? ''), playerIds: ids, limits, roundsCount: Number.isFinite(rc) && rc >= 1 ? rc : undefined };
 };
 
 // 保存データの読み込み用。旧形式 { from, to }（連続範囲）も rounds 形式に変換して受け入れる。
@@ -1400,6 +1404,8 @@ export default function Home() {
   const [nextEntryOpen, setNextEntryOpen] = useState(false);
   const [nextEntryFilter, setNextEntryFilter] = useState('');
   const [nextSaveState, setNextSaveState] = useState<'' | 'saving' | 'saved' | 'error'>('');
+  const [nextLimitPlayerId, setNextLimitPlayerId] = useState(''); // 事前登録: 出場限定を設定する選手
+  const [nextLimitRounds, setNextLimitRounds] = useState<number[]>([]); // 事前登録: 出場する回戦
   const nextEntryRef = useRef<NextEntry | null>(null);
   const nextSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
@@ -1822,8 +1828,46 @@ export default function Home() {
   const toggleNextEntry = (id: string) => {
     if (!isAdmin) return;
     const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
-    const ids = base.playerIds.includes(id) ? base.playerIds.filter(x => x !== id) : [...base.playerIds, id];
-    commitNextEntry({ ...base, playerIds: ids });
+    const removing = base.playerIds.includes(id);
+    const ids = removing ? base.playerIds.filter(x => x !== id) : [...base.playerIds, id];
+    const limits = { ...(base.limits || {}) };
+    if (removing) delete limits[id]; // 参加を外した選手の出場限定は解除する
+    commitNextEntry({ ...base, playerIds: ids, limits });
+  };
+  // 事前登録の回戦数（未設定なら、その回の開始目安が決まっていればその数、なければ今の大会の回戦数）
+  const nextRoundsN = (): number => nextEntry?.roundsCount ?? ROUND_START_TIMES_BY_TOURNAMENT[Number(nextEntry?.no)]?.length ?? Math.max(roundsCount, 1);
+  const setNextRoundsCount = (v: number) => {
+    if (!isAdmin) return;
+    const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
+    const n = Math.max(1, Math.min(20, Math.floor(v) || 1));
+    // 回戦数が減ったら、範囲外の回戦を限定から外す（空になる限定は解除）
+    const limits: Record<string, PlayerLimit> = {};
+    Object.entries(base.limits || {}).forEach(([id, l]) => {
+      const rounds = l.rounds.filter(r => r <= n);
+      if (rounds.length > 0 && rounds.length < n) limits[id] = { rounds };
+    });
+    commitNextEntry({ ...base, roundsCount: n, limits });
+  };
+  const toggleNextLimitRound = (n: number) =>
+    setNextLimitRounds(prev => (prev.includes(n) ? prev.filter(x => x !== n) : [...prev, n].sort((a, b) => a - b)));
+  const addNextLimit = () => {
+    if (!isAdmin || !nextLimitPlayerId) return;
+    const n = nextRoundsN();
+    const rounds = nextLimitRounds.filter(r => r >= 1 && r <= n);
+    if (rounds.length === 0) { alert('出場する回戦を1つ以上選択してください。'); return; }
+    if (rounds.length === n) { alert('全試合に出場するため、限定の設定は不要です。'); return; }
+    const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
+    commitNextEntry({ ...base, limits: { ...(base.limits || {}), [nextLimitPlayerId]: { rounds } } });
+    setNextLimitPlayerId('');
+    setNextLimitRounds([]);
+  };
+  const removeNextLimit = (id: string) => {
+    if (!isAdmin) return;
+    const base = nextEntryRef.current;
+    if (!base) return;
+    const limits = { ...(base.limits || {}) };
+    delete limits[id];
+    commitNextEntry({ ...base, limits });
   };
   const setNextEntryNo = (v: string) => {
     if (!isAdmin) return;
@@ -1833,13 +1877,14 @@ export default function Home() {
   const setNextEntryAll = (on: boolean) => {
     if (!isAdmin) return;
     const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
-    commitNextEntry({ ...base, playerIds: on ? dbPlayers.filter(pl => !isKuroko(pl.name)).map(pl => pl.id) : [] });
+    const emptyLimits: Record<string, PlayerLimit> = {};
+    commitNextEntry({ ...base, playerIds: on ? dbPlayers.filter(pl => !isKuroko(pl.name)).map(pl => pl.id) : [], limits: on ? (base.limits ?? emptyLimits) : emptyLimits });
   };
   // いまのエントリー（今の大会の参加者）をコピーして、次の大会の候補にする
   const copyCurrentEntryToNext = () => {
     if (!isAdmin || entryPlayerIds.length === 0) return;
     const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
-    commitNextEntry({ ...base, playerIds: [...entryPlayerIds] });
+    commitNextEntry({ ...base, playerIds: [...entryPlayerIds], limits: { ...playerLimits }, roundsCount });
   };
   const clearNextEntryAll = () => {
     if (!isAdmin || !nextEntry) return;
@@ -1852,8 +1897,12 @@ export default function Home() {
     const ids = nextEntry.playerIds.filter(id => dbPlayers.some(pl => pl.id === id));
     if (entryPlayerIds.length > 0 && !window.confirm(`いまのエントリー（${entryPlayerIds.length}名）を、事前登録した${ids.length}名に置き換えますか？`)) return;
     setEntryPlayerIds(ids);
-    setPlayerLimits({}); // 出場限定は、エントリーが変わるのでいったん解除（必要なら設定し直し）
+    // 事前登録した出場限定も読み込む（登録されている選手の分だけ）
+    const limits: Record<string, PlayerLimit> = {};
+    (Object.entries(nextEntry.limits ?? {}) as [string, PlayerLimit][]).forEach(([id, l]) => { if (ids.includes(id)) limits[id] = l; });
+    setPlayerLimits(limits);
     if (nextEntry.no) handleChangeTournamentNo(nextEntry.no);
+    if (nextEntry.roundsCount) setRoundsCount(nextEntry.roundsCount); // 回戦数を指定していれば、それを優先
   };
 
   // ----------------------------------------
@@ -5245,7 +5294,7 @@ export default function Home() {
                     <span className="block text-sm md:text-base font-black text-slate-800">📝 次の大会の参加選手を事前登録</span>
                     <span className="block text-[11px] text-slate-500 mt-0.5">
                       {nextEntry && nextEntry.playerIds.length > 0
-                        ? `第${nextEntry.no || '?'}回: ${nextEntry.playerIds.length}名を登録済み`
+                        ? `第${nextEntry.no || '?'}回: ${nextEntry.playerIds.length}名を登録済み${Object.keys(nextEntry.limits || {}).length > 0 ? `（出場限定 ${Object.keys(nextEntry.limits || {}).length}名）` : ''}`
                         : '今の大会の進行中・終了後でも、先に参加選手を登録しておけます'}
                     </span>
                   </span>
@@ -5263,6 +5312,16 @@ export default function Home() {
                           className="w-20 p-2 border rounded-lg text-center font-black text-lg"
                         />
                         回の参加選手
+                      </label>
+                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                        全
+                        <input
+                          type="number" min="1" max="20" inputMode="numeric"
+                          value={nextRoundsN()}
+                          onChange={e => setNextRoundsCount(Number(e.target.value))}
+                          className="w-16 p-2 border rounded-lg text-center font-black text-lg"
+                        />
+                        回戦
                       </label>
                       <span className="text-sm font-black text-indigo-700">{nextEntry ? nextEntry.playerIds.length : 0}名</span>
                       <span className={`text-[11px] font-bold ${nextSaveState === 'error' ? 'text-red-600' : 'text-slate-400'}`}>
@@ -5298,6 +5357,63 @@ export default function Home() {
                             ><PlayerLabel name={pl.name} /> {on && '✓'}</button>
                           );
                         })}
+                    </div>
+                    {/* 出場試合数の限定（任意）: 事前登録した選手の中から、出る回戦を選ぶ */}
+                    <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200">
+                      <h4 className="text-sm font-black text-slate-700 mb-1">出場試合数を限定する選手（任意）</h4>
+                      <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">基本は全試合に出場します。出る回戦を連続していなくても自由に選べます（例: 1〜3回戦と7〜9回戦、2・5・8回戦）。</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <select
+                          value={nextLimitPlayerId}
+                          onChange={e => { setNextLimitPlayerId(e.target.value); setNextLimitRounds(nextEntry?.limits?.[e.target.value]?.rounds || []); }}
+                          className="p-2 border rounded-lg bg-white text-sm min-w-[12rem]"
+                        >
+                          <option value="">登録済みの選手から選ぶ...</option>
+                          {dbPlayers.filter(pl => nextEntry?.playerIds.includes(pl.id)).map(pl => (
+                            <option key={pl.id} value={pl.id}>{proMarkedName(pl.name)}{nextEntry?.limits?.[pl.id] ? '（設定済み）' : ''}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={addNextLimit}
+                          disabled={!nextLimitPlayerId || nextLimitRounds.length === 0}
+                          className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition"
+                        >{nextLimitPlayerId && nextEntry?.limits?.[nextLimitPlayerId] ? '更新' : '追加'}</button>
+                      </div>
+                      <div className="mt-2">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-bold text-slate-600">出場する回戦（タップで選択）</span>
+                          <button onClick={() => setNextLimitRounds(Array.from({ length: nextRoundsN() }, (_, i) => i + 1))} className="text-[11px] font-bold text-amber-700 underline">全選択</button>
+                          <button onClick={() => setNextLimitRounds([])} className="text-[11px] font-bold text-slate-500 underline">クリア</button>
+                          {nextLimitRounds.length > 0 && <span className="text-[11px] font-bold text-amber-700">→ {formatLimitRounds(nextLimitRounds.filter(n => n <= nextRoundsN()))}</span>}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {Array.from({ length: nextRoundsN() }, (_, i) => i + 1).map(n => {
+                            const on = nextLimitRounds.includes(n);
+                            return (
+                              <button
+                                key={n}
+                                onClick={() => toggleNextLimitRound(n)}
+                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'}`}
+                              >{n}</button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      {Object.keys(nextEntry?.limits || {}).length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-3">
+                          {(Object.entries(nextEntry?.limits ?? {}) as [string, PlayerLimit][]).map(([id, l]) => (
+                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-slate-700">
+                              <PlayerLabel name={dbPlayers.find(pl => pl.id === id)?.name || '不明'} />
+                              <button
+                                onClick={() => { setNextLimitPlayerId(id); setNextLimitRounds(l.rounds); }}
+                                className="text-xs text-amber-700 underline decoration-dotted hover:text-amber-900"
+                                title="出場回戦を編集"
+                              >{formatLimitRounds(l.rounds)}</button>
+                              <button onClick={() => removeNextLimit(id)} className="w-5 h-5 rounded-full bg-slate-200 hover:bg-red-200 text-slate-500 hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <div className="flex flex-wrap items-center gap-3">
                       {nextEntry && nextEntry.playerIds.length > 0 && (
@@ -5376,7 +5492,7 @@ export default function Home() {
                   <>
                     {nextEntry && nextEntry.playerIds.length > 0 && tournamentPhase === 'entry' && (
                       <div className="mb-4 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-bold text-indigo-900">📝 事前登録した第{nextEntry.no || '?'}回の参加選手（{nextEntry.playerIds.length}名）があります</span>
+                        <span className="text-sm font-bold text-indigo-900">📝 事前登録した第{nextEntry.no || '?'}回の参加選手（{nextEntry.playerIds.length}名{Object.keys(nextEntry.limits || {}).length > 0 ? `・出場限定 ${Object.keys(nextEntry.limits || {}).length}名` : ''}）があります</span>
                         <button onClick={loadNextEntryIntoCurrent} className="text-xs font-black px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">📥 事前登録を読み込む</button>
                       </div>
                     )}
