@@ -101,6 +101,14 @@ type Round = {
 // 今大会ごとに設定する。
 type PlayerLimit = { rounds: number[] };
 
+// 次の大会の参加選手の事前登録（今の大会が進行中・終了後でも、先に登録しておける）。
+// 保存先は、現在の大会（id='current'）とは別の行（id='next_entry'）なので、現在の大会をリセットしても消えない。
+type NextEntry = { no: string; playerIds: string[] };
+const normalizeNextEntry = (raw: any): NextEntry | null => {
+  if (!raw || !Array.isArray(raw.playerIds)) return null;
+  return { no: String(raw.no ?? ''), playerIds: raw.playerIds.filter((x: any) => typeof x === 'string') };
+};
+
 // 保存データの読み込み用。旧形式 { from, to }（連続範囲）も rounds 形式に変換して受け入れる。
 const normalizePlayerLimits = (raw: any): Record<string, PlayerLimit> => {
   const out: Record<string, PlayerLimit> = {};
@@ -1271,6 +1279,23 @@ const api = {
     if (error) console.error('大会リセットエラー:', error);
   },
 
+  // 次の大会の参加選手の事前登録（tournaments テーブルの別の行 id='next_entry' に保存）
+  getNextEntry: async (): Promise<any> => {
+    const { data, error } = await supabase.from('tournaments').select('data').eq('id', 'next_entry').single();
+    if (error || !data) return null;
+    return data.data;
+  },
+  saveNextEntry: async (entry: NextEntry): Promise<boolean> => {
+    const { error } = await supabase.from('tournaments').upsert({ id: 'next_entry', data: entry, updated_at: new Date().toISOString() });
+    if (error) { console.error('事前登録の保存エラー:', error); return false; }
+    return true;
+  },
+  clearNextEntry: async (): Promise<boolean> => {
+    const { error } = await supabase.from('tournaments').delete().eq('id', 'next_entry');
+    if (error) { console.error('事前登録の削除エラー:', error); return false; }
+    return true;
+  },
+
   exportBackup: async () => {
     const players = await api.getPlayers();
     const tournament = await api.getCurrentTournament();
@@ -1370,6 +1395,13 @@ export default function Home() {
   // 成績表（Xへは手動で投稿する。表を画面に出してスクリーンショットを撮る）
   const [showSheet, setShowSheet] = useState(true);
   const [copyMsg, setCopyMsg] = useState('');
+  // 次の大会の参加選手の事前登録
+  const [nextEntry, setNextEntry] = useState<NextEntry | null>(null);
+  const [nextEntryOpen, setNextEntryOpen] = useState(false);
+  const [nextEntryFilter, setNextEntryFilter] = useState('');
+  const [nextSaveState, setNextSaveState] = useState<'' | 'saving' | 'saved' | 'error'>('');
+  const nextEntryRef = useRef<NextEntry | null>(null);
+  const nextSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
   const [adminStreakAcross, setAdminStreakAcross] = useState(false); // 管理用データ: 連続記録を大会をまたいで数えるか（既定: 同じ大会のみ）
   const [adminSynergyMin, setAdminSynergyMin] = useState(5); // 管理用データ: 相性ランキングの対象にする、同卓した半荘数の下限
@@ -1494,6 +1526,9 @@ export default function Home() {
       setArchives(await api.getArchives());
       const current = await api.getCurrentTournament();
       applyTournamentData(current);
+      const pre = normalizeNextEntry(await api.getNextEntry());
+      nextEntryRef.current = pre;
+      setNextEntry(pre);
       setIsLoaded(true);
     };
     loadData();
@@ -1760,6 +1795,68 @@ export default function Home() {
   };
 
   // ----------------------------------------
+  // A-1. 次の大会の参加選手の事前登録（管理者用。今の大会の進行中・終了後でも登録できる）
+  // ----------------------------------------
+  // 登録されていない一番小さい回（今の大会の回も含めて除く）。例: 第1〜5回が登録済みで今が第7回なら、次は第6回
+  const suggestNextTournamentNo = (): string => {
+    const used = new Set<number>();
+    archives.forEach(a => { const n = archiveTournamentNo(a.name); if (n !== null) used.add(n); });
+    const cur = parseInt(tournamentNo, 10);
+    if (Number.isFinite(cur)) used.add(cur);
+    let n = 1;
+    while (used.has(n)) n++;
+    return String(n);
+  };
+  // 変更を反映して、少し待ってから（連続して押しても1回だけ）保存する
+  const commitNextEntry = (next: NextEntry | null) => {
+    nextEntryRef.current = next;
+    setNextEntry(next);
+    setNextSaveState('saving');
+    if (nextSaveTimer.current) clearTimeout(nextSaveTimer.current);
+    nextSaveTimer.current = setTimeout(async () => {
+      const latest = nextEntryRef.current;
+      const ok = latest ? await api.saveNextEntry(latest) : await api.clearNextEntry();
+      setNextSaveState(ok ? 'saved' : 'error');
+    }, 500);
+  };
+  const toggleNextEntry = (id: string) => {
+    if (!isAdmin) return;
+    const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
+    const ids = base.playerIds.includes(id) ? base.playerIds.filter(x => x !== id) : [...base.playerIds, id];
+    commitNextEntry({ ...base, playerIds: ids });
+  };
+  const setNextEntryNo = (v: string) => {
+    if (!isAdmin) return;
+    const base: NextEntry = nextEntryRef.current ?? { no: '', playerIds: [] };
+    commitNextEntry({ ...base, no: v.replace(/[^0-9]/g, '').slice(0, 3) });
+  };
+  const setNextEntryAll = (on: boolean) => {
+    if (!isAdmin) return;
+    const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
+    commitNextEntry({ ...base, playerIds: on ? dbPlayers.filter(pl => !isKuroko(pl.name)).map(pl => pl.id) : [] });
+  };
+  // いまのエントリー（今の大会の参加者）をコピーして、次の大会の候補にする
+  const copyCurrentEntryToNext = () => {
+    if (!isAdmin || entryPlayerIds.length === 0) return;
+    const base: NextEntry = nextEntryRef.current ?? { no: suggestNextTournamentNo(), playerIds: [] };
+    commitNextEntry({ ...base, playerIds: [...entryPlayerIds] });
+  };
+  const clearNextEntryAll = () => {
+    if (!isAdmin || !nextEntry) return;
+    if (!window.confirm('事前登録した参加選手を、すべて消しますか？')) return;
+    commitNextEntry(null);
+  };
+  // 事前登録した参加選手を、いまのエントリーに読み込む（新しい大会のエントリー中のみ）
+  const loadNextEntryIntoCurrent = () => {
+    if (!isAdmin || tournamentPhase !== 'entry' || !nextEntry) return;
+    const ids = nextEntry.playerIds.filter(id => dbPlayers.some(pl => pl.id === id));
+    if (entryPlayerIds.length > 0 && !window.confirm(`いまのエントリー（${entryPlayerIds.length}名）を、事前登録した${ids.length}名に置き換えますか？`)) return;
+    setEntryPlayerIds(ids);
+    setPlayerLimits({}); // 出場限定は、エントリーが変わるのでいったん解除（必要なら設定し直し）
+    if (nextEntry.no) handleChangeTournamentNo(nextEntry.no);
+  };
+
+  // ----------------------------------------
   // A-2. 出場試合数の限定（エントリー画面・管理者用）
   // ----------------------------------------
   const [limitPlayerId, setLimitPlayerId] = useState('');
@@ -1952,6 +2049,7 @@ export default function Home() {
     if (!isAdmin || tournamentPhase !== 'drawing') return;
     if (!window.confirm('大会を開始しますか？\n開始すると、全員に卓組が公開され、得点入力ができるようになります。')) return;
     setDrawingAnnounced(false);
+    if (nextEntry && nextEntry.no === tournamentNo) commitNextEntry(null); // この大会の事前登録は使い終わったので消す
     setTournamentPhase('playing');
   };
 
@@ -5139,6 +5237,81 @@ export default function Home() {
         {activeTab === 'tournament' && (
           <div className="space-y-6 animate-in fade-in duration-300">
 
+            {/* 次の大会の参加選手の事前登録（管理者のみ。今の大会が進行中・終了後でも登録できる） */}
+            {isAdmin && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+                <button onClick={() => setNextEntryOpen(v => !v)} className="w-full flex items-center justify-between gap-3 px-4 md:px-5 py-3.5 text-left hover:bg-slate-50 transition">
+                  <span className="min-w-0">
+                    <span className="block text-sm md:text-base font-black text-slate-800">📝 次の大会の参加選手を事前登録</span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                      {nextEntry && nextEntry.playerIds.length > 0
+                        ? `第${nextEntry.no || '?'}回: ${nextEntry.playerIds.length}名を登録済み`
+                        : '今の大会の進行中・終了後でも、先に参加選手を登録しておけます'}
+                    </span>
+                  </span>
+                  <span className="text-xs font-bold text-slate-400 whitespace-nowrap">{nextEntryOpen ? '閉じる ▲' : '開く ▼'}</span>
+                </button>
+                {nextEntryOpen && (
+                  <div className="px-4 md:px-5 pb-5 pt-1 space-y-3 border-t border-slate-100">
+                    <div className="flex flex-wrap items-center gap-3 pt-3">
+                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                        第
+                        <input
+                          type="number" min="1" inputMode="numeric"
+                          value={nextEntry?.no ?? suggestNextTournamentNo()}
+                          onChange={e => setNextEntryNo(e.target.value)}
+                          className="w-20 p-2 border rounded-lg text-center font-black text-lg"
+                        />
+                        回の参加選手
+                      </label>
+                      <span className="text-sm font-black text-indigo-700">{nextEntry ? nextEntry.playerIds.length : 0}名</span>
+                      <span className={`text-[11px] font-bold ${nextSaveState === 'error' ? 'text-red-600' : 'text-slate-400'}`}>
+                        {nextSaveState === 'saving' ? '保存中…' : nextSaveState === 'saved' ? '✓ 保存しました' : nextSaveState === 'error' ? '保存に失敗しました（もう一度操作してください）' : ''}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        value={nextEntryFilter}
+                        onChange={e => setNextEntryFilter(e.target.value)}
+                        placeholder="名前で絞り込み"
+                        className="flex-1 min-w-[10rem] p-2 border rounded-lg text-sm"
+                      />
+                      <button onClick={() => setNextEntryAll(true)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">全員を選択</button>
+                      <button onClick={() => setNextEntryAll(false)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">すべて解除</button>
+                      <button
+                        onClick={copyCurrentEntryToNext}
+                        disabled={entryPlayerIds.length === 0}
+                        className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-40"
+                        title="いまの大会のエントリーを、次の大会の候補としてコピーします"
+                      >今の大会の参加者をコピー</button>
+                    </div>
+                    <div className="flex flex-wrap gap-2 max-h-72 overflow-y-auto p-1">
+                      {dbPlayers
+                        .filter(pl => !isKuroko(pl.name) && (nextEntryFilter.trim() === '' || pl.name.toLowerCase().includes(nextEntryFilter.trim().toLowerCase())))
+                        .map(pl => {
+                          const on = !!nextEntry && nextEntry.playerIds.includes(pl.id);
+                          return (
+                            <button
+                              key={pl.id}
+                              onClick={() => toggleNextEntry(pl.id)}
+                              className={`px-3.5 py-2 rounded-full font-bold text-sm transition border-2 ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+                            ><PlayerLabel name={pl.name} /> {on && '✓'}</button>
+                          );
+                        })}
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3">
+                      {nextEntry && nextEntry.playerIds.length > 0 && (
+                        <button onClick={clearNextEntryAll} className="text-xs font-bold px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">事前登録を消す</button>
+                      )}
+                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                        登録した選手は、新しい大会のエントリー画面で「事前登録を読み込む」を押すと、そのまま参加者になります。この大会を開始すると、事前登録は自動で消えます。
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* 卓組抽選中（管理者のみ）: 画面の一番上に「大会開始」ボタン */}
             {isAdmin && tournamentPhase === 'drawing' && (
               <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-2xl p-4 md:p-5 flex flex-col md:flex-row md:items-center gap-3 md:gap-5 shadow-sm">
@@ -5201,6 +5374,12 @@ export default function Home() {
                    <p className="text-slate-600 font-bold">管理者が大会を開始するのをお待ちください...</p>
                 ) : (
                   <>
+                    {nextEntry && nextEntry.playerIds.length > 0 && tournamentPhase === 'entry' && (
+                      <div className="mb-4 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-bold text-indigo-900">📝 事前登録した第{nextEntry.no || '?'}回の参加選手（{nextEntry.playerIds.length}名）があります</span>
+                        <button onClick={loadNextEntryIntoCurrent} className="text-xs font-black px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">📥 事前登録を読み込む</button>
+                      </div>
+                    )}
                     <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
                       <h3 className="font-bold text-slate-700 mb-3">参加者を選択 (クリックで追加)</h3>
                       <div className="flex flex-wrap gap-2">
@@ -5583,21 +5762,21 @@ export default function Home() {
                                               const chonbo = p.chonbo || 0;
                                               return (
                                                 <div key={pIdx} className={`p-2 rounded-lg ${table.isSubmitted ? 'opacity-80' : 'bg-slate-50'} ${chonbo > 0 ? 'ring-1 ring-red-200 bg-red-50/60' : ''}`}>
-                                                  <div className="flex justify-between items-center gap-3">
-                                                    <span className="w-20 sm:w-28 flex-shrink-0 font-bold text-slate-700 truncate">
-                                                      {p.wind}: <PlayerLabel name={p.name} className="text-indigo-900" />
+                                                  <div className="flex justify-between items-center gap-2 sm:gap-3">
+                                                    <span className="flex-1 min-w-0 font-bold text-slate-700 leading-snug break-words">
+                                                      <span className="text-slate-400 mr-1">{p.wind}</span><PlayerLabel name={p.name} className="text-indigo-900" />
                                                     </span>
                                                     
                                                     <div className={`flex items-center border-2 rounded-lg px-2 py-2 sm:py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
                                                       <input
                                                         type="number" value={p.score} disabled={table.isSubmitted || !canEditTable(table)}
                                                         onChange={(e) => handleScoreChange(rIdx, tIdx, pIdx, Number(e.target.value))}
-                                                        className={`w-16 sm:w-20 text-right font-mono font-bold text-xl sm:text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
+                                                        className={`w-14 sm:w-20 text-right font-mono font-bold text-xl sm:text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
                                                       />
                                                       <span className="text-slate-400 font-bold text-sm ml-1 select-none">00</span>
                                                     </div>
 
-                                                    <span className={`w-16 sm:w-20 flex-shrink-0 text-right font-black text-lg sm:text-xl tabular-nums ${!table.isCalculated && !table.isSubmitted ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                                    <span className={`w-14 sm:w-20 flex-shrink-0 text-right font-black text-lg sm:text-xl tabular-nums ${!table.isCalculated && !table.isSubmitted ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
                                                       {table.isCalculated || table.isSubmitted ? fmtPt(p.point) : '-'}
                                                     </span>
                                                   </div>
