@@ -2625,6 +2625,7 @@ export default function Home() {
   }, [tournamentNo]);
   const [archiveNotes, setArchiveNotes] = useState('');
   const [lifetimeScope, setLifetimeScope] = useState<LifetimeScope>('all'); // 生涯成績一覧の表示範囲
+  const [lifetimeSort, setLifetimeSort] = useState<{ key: string; dir: 'asc' | 'desc' } | null>(null); // 生涯成績一覧の並べ替え（null=元の順）
   const [archiveRuleName, setArchiveRuleName] = useState(RULE_NAME); // この大会で使ったルール（生涯ポイントは最高位戦ルールのみ反映）
   const archiveRuleTouched = useRef(false);
   const [archiveNameSuffix, setArchiveNameSuffix] = useState(''); // 例: 年間チャンピオン戦（別大会として登録するとき）
@@ -3103,6 +3104,29 @@ export default function Home() {
     return rows;
   };
   // 生涯成績の集計は、生涯成績タブか個人成績を開いているときだけ行う（入力のたびに走らせない）
+  // 見出しをクリックするたびに「昇順 → 降順 → 元の順」と切り替える
+  const cycleLifetimeSort = (key: string) =>
+    setLifetimeSort(prev => (!prev || prev.key !== key ? { key, dir: 'asc' } : prev.dir === 'asc' ? { key, dir: 'desc' } : null));
+  const sortLifetimeRows = (rows: LifetimeSummary[]): LifetimeSummary[] => {
+    if (!lifetimeSort) return rows;
+    const { key, dir } = lifetimeSort;
+    const sign = dir === 'asc' ? 1 : -1;
+    const dIdx = key.startsWith('d') ? Number(key.slice(1)) : -1; // 着順の列（d0=1着 … d3=4着）は、率で並べ、同率なら回数で並べる
+    const valueOf = (r: LifetimeSummary): number => {
+      switch (key) {
+        case 'rank': return r.rank;
+        case 'point': return r.point;
+        case 'games': return r.games;
+        case 'avg': return r.games > 0 ? r.rankSum / r.games : 0;
+        default: return dIdx >= 0 && r.games > 0 ? r.dist[dIdx] / r.games : 0;
+      }
+    };
+    return [...rows].sort((a, b) => {
+      let c = key === 'name' ? a.name.localeCompare(b.name, 'ja') : valueOf(a) - valueOf(b);
+      if (c === 0 && dIdx >= 0) c = a.dist[dIdx] - b.dist[dIdx];
+      return c * sign || a.rank - b.rank;
+    });
+  };
   const needLifetime = activeTab === 'lifetime' || !!detailModalPlayerId;
   const lifetimeRows = needLifetime ? buildLifetimeRows('all') : [];
   const lifetimeRowsSaikoi = needLifetime ? buildLifetimeRows('saikoi') : [];
@@ -4569,25 +4593,46 @@ export default function Home() {
                   <table className="w-full text-sm min-w-[560px]">
                     <thead className="bg-slate-900 text-white text-xs">
                       <tr>
-                        <th className="p-2.5 text-center font-bold w-12">順位</th>
-                        <th className="p-2.5 text-left font-bold">選手名</th>
-                        <th className="p-2.5 text-right font-bold whitespace-nowrap">生涯pt{lifetimeScope === 'all' && <span className="text-amber-300">※</span>}</th>
-                        <th className="p-2.5 text-right font-bold">半荘</th>
-                        <th className="p-2.5 text-right font-bold">平均着順</th>
-                        <th className="p-2.5 text-right font-bold">1着</th>
-                        <th className="p-2.5 text-right font-bold">2着</th>
-                        <th className="p-2.5 text-right font-bold">3着</th>
-                        <th className="p-2.5 text-right font-bold">4着</th>
+                        {([
+                          { key: 'rank', label: '順位', align: 'center', extra: 'w-12' },
+                          { key: 'name', label: '選手名', align: 'left', extra: '' },
+                          { key: 'point', label: '生涯pt', align: 'right', extra: 'whitespace-nowrap' },
+                          { key: 'games', label: '半荘', align: 'right', extra: '' },
+                          { key: 'avg', label: '平均着順', align: 'right', extra: 'whitespace-nowrap' },
+                          { key: 'd0', label: '1着', align: 'right', extra: '' },
+                          { key: 'd1', label: '2着', align: 'right', extra: '' },
+                          { key: 'd2', label: '3着', align: 'right', extra: '' },
+                          { key: 'd3', label: '4着', align: 'right', extra: '' },
+                        ] as const).map(col => {
+                          const active = lifetimeSort?.key === col.key;
+                          return (
+                            <th
+                              key={col.key}
+                              className={`p-0 font-bold ${col.extra}`}
+                              aria-sort={active ? (lifetimeSort!.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                            >
+                              <button
+                                onClick={() => cycleLifetimeSort(col.key)}
+                                className={`w-full p-2.5 whitespace-nowrap font-bold transition hover:bg-white/10 ${col.align === 'center' ? 'text-center' : col.align === 'left' ? 'text-left' : 'text-right'} ${active ? 'bg-white/10' : ''}`}
+                                title="クリックで 昇順 → 降順 → 元の順 と切り替わります"
+                              >
+                                {col.label}
+                                {col.key === 'point' && lifetimeScope === 'all' && <span className="text-amber-300">※</span>}
+                                <span className={`ml-1 text-[10px] ${active ? 'text-amber-300' : 'text-slate-500'}`}>{active ? (lifetimeSort!.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+                              </button>
+                            </th>
+                          );
+                        })}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).map((r, i) => {
+                      {sortLifetimeRows(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).map(r => {
                         const pctOf = (n: number) => (r.games > 0 ? `${Math.round((n / r.games) * 100)}%` : '-');
                         return (
                           <tr
                             key={r.key}
                             onClick={() => setDetailModalPlayerId(r.key)}
-                            className={`cursor-pointer hover:bg-amber-50/60 ${i === 0 ? 'bg-amber-50/60' : ''}`}
+                            className={`cursor-pointer hover:bg-amber-50/60 ${r.rank === 1 ? 'bg-amber-50/60' : ''}`}
                           >
                             <td className="p-2.5 text-center font-black text-slate-400">{r.rank}</td>
                             <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap"><PlayerLabel name={r.name} /></td>
