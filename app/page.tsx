@@ -3111,19 +3111,18 @@ export default function Home() {
     if (!lifetimeSort) return rows;
     const { key, dir } = lifetimeSort;
     const sign = dir === 'asc' ? 1 : -1;
-    const dIdx = key.startsWith('d') ? Number(key.slice(1)) : -1; // 着順の列（d0=1着 … d3=4着）は、率で並べ、同率なら回数で並べる
+    const dIdx = key.startsWith('d') ? Number(key.slice(1)) : -1; // 着順の列（d0=1着 … d3=4着）は、回数で並べる
     const valueOf = (r: LifetimeSummary): number => {
       switch (key) {
         case 'rank': return r.rank;
         case 'point': return r.point;
         case 'games': return r.games;
         case 'avg': return r.games > 0 ? r.rankSum / r.games : 0;
-        default: return dIdx >= 0 && r.games > 0 ? r.dist[dIdx] / r.games : 0;
+        default: return dIdx >= 0 ? r.dist[dIdx] : 0;
       }
     };
     return [...rows].sort((a, b) => {
-      let c = key === 'name' ? a.name.localeCompare(b.name, 'ja') : valueOf(a) - valueOf(b);
-      if (c === 0 && dIdx >= 0) c = a.dist[dIdx] - b.dist[dIdx];
+      const c = key === 'name' ? a.name.localeCompare(b.name, 'ja') : valueOf(a) - valueOf(b);
       return c * sign || a.rank - b.rank;
     });
   };
@@ -4632,7 +4631,7 @@ export default function Home() {
                           <tr
                             key={r.key}
                             onClick={() => setDetailModalPlayerId(r.key)}
-                            className={`cursor-pointer hover:bg-amber-50/60 ${r.rank === 1 ? 'bg-amber-50/60' : ''}`}
+                            className="cursor-pointer hover:bg-amber-50/60"
                           >
                             <td className="p-2.5 text-center font-black text-slate-400">{r.rank}</td>
                             <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap"><PlayerLabel name={r.name} /></td>
