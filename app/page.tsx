@@ -1423,6 +1423,7 @@ export default function Home() {
   const [showSheet, setShowSheet] = useState(true);
   // 成績表をどの回戦終了時点で出すか（null = 最新）。投稿し忘れた回戦に巻き戻すのに使う
   const [sheetRound, setSheetRound] = useState<number | null>(null);
+  const [isArchivingCurrent, setIsArchivingCurrent] = useState(false);
   const [copyMsg, setCopyMsg] = useState('');
   // 次の大会の参加選手の事前登録
   const [nextEntry, setNextEntry] = useState<NextEntry | null>(null);
@@ -2551,6 +2552,106 @@ export default function Home() {
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
     }, 100);
+  };
+
+  // 今大会を過去大会としてアーカイブする。
+  //   ・送信済みの卓の成績から、最終成績・半荘ログ・チョンボ記録を作って保存する
+  //   ・今季の通算ポイントには、送信のたびに加算済みなので、ここでは加算しない（二重加算を防ぐ）
+  //   ・保存に成功したら、今大会の進行をクリアして、次の大会の準備状態に戻す
+  const handleArchiveCurrentTournament = async () => {
+    if (!isAdmin || isArchivingCurrent) return;
+    const no = parseInt(String(tournamentNo), 10);
+    if (!no) { alert('大会の回数（第何回か）が設定されていません。'); return; }
+    const name = `第${no}回`;
+    if (archives.some(a => archiveTournamentNo(a.name) === no)) {
+      alert(`「${name}」はすでに過去大会に登録されています。\n大会の回数を確認するか、過去大会の登録を先に削除してください。`);
+      return;
+    }
+    const submittedTables: { round: number; table: Table }[] = [];
+    seating.forEach(r => {
+      if (r.round < 1 || r.round > roundsCount) return;
+      r.tables.forEach(t => { if (t.isSubmitted) submittedTables.push({ round: r.round, table: t }); });
+    });
+    if (submittedTables.length === 0) { alert('送信済みの卓がありません。成績を送信してからアーカイブしてください。'); return; }
+    const totalTables = seating.filter(r => !r.isPending || r.tables.length > 0).reduce((n, r) => n + r.tables.length, 0);
+    const unsubmitted = Math.max(0, totalTables - submittedTables.length);
+    const pendingRounds = seating.filter(r => r.isPending || r.tables.length === 0).length;
+    const incompleteNote = unsubmitted > 0 || pendingRounds > 0
+      ? `\n\n⚠️ 未送信の卓（${unsubmitted}卓）や、卓組が決まっていない回戦（${pendingRounds}回戦）があります。送信済みの分だけが保存されます。`
+      : '';
+
+    // 半荘ログ（1卓 = 1半荘）
+    submittedTables.sort((a, b) => a.round - b.round || a.table.tableNumber - b.table.tableNumber);
+    const hanchans: ArchiveHanchan[] = submittedTables.map((x, i) => {
+      const sortedScores = [...x.table.players.map(p => p.score)].sort((a, b) => b - a);
+      return {
+        no: i + 1,
+        deposit: Math.round((getTableDeposit(x.table) / 10) * 10) / 10,
+        results: x.table.players.map(p => ({
+          playerId: p.playerId,
+          name: p.name,
+          rank: sortedScores.indexOf(p.score) + 1,
+          score: p.score,
+          point: Math.round(p.point * 10) / 10,
+          excluded: isKuroko(p.name),
+        })),
+      };
+    });
+
+    // 最終成績（黒子は順位に含めない）
+    const agg = new Map<string, { name: string; point: number; games: number }>();
+    hanchans.forEach(h => h.results.forEach(r => {
+      if (r.excluded) return;
+      const cur = agg.get(r.playerId) || { name: r.name, point: 0, games: 0 };
+      cur.point += r.point; cur.games += 1;
+      agg.set(r.playerId, cur);
+    }));
+    const sorted = Array.from(agg.entries())
+      .map(([playerId, v]) => ({ playerId, name: v.name, totalPoint: Math.round(v.point * 10) / 10, gameCount: v.games }))
+      .sort((a, b) => b.totalPoint - a.totalPoint || a.name.localeCompare(b.name, 'ja'));
+    let prevRank = 0;
+    const standings: ArchiveStanding[] = sorted.map((x, i) => {
+      const rank = i > 0 && Math.round(sorted[i - 1].totalPoint * 10) === Math.round(x.totalPoint * 10) ? prevRank : i + 1;
+      prevRank = rank;
+      return { ...x, rank };
+    });
+
+    // チョンボの記録（成績には織り込み済みなので、参考情報として保存）
+    const penalties: ArchivePenalty[] = [];
+    submittedTables.forEach(x => x.table.players.forEach(p => {
+      if ((p.chonbo || 0) > 0) penalties.push({ playerId: p.playerId, name: p.name, point: -CHONBO_PENALTY * p.chonbo, reason: `チョンボ×${p.chonbo}（${x.round}回戦 ${x.table.tableNumber}卓）` });
+    }));
+
+    const mismatchNote = totalMismatches.length > 0
+      ? `\n\n※今季ポイントがズレている選手がいます（${totalMismatches.length}名）。アーカイブ前に「🔧 通算を検算して修正」を実行することをおすすめします。`
+      : '';
+    if (!window.confirm(`今大会を「${name}」として過去大会に保存します。\n\n・最終成績: ${standings.length}名\n・半荘ログ: ${hanchans.length}卓分\n・チョンボ記録: ${penalties.length}件\n\n保存後、今大会の進行はクリアされ、次の大会の準備状態に戻ります。\n※今季ポイントには送信時に加算済みのため、再度の加算はしません。${incompleteNote}${mismatchNote}`)) return;
+
+    setIsArchivingCurrent(true);
+    try {
+      // 1. 先にアーカイブを保存（失敗した場合は何も変更しない）
+      await api.saveArchive({ name, ruleName: RULE_NAME, standings, hanchans, penalties });
+      // 2. 今大会の進行をクリア（通算ポイントは取り消さない）
+      await api.clearCurrentTournament();
+      setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false);
+      updateTimer(prev => ({ ...prev, startAts: {} }));
+      setTournamentPhase('entry'); setSheetRound(null);
+      const latestArchives: TournamentArchive[] = await api.getArchives();
+      setArchives(latestArchives);
+      setDbPlayers(await api.getPlayers());
+      // 3. 次に入力する回 = まだ登録されていない一番小さい回
+      const done = new Set<number>();
+      latestArchives.forEach(a => { const n = archiveTournamentNo(a.name); if (n !== null) done.add(n); });
+      let next = 1; while (done.has(next)) next++;
+      setTournamentNo(String(next));
+      setActiveTab('tournament');
+      alert(`「${name}」を過去大会に保存しました。\n今大会の進行をクリアしました（次は第${next}回）。`);
+    } catch (err) {
+      console.error(err);
+      alert('アーカイブ中にエラーが発生しました。今大会のデータはそのまま残っています。コンソールを確認してください。\n（tournament_archivesテーブルのINSERTポリシーを確認してください）');
+    } finally {
+      setIsArchivingCurrent(false);
+    }
   };
 
   // 全選手の通算ポイントを0にリセットする（過去大会の記録自体は削除しない）。
@@ -5779,6 +5880,11 @@ export default function Home() {
                         <button onClick={() => setShowAdminTools(!showAdminTools)} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${showAdminTools ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'}`}>
                           🛠️ 選手の追加・差し替え
                         </button>
+                        {tournamentPhase === 'playing' && (
+                          <button onClick={handleArchiveCurrentTournament} disabled={isArchivingCurrent} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
+                            {isArchivingCurrent ? '保存中...' : '📦 過去大会にアーカイブ'}
+                          </button>
+                        )}
                         <button onClick={handleResetTournament} className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-2 rounded-lg font-bold text-sm transition">
                           大会をリセット
                         </button>
