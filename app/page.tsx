@@ -1288,6 +1288,16 @@ const api = {
   },
 
   saveCurrentTournament: async (tournamentData: any) => {
+    // すでに過去大会として登録済みの大会の進行データは保存しない。
+    // （アーカイブ後に、古い画面を開いたままの端末が、クリアしたはずのデータを書き戻してしまうのを防ぐ）
+    try {
+      const no = parseInt(String(tournamentData?.tournamentNo), 10);
+      const hasSeating = Array.isArray(tournamentData?.seating) && tournamentData.seating.length > 0;
+      if (no && hasSeating) {
+        const { data: hit } = await supabase.from('tournament_archives').select('id').like('name', `第${no}回%`).limit(1);
+        if (hit && hit.length > 0) return;
+      }
+    } catch { /* 確認できなければ通常どおり保存 */ }
     const { error } = await supabase
       .from('tournaments')
       .upsert({
@@ -1488,6 +1498,12 @@ export default function Home() {
 
   // 過去大会（アーカイブ）
   const [archives, setArchives] = useState<TournamentArchive[]>([]);
+  // 今大会（第N回）がすでに過去大会として登録済みなのに、進行データが残っている状態か。
+  // この間は、過去大会と今大会の二重集計を防ぐため、今大会の分を集計から外す。
+  const currentTournamentArchived =
+    seating.some(r => r.tables.some(t => t.isSubmitted)) &&
+    archives.some(a => archiveTournamentNo(a.name) === parseInt(String(tournamentNo), 10));
+  const countedSeating: Round[] = currentTournamentArchived ? [] : seating;
   const [openTotalPlayerId, setOpenTotalPlayerId] = useState<string | null>(null);
   const [detailModalPlayerId, setDetailModalPlayerId] = useState<string | null>(null);
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
@@ -1631,6 +1647,11 @@ export default function Home() {
       if (typeof document !== 'undefined' && document.hidden) return;
       const current = await api.getCurrentTournament();
       if (!current) return;
+      // 他の端末で大会がアーカイブ／リセットされていたら、古い内容を保存し続けないよう最新状態を読み込み直す
+      if (current.tournamentPhase === 'entry' && Array.isArray(current.seating) && current.seating.length === 0) {
+        window.location.reload();
+        return;
+      }
       if (current.timer) {
         const srv = normalizeTimer(current.timer);
         setTimerState(prev => (srv.stamp > prev.stamp ? srv : prev));
@@ -2540,7 +2561,8 @@ export default function Home() {
               reverses.push({ id: p.playerId, pointDelta: -p.point });
             });
           }));
-          if (reverses.length > 0) await api.updatePlayersScores(reverses);
+          // 今大会がすでに過去大会に登録済みなら、ポイントは過去大会側に含まれているので取り消さない
+          if (reverses.length > 0 && !currentTournamentArchived) await api.updatePlayersScores(reverses);
           setDbPlayers(await api.getPlayers());
         } catch (err) {
           console.error(err);
@@ -2651,6 +2673,28 @@ export default function Home() {
       alert('アーカイブ中にエラーが発生しました。今大会のデータはそのまま残っています。コンソールを確認してください。\n（tournament_archivesテーブルのINSERTポリシーを確認してください）');
     } finally {
       setIsArchivingCurrent(false);
+    }
+  };
+
+  // すでに過去大会へ登録済みの今大会の進行データだけをクリアする（通算ポイントは変更しない）
+  const handleClearArchivedCurrent = async () => {
+    if (!isAdmin || !currentTournamentArchived) return;
+    const no = parseInt(String(tournamentNo), 10);
+    if (!window.confirm(`第${no}回はすでに過去大会に登録済みです。\n残っている今大会の進行データをクリアします。\n\n※通算ポイントは変更しません（過去大会に含まれているため）。`)) return;
+    try {
+      await api.clearCurrentTournament();
+      setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false);
+      updateTimer(prev => ({ ...prev, startAts: {} }));
+      setTournamentPhase('entry'); setSheetRound(null);
+      const done = new Set<number>();
+      archives.forEach(a => { const n = archiveTournamentNo(a.name); if (n !== null) done.add(n); });
+      let next = 1; while (done.has(next)) next++;
+      setTournamentNo(String(next));
+      setActiveTab('tournament');
+      alert(`クリアしました（次は第${next}回）。`);
+    } catch (err) {
+      console.error(err);
+      alert('クリア中にエラーが発生しました。');
     }
   };
 
@@ -2994,7 +3038,7 @@ export default function Home() {
   // 今大会（進行中）で、指定選手が送信済みの卓に入った半荘数
   const getCurrentTournamentGameCount = (playerId: string) => {
     let count = 0;
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       if (t.players.some(p => p.playerId === playerId)) count++;
     }));
@@ -3013,7 +3057,7 @@ export default function Home() {
       const st = a.standings.find(s => s.playerId === playerId);
       if (st) pt += st.totalPoint;
     });
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       const me = t.players.find(p => p.playerId === playerId);
       if (me) pt += me.point;
@@ -3153,7 +3197,7 @@ export default function Home() {
         });
       });
     });
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       const sorted = [...t.players].sort((a, b) => b.score - a.score);
       list.push({
@@ -3274,7 +3318,7 @@ export default function Home() {
       }
     });
     // 今大会（送信済みの卓）
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       const sorted = [...t.players].sort((a, b) => b.score - a.score);
       t.players.forEach(pl => {
@@ -3381,7 +3425,7 @@ export default function Home() {
 
     // 進行中の今大会（送信済みの卓のみ）
     const currentRows: Row[] = [];
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       const me = t.players.find(p => p.playerId === playerId);
       if (!me || isKuroko(me.name)) return;
@@ -4060,7 +4104,7 @@ export default function Home() {
           h.results.map(r => { const nm = nameOf(r.playerId, r.name); return { name: nm, score: r.score * 100, real: !r.excluded && !isKuroko(nm) }; }));
       });
     });
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       scan(`今大会 ${r.round}回戦 ${t.tableNumber}卓`, Number.POSITIVE_INFINITY, r.round * 100 + t.tableNumber,
         t.players.map(pl => { const nm = nameOf(pl.playerId, pl.name); return { name: nm, score: pl.score * 100, real: !isKuroko(nm) }; }));
@@ -4090,7 +4134,7 @@ export default function Home() {
       const key = lifetimeKeyOf(r.playerId, nm);
       return { key, name: dbNameById.get(key) || nm, point: r.point, real: !r.excluded && !isKuroko(nm) };
     }))));
-    seating.forEach(r => r.tables.forEach(t => {
+    countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       addTable(t.players.map(pl => ({ key: pl.playerId, name: nameOf(pl.playerId, pl.name), point: pl.point, real: !isKuroko(pl.name) })));
     }));
@@ -5880,7 +5924,12 @@ export default function Home() {
                         <button onClick={() => setShowAdminTools(!showAdminTools)} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${showAdminTools ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'}`}>
                           🛠️ 選手の追加・差し替え
                         </button>
-                        {tournamentPhase === 'playing' && (
+                        {currentTournamentArchived && (
+                          <button onClick={handleClearArchivedCurrent} className="bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
+                            🧹 登録済みの今大会データをクリア
+                          </button>
+                        )}
+                        {tournamentPhase === 'playing' && !currentTournamentArchived && (
                           <button onClick={handleArchiveCurrentTournament} disabled={isArchivingCurrent} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
                             {isArchivingCurrent ? '保存中...' : '📦 過去大会にアーカイブ'}
                           </button>
