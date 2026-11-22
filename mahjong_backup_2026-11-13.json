@@ -1,0 +1,1388 @@
+{
+  "players": [
+    {
+      "id": "9734663e-bd6b-48e7-b7a9-b1ec0e083253",
+      "name": "Ogibo",
+      "totalPoint": 401.6,
+      "totalGames": 20,
+      "championshipRight": true,
+      "loginCode": "5SSXVJ"
+    },
+    {
+      "id": "5f451804-215e-4406-b4d1-4282f4cc3a48",
+      "name": "Toku",
+      "totalPoint": 362.8,
+      "totalGames": 20,
+      "championshipRight": true,
+      "loginCode": "YFMZE5"
+    },
+    {
+      "id": "02a849ba-157d-4b1d-bc90-9250100b76e9",
+      "name": "藤田 蒼生",
+      "totalPoint": 144.8,
+      "totalGames": 20,
+      "championshipRight": true,
+      "loginCode": "SNF3DB"
+    },
+    {
+      "id": "dedadae7-be6f-4990-96ee-da5532c33bc6",
+      "name": "尾崎 太郎",
+      "totalPoint": 139.4,
+      "totalGames": 20,
+      "championshipRight": false,
+      "loginCode": "HUK55D"
+    },
+    {
+      "id": "dc44074a-ec1c-4a51-8a95-a67ccc0dc838",
+      "name": "pu-",
+      "totalPoint": 114.8,
+      "totalGames": 7,
+      "championshipRight": false,
+      "loginCode": "5JE3B3"
+    },
+    {
+      "id": "3efdc889-2ad9-4439-860c-f815cfef9663",
+      "name": "はるのしん",
+      "totalPoint": 86.9,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "Q8PVH7"
+    },
+    {
+      "id": "66909a90-0e51-4aac-9d36-d2928afb2bf7",
+      "name": "立直",
+      "totalPoint": 68.7,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "B7Q56Z"
+    },
+    {
+      "id": "cd5b906e-671e-4484-a381-8be9dc5e46ab",
+      "name": "とらっぴ",
+      "totalPoint": 68.4,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "XSZ9XU"
+    },
+    {
+      "id": "b965a054-0b1d-4792-b249-e14dffab3a7a",
+      "name": "千葉県のYさん",
+      "totalPoint": 63.7,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "9UZU2N"
+    },
+    {
+      "id": "591d09a3-fcc0-4f7a-a74e-b5268299fdbd",
+      "name": "おーちゃ",
+      "totalPoint": 51.5,
+      "totalGames": 8,
+      "championshipRight": false,
+      "loginCode": "D55EA9"
+    },
+    {
+      "id": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf",
+      "name": "池田 悠之丞",
+      "totalPoint": 45.7,
+      "totalGames": 20,
+      "championshipRight": false,
+      "loginCode": "9N5YH5"
+    },
+    {
+      "id": "ffecb65f-d5ce-428a-a8bf-694cad4192a0",
+      "name": "すがる三味線",
+      "totalPoint": 41.8,
+      "totalGames": 18,
+      "championshipRight": false,
+      "loginCode": "ZNYW9M"
+    },
+    {
+      "id": "d8bca931-be20-4613-94d6-a46d04b69cbc",
+      "name": "なぎ",
+      "totalPoint": 32.6,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "PWZF3J"
+    },
+    {
+      "id": "d968bc70-c601-4762-83f1-b9180ed91dcf",
+      "name": "いぼっち",
+      "totalPoint": 19.7,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "UXN2YR"
+    },
+    {
+      "id": "de9e46b5-c3da-4d9d-8a33-1cb931416011",
+      "name": "れいんえふ",
+      "totalPoint": 4.2,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "UN68Y4"
+    },
+    {
+      "id": "f2d8c61a-bff4-49b4-a786-3b2f836ac17f",
+      "name": "カズキ",
+      "totalPoint": 2.9,
+      "totalGames": 8,
+      "championshipRight": false,
+      "loginCode": "4RFQX5"
+    },
+    {
+      "id": "1f3efa80-3ee1-4d83-9f18-3c96133e76cc",
+      "name": "ゆずぽん",
+      "totalPoint": -12,
+      "totalGames": 8,
+      "championshipRight": false,
+      "loginCode": "FQ3RPX"
+    },
+    {
+      "id": "9e34f99c-6ec8-4786-951e-9adafbe215df",
+      "name": "みこっぱち",
+      "totalPoint": -18,
+      "totalGames": 20,
+      "championshipRight": false,
+      "loginCode": "86N8J2"
+    },
+    {
+      "id": "05818d60-0362-4ca7-b865-e65dafadaf71",
+      "name": "shon",
+      "totalPoint": -23.6,
+      "totalGames": 8,
+      "championshipRight": false,
+      "loginCode": "VTAFSS"
+    },
+    {
+      "id": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c",
+      "name": "外道城",
+      "totalPoint": -52.2,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "GEE3WR"
+    },
+    {
+      "id": "12c4bffd-0dbc-4482-b081-f39dafb1bcdd",
+      "name": "井上財閥",
+      "totalPoint": -79.3,
+      "totalGames": 6,
+      "championshipRight": false,
+      "loginCode": "Q63UMJ"
+    },
+    {
+      "id": "f4b7ffed-f93d-4c99-976e-ee980473832e",
+      "name": "あかね",
+      "totalPoint": -87.3,
+      "totalGames": 7,
+      "championshipRight": false,
+      "loginCode": "VNQWR7"
+    },
+    {
+      "id": "313fd8ea-1dad-4f16-807b-e82e989b0808",
+      "name": "人亜目",
+      "totalPoint": -99.2,
+      "totalGames": 18,
+      "championshipRight": false,
+      "loginCode": "8DH9EW"
+    },
+    {
+      "id": "853bba16-ccdf-4a22-830d-18e71c1bb264",
+      "name": "和太鼓",
+      "totalPoint": -103.8,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "U7QBEH"
+    },
+    {
+      "id": "fe65b266-1f34-4a01-9551-4bee169c3dc1",
+      "name": "櫟木",
+      "totalPoint": -112.2,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "Z6XSFT"
+    },
+    {
+      "id": "b47cf5fd-c0d9-47ab-8618-cc92b3956112",
+      "name": "鯨井商事",
+      "totalPoint": -201.3,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "QM6KKT"
+    },
+    {
+      "id": "a359fe66-83a4-413b-ab95-cf8a44718de7",
+      "name": "nagiまろん",
+      "totalPoint": -211.8,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "87BX3D"
+    },
+    {
+      "id": "6262fba3-240a-4612-a4d8-e2b923012eb9",
+      "name": "睡産",
+      "totalPoint": -211.9,
+      "totalGames": 20,
+      "championshipRight": false,
+      "loginCode": "ZYS8RF"
+    },
+    {
+      "id": "0196b2c7-d628-4173-8493-b9255c6da253",
+      "name": "Xe",
+      "totalPoint": -228.6,
+      "totalGames": 10,
+      "championshipRight": false,
+      "loginCode": "P326Y9"
+    },
+    {
+      "id": "590ccb69-8817-4400-90ce-5c8887ae231d",
+      "name": "ゴマ油",
+      "totalPoint": -322.9,
+      "totalGames": 20,
+      "championshipRight": false,
+      "loginCode": "4VFFJY"
+    },
+    {
+      "id": "932677ed-d4f1-45ae-a17f-233a109e5281",
+      "name": "ピノット麻雀",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "UD7GJA"
+    },
+    {
+      "id": "dfcb17cb-4c44-4e26-a6b6-1304069a4ce0",
+      "name": "トナリニトロロ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "JEHYWU"
+    },
+    {
+      "id": "119e6f35-abdf-4750-a35e-6ff3ac88bd4f",
+      "name": "Jotaro",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "CSNXVG"
+    },
+    {
+      "id": "1df42c35-bbef-44f0-968e-ced28219a144",
+      "name": "萬拾",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "PTJTVF"
+    },
+    {
+      "id": "57029fdf-a134-4deb-b7ae-9ec86d9d3d9a",
+      "name": "Nakkun",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "GZTTAQ"
+    },
+    {
+      "id": "e71179a6-5aa4-4dce-893e-694a7479d0d5",
+      "name": "岡崎 正道",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "B69GNK"
+    },
+    {
+      "id": "fab7ecc0-d307-4408-8723-8dfd1db4ed94",
+      "name": "裏目ノプロ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "TKRG5Y"
+    },
+    {
+      "id": "f66100c5-c061-45e4-8907-77168310a852",
+      "name": "し",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "RXD386"
+    },
+    {
+      "id": "3003bec1-d21b-4086-a08f-85c1fee26337",
+      "name": "たらこ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "J6FAQP"
+    },
+    {
+      "id": "ec2cdcf7-056b-4638-94c5-9e81abed05d6",
+      "name": "かなぴよ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "782W6U"
+    },
+    {
+      "id": "5a575c2d-e998-4ead-a136-4b4aa0b4ad67",
+      "name": "ちからかな",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "FBPW4S"
+    },
+    {
+      "id": "bf5fafb9-1937-49b3-b360-00aa1d869900",
+      "name": "アルス",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "4SYF88"
+    },
+    {
+      "id": "1944a64c-6410-4a93-8282-314f717a9258",
+      "name": "暇人太郎",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "M2FS2T"
+    },
+    {
+      "id": "8018afab-2358-49e5-a517-f1468d337d5f",
+      "name": "りょうじ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "K2S3J4"
+    },
+    {
+      "id": "17be6baf-1355-4940-bb4e-c46483f80464",
+      "name": "藤田 明人P",
+      "totalPoint": 87.8,
+      "totalGames": 8,
+      "championshipRight": false,
+      "loginCode": "QEJN4Q"
+    },
+    {
+      "id": "20ed8e7f-29fb-4b78-a4f4-286e58831aae",
+      "name": "松澤 悠介P",
+      "totalPoint": 42,
+      "totalGames": 15,
+      "championshipRight": false,
+      "loginCode": "4J55JN"
+    },
+    {
+      "id": "944a825d-2025-4908-a702-5eb5ec5436b6",
+      "name": "紀平 一磨",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "YYGG23"
+    },
+    {
+      "id": "6dbaabca-79d3-4d0e-9f89-7915f69acea0",
+      "name": "黒子",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "KHPZ27"
+    },
+    {
+      "id": "ef9bf9b4-62de-4c5e-827d-9701d03fd640",
+      "name": "みやうち 悠太 P",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "X2KN7Z"
+    },
+    {
+      "id": "2a935368-3d7b-4081-ba1a-6baa90a035c6",
+      "name": "後藤 奏",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "GS59YH"
+    },
+    {
+      "id": "b53c43d5-e2b9-4717-bb1b-3f93482f398e",
+      "name": "Mr四着回避",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "625KSE"
+    },
+    {
+      "id": "c7e2b63e-bfe7-433e-bda5-eb8cd32aaf95",
+      "name": "BOM",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "35WUMA"
+    },
+    {
+      "id": "ec443d97-e385-4751-8827-b2688b24ea5a",
+      "name": "ninjamaru",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "G2D49G"
+    },
+    {
+      "id": "ca92ab88-b80e-4b26-8116-748486ed4bf8",
+      "name": "Enak",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "GUWW44"
+    },
+    {
+      "id": "0fd26a03-098e-441e-91fc-9c7290a212b3",
+      "name": "カピバラ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "AX89YV"
+    },
+    {
+      "id": "76a48f8f-f3b1-4aa5-bb11-fbc25ec8511b",
+      "name": "ゆいねこ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "7RAM6P"
+    },
+    {
+      "id": "b1f6d95f-8278-4adb-9b7a-6992997eee0d",
+      "name": "れんのすけ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "4FWJRZ"
+    },
+    {
+      "id": "8f74020b-045d-4521-8c36-60ff15b975c6",
+      "name": "大塚",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "9TXWDX"
+    },
+    {
+      "id": "892ee6ef-dff0-44ae-8df7-faabf9ba57e7",
+      "name": "しらい",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "CGWGD7"
+    },
+    {
+      "id": "d2dafe27-0f05-416d-8bac-77730d04a431",
+      "name": "吉田",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "CGWC5G"
+    },
+    {
+      "id": "a548d50c-fa7b-4992-943b-292cc7bccdf2",
+      "name": "わぶ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "NU2N6R"
+    },
+    {
+      "id": "40ec1ccb-3121-423c-b317-1455c88419a6",
+      "name": "佐藤",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "HSHZRT"
+    },
+    {
+      "id": "7db1ba13-5aab-4cb1-a162-52004cb71878",
+      "name": "きだ",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "SMFT8V"
+    },
+    {
+      "id": "2b191af3-d30e-4d2e-97fb-5ebc01d76c72",
+      "name": "吉井",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "RY533S"
+    },
+    {
+      "id": "49280463-a169-425d-854c-f5f95f484168",
+      "name": "グエン",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "ECM4CV"
+    },
+    {
+      "id": "cfcadb52-d3d5-4b6c-be2b-19184df32482",
+      "name": "大内",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "QR8CVQ"
+    },
+    {
+      "id": "b44ea49d-6da9-4d20-9a45-94ba4b38f263",
+      "name": "高林",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "YGZNVJ"
+    },
+    {
+      "id": "96ca2c92-94ab-4efe-905d-be851c8d3e63",
+      "name": "しま",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "S8EUVB"
+    },
+    {
+      "id": "ac773980-2898-42c9-b074-11d5bc28bd20",
+      "name": "さかき",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "7NNZ3J"
+    },
+    {
+      "id": "0a45d0c6-6ded-4190-a3b6-9d7b6e35b261",
+      "name": "宮本",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "9T8Y4S"
+    },
+    {
+      "id": "cd421cf1-6db2-4ad3-ab07-25540a496b6c",
+      "name": "unagi",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "9F772R"
+    },
+    {
+      "id": "333904dc-a54d-487b-bb41-6a98d5ea8ce1",
+      "name": "小椋トマト",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "RK9R6A"
+    },
+    {
+      "id": "8b5da025-322c-4134-b75d-ae9bb8be683c",
+      "name": "遠藤",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "KBFT22"
+    },
+    {
+      "id": "c4b72349-8f30-4560-ba0c-e5a56b089c72",
+      "name": "秋ノ空蝉",
+      "totalPoint": 0,
+      "totalGames": 0,
+      "championshipRight": false,
+      "loginCode": "ZXBF9Q"
+    }
+  ],
+  "tournament": {
+    "timer": {
+      "stamp": 1794358521633,
+      "startAts": {},
+      "breakMinutes": 3
+    },
+    "seating": [
+      {
+        "mode": "normal",
+        "round": 1,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "尾崎 太郎",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              },
+              {
+                "name": "岡崎 正道",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              },
+              {
+                "name": "裏目ノプロ",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              },
+              {
+                "name": "アルス",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "池田 悠之丞",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              },
+              {
+                "name": "あおい",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              },
+              {
+                "name": "櫟木",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              },
+              {
+                "name": "みこっぱち",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "Ogibo",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              },
+              {
+                "name": "かなぴよ",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              },
+              {
+                "name": "Toku",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              },
+              {
+                "name": "外道城",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "normal",
+        "round": 2,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "Toku",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              },
+              {
+                "name": "外道城",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              },
+              {
+                "name": "あおい",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              },
+              {
+                "name": "裏目ノプロ",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "かなぴよ",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              },
+              {
+                "name": "尾崎 太郎",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              },
+              {
+                "name": "Ogibo",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              },
+              {
+                "name": "池田 悠之丞",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "櫟木",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              },
+              {
+                "name": "アルス",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              },
+              {
+                "name": "岡崎 正道",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              },
+              {
+                "name": "みこっぱち",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "normal",
+        "round": 3,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "岡崎 正道",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              },
+              {
+                "name": "Toku",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              },
+              {
+                "name": "かなぴよ",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              },
+              {
+                "name": "あおい",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "みこっぱち",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              },
+              {
+                "name": "池田 悠之丞",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              },
+              {
+                "name": "外道城",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              },
+              {
+                "name": "尾崎 太郎",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "アルス",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              },
+              {
+                "name": "Ogibo",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              },
+              {
+                "name": "裏目ノプロ",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              },
+              {
+                "name": "櫟木",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "normal",
+        "round": 4,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "あおい",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              },
+              {
+                "name": "尾崎 太郎",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              },
+              {
+                "name": "アルス",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              },
+              {
+                "name": "かなぴよ",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "裏目ノプロ",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              },
+              {
+                "name": "みこっぱち",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              },
+              {
+                "name": "池田 悠之丞",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              },
+              {
+                "name": "Toku",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "外道城",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              },
+              {
+                "name": "櫟木",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              },
+              {
+                "name": "Ogibo",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              },
+              {
+                "name": "岡崎 正道",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "normal",
+        "round": 5,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "Ogibo",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              },
+              {
+                "name": "あおい",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              },
+              {
+                "name": "池田 悠之丞",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              },
+              {
+                "name": "アルス",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "みこっぱち",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              },
+              {
+                "name": "岡崎 正道",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              },
+              {
+                "name": "裏目ノプロ",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              },
+              {
+                "name": "尾崎 太郎",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "Toku",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              },
+              {
+                "name": "櫟木",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              },
+              {
+                "name": "外道城",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              },
+              {
+                "name": "かなぴよ",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "normal",
+        "round": 6,
+        "tables": [
+          {
+            "players": [
+              {
+                "name": "尾崎 太郎",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "dedadae7-be6f-4990-96ee-da5532c33bc6"
+              },
+              {
+                "name": "Toku",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "5f451804-215e-4406-b4d1-4282f4cc3a48"
+              },
+              {
+                "name": "櫟木",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fe65b266-1f34-4a01-9551-4bee169c3dc1"
+              },
+              {
+                "name": "Ogibo",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9734663e-bd6b-48e7-b7a9-b1ec0e083253"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 1,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "アルス",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "bf5fafb9-1937-49b3-b360-00aa1d869900"
+              },
+              {
+                "name": "かなぴよ",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "ec2cdcf7-056b-4638-94c5-9e81abed05d6"
+              },
+              {
+                "name": "みこっぱち",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "9e34f99c-6ec8-4786-951e-9adafbe215df"
+              },
+              {
+                "name": "外道城",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 2,
+            "isCalculated": false
+          },
+          {
+            "players": [
+              {
+                "name": "池田 悠之丞",
+                "wind": "東",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "56bed2b0-cf22-4eb1-882e-085bd1a15bbf"
+              },
+              {
+                "name": "岡崎 正道",
+                "wind": "南",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "e71179a6-5aa4-4dce-893e-694a7479d0d5"
+              },
+              {
+                "name": "あおい",
+                "wind": "西",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "02a849ba-157d-4b1d-bc90-9250100b76e9"
+              },
+              {
+                "name": "裏目ノプロ",
+                "wind": "北",
+                "point": 0,
+                "score": 300,
+                "chonbo": 0,
+                "playerId": "fab7ecc0-d307-4408-8723-8dfd1db4ed94"
+              }
+            ],
+            "isSubmitted": false,
+            "tableNumber": 3,
+            "isCalculated": false
+          }
+        ],
+        "isPending": false,
+        "sitOutIds": []
+      },
+      {
+        "mode": "rankTopFirst",
+        "round": 7,
+        "tables": [],
+        "isPending": true,
+        "sitOutIds": []
+      },
+      {
+        "mode": "rankBottomFirst",
+        "round": 8,
+        "tables": [],
+        "isPending": true,
+        "sitOutIds": []
+      }
+    ],
+    "roundsCount": 8,
+    "playerLimits": {},
+    "tournamentNo": "7",
+    "entryPlayerIds": [
+      "9734663e-bd6b-48e7-b7a9-b1ec0e083253",
+      "5f451804-215e-4406-b4d1-4282f4cc3a48",
+      "02a849ba-157d-4b1d-bc90-9250100b76e9",
+      "dedadae7-be6f-4990-96ee-da5532c33bc6",
+      "3ba8ccfe-c7dc-4152-b135-47ff433e6d9c",
+      "9e34f99c-6ec8-4786-951e-9adafbe215df",
+      "fe65b266-1f34-4a01-9551-4bee169c3dc1",
+      "e71179a6-5aa4-4dce-893e-694a7479d0d5",
+      "fab7ecc0-d307-4408-8723-8dfd1db4ed94",
+      "ec2cdcf7-056b-4638-94c5-9e81abed05d6",
+      "56bed2b0-cf22-4eb1-882e-085bd1a15bbf",
+      "bf5fafb9-1937-49b3-b360-00aa1d869900"
+    ],
+    "tournamentPhase": "drawing",
+    "drawingAnnounced": false
+  }
+}

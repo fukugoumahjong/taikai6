@@ -1226,32 +1226,55 @@ const api = {
   updatePlayersScores: async (updates: { id: string; pointDelta: number }[]) => {
     const failures: string[] = [];
     for (const u of updates) {
-      const { data: current, error: selectError } = await supabase
-        .from('players')
-        .select('total_point')
-        .eq('id', u.id)
-        .single();
+      // 別の端末が同時に同じ選手のポイントを更新すると、読み取り→書き込みの間に値が変わり
+      // 片方の加算が消える（通算がズレる）。更新時に「読み取った値のままか」を条件にして、
+      // 変わっていたら読み取り直してやり直す。
+      let done = false;
+      for (let attempt = 0; attempt < 8 && !done; attempt++) {
+        const { data: current, error: selectError } = await supabase
+          .from('players')
+          .select('total_point')
+          .eq('id', u.id)
+          .single();
 
-      if (selectError || !current) {
-        console.error('プレイヤー取得エラー:', u.id, selectError);
-        failures.push(u.id);
-        continue;
+        if (selectError || !current) {
+          console.error('プレイヤー取得エラー:', u.id, selectError);
+          break;
+        }
+
+        const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
+        const { data: updatedRows, error: updateError } = await supabase
+          .from('players')
+          .update({ total_point: newPoint })
+          .eq('id', u.id)
+          .eq('total_point', current.total_point)
+          .select('id');
+
+        if (updateError) {
+          console.error('プレイヤー更新エラー:', u.id, updateError);
+          break;
+        }
+        if (updatedRows && updatedRows.length > 0) done = true;
+        else await new Promise(r => setTimeout(r, 80 + Math.random() * 120));
       }
-
-      const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
-      const { error: updateError } = await supabase
-        .from('players')
-        .update({ total_point: newPoint })
-        .eq('id', u.id);
-
-      if (updateError) {
-        console.error('プレイヤー更新エラー:', u.id, updateError);
-        failures.push(u.id);
-      }
+      if (!done) failures.push(u.id);
     }
     if (failures.length > 0) {
       throw new Error(`通算ポイントの更新に失敗した選手があります（${failures.length}件）。players テーブルの update 権限（RLSポリシー）を確認してください。`);
     }
+  },
+
+  // 通算ポイントを指定の値に直接書き換える（再計算による修復用）
+  setPlayerTotalPoints: async (items: { id: string; totalPoint: number }[]) => {
+    const failures: string[] = [];
+    for (const it of items) {
+      const { error } = await supabase
+        .from('players')
+        .update({ total_point: Math.round(it.totalPoint * 10) / 10 })
+        .eq('id', it.id);
+      if (error) { console.error('通算ポイント修正エラー:', it.id, error); failures.push(it.id); }
+    }
+    if (failures.length > 0) throw new Error(`修正に失敗した選手があります（${failures.length}件）`);
   },
 
   getCurrentTournament: async (): Promise<any> => {
@@ -2380,17 +2403,43 @@ export default function Home() {
   // ----------------------------------------
   // D. 送信と「送信の取り消し(編集)」
   // ----------------------------------------
+  // 送信・取消の処理中は同じ卓を再度処理しない（連打・二重タップによる二重加算を防ぐ）
+  const submittingTables = useRef<Set<string>>(new Set());
+
   const handleSubmitTable = async (rIdx: number, tIdx: number) => {
     const table = seating[rIdx].tables[tIdx];
     if (!canEditTable(table)) return;
+    if (table.isSubmitted) return;
     if (!table.isCalculated) { alert('先にスコアを計算してください。'); return; }
+    const lockKey = `${seating[rIdx].round}-${table.tableNumber}`;
+    if (submittingTables.current.has(lockKey)) return;
     const confirmMsg = isAdmin
       ? 'クラウドに送信しますか？'
       : '本当に送信しますか？\n\n卓内の1人が入力後、全員の確認を取ってから送信ボタンを押してください。\n送信後、一度確定すると自分では修正できません。間違いが発覚した場合は運営にお知らせください。';
     if (!window.confirm(confirmMsg)) return;
 
-    const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point }));
-    await api.updatePlayersScores(updates);
+    submittingTables.current.add(lockKey);
+    try {
+      // 別の端末ですでに送信済みの卓なら、二重に加算しない
+      try {
+        const latest = await api.getCurrentTournament();
+        const srv = (latest?.seating as Round[] | undefined)?.find(x => x.round === seating[rIdx].round)
+          ?.tables.find(x => x.tableNumber === table.tableNumber);
+        if (srv?.isSubmitted) {
+          alert('この卓はすでに送信済みです（他の端末で送信されました）。画面を更新して確認してください。');
+          return;
+        }
+      } catch { /* 取得できなければ手元の状態で続行 */ }
+
+      const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point }));
+      await api.updatePlayersScores(updates);
+    } catch (err) {
+      console.error(err);
+      alert('通算ポイントの更新に失敗しました。送信は完了していません。もう一度お試しください。');
+      return;
+    } finally {
+      submittingTables.current.delete(lockKey);
+    }
     setDbPlayers(await api.getPlayers());
 
     const updated = [...seating];
@@ -2841,6 +2890,41 @@ export default function Home() {
   // 各回戦の開始時刻の表示用。2回戦以降でタイマーが動いた回戦は実際の開始時刻、それ以外は従来の目安
   const startTimeOf = (roundNo: number): string | null =>
     timerState.startAts[roundNo] ? formatClock(timerState.startAts[roundNo]) : (scheduleTimes[roundNo - 1] || null);
+
+  // 今季ポイントの「正しい値」= 今季の過去大会の最終成績 ＋ 今大会で送信済みの卓の合計。
+  // 選手データの通算ポイント（加減算で更新される値）がこれとズレていないかの検算に使う。
+  const getExpectedSeasonPoint = (playerId: string): number => {
+    let pt = 0;
+    seasonArchives.forEach(a => {
+      const st = a.standings.find(s => s.playerId === playerId);
+      if (st) pt += st.totalPoint;
+    });
+    seating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      const me = t.players.find(p => p.playerId === playerId);
+      if (me) pt += me.point;
+    }));
+    return Math.round(pt * 10) / 10;
+  };
+  const totalMismatches = dbPlayers
+    .filter(p => !isKuroko(p.name))
+    .map(p => ({ player: p, expected: getExpectedSeasonPoint(p.id), actual: Math.round(p.totalPoint * 10) / 10 }))
+    .filter(x => Math.abs(x.expected - x.actual) >= 0.05 && (getTotalGames(x.player.id) > 0 || x.actual !== 0));
+
+  const handleFixTotals = async () => {
+    if (!isAdmin) return;
+    if (totalMismatches.length === 0) { alert('ズレは見つかりませんでした。今季ポイントは大会成績の合計と一致しています。'); return; }
+    const lines = totalMismatches.map(x => `${x.player.name}: ${fmtPt(x.actual)} → ${fmtPt(x.expected)}`).join('\n');
+    if (!window.confirm(`今季ポイントを、過去大会（今季分）＋今大会の送信済み成績の合計に合わせて修正します。\n\n${lines}\n\n※手動で編集した調整値は上書きされます。実行しますか？`)) return;
+    try {
+      await api.setPlayerTotalPoints(totalMismatches.map(x => ({ id: x.player.id, totalPoint: x.expected })));
+      setDbPlayers(await api.getPlayers());
+      alert('今季ポイントを修正しました。');
+    } catch (err) {
+      console.error(err);
+      alert('修正中にエラーが発生しました。コンソールを確認してください。');
+    }
+  };
 
   // 通算成績ランキングに表示する選手（通算0半荘の選手は表示しない）
   const totalRankingPlayers = displayDbPlayers.filter(p => getTotalGames(p.id) > 0);
@@ -4667,11 +4751,27 @@ export default function Home() {
             <div className="flex items-start justify-between gap-3 mb-1">
               <h2 className="text-xl font-bold">今季成績ランキング</h2>
               {isAdmin && (
+                <button onClick={handleFixTotals} className="bg-amber-100 hover:bg-amber-200 text-amber-800 px-3 py-1.5 rounded-lg font-bold text-xs transition whitespace-nowrap mr-2">
+                  🔧 通算を検算して修正
+                </button>
+              )}
+              {isAdmin && (
                 <button onClick={handleResetAllTotals} className="bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-lg font-bold text-xs transition whitespace-nowrap">
                   🗑️ 全員の今季成績をリセット
                 </button>
               )}
             </div>
+            {isAdmin && totalMismatches.length > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800">
+                <div className="font-bold mb-1">⚠️ 今季ポイントが大会成績の合計とズレている選手がいます（{totalMismatches.length}名）</div>
+                <ul className="mb-2 space-y-0.5">
+                  {totalMismatches.map(x => (
+                    <li key={x.player.id} className="tabular-nums">{x.player.name}: 表示 {fmtPt(x.actual)} ／ 正しい値 {fmtPt(x.expected)}</li>
+                  ))}
+                </ul>
+                <button onClick={handleFixTotals} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs transition">大会成績の合計に合わせて修正する</button>
+              </div>
+            )}
             <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 align-middle mr-1"></span>
               年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です
