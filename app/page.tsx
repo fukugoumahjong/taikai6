@@ -1421,6 +1421,8 @@ export default function Home() {
   const [drawingAnnounced, setDrawingAnnounced] = useState(false);
   // 成績表（Xへは手動で投稿する。表を画面に出してスクリーンショットを撮る）
   const [showSheet, setShowSheet] = useState(true);
+  // 成績表をどの回戦終了時点で出すか（null = 最新）。投稿し忘れた回戦に巻き戻すのに使う
+  const [sheetRound, setSheetRound] = useState<number | null>(null);
   const [copyMsg, setCopyMsg] = useState('');
   // 次の大会の参加選手の事前登録
   const [nextEntry, setNextEntry] = useState<NextEntry | null>(null);
@@ -2205,11 +2207,17 @@ export default function Home() {
   // 成績表の行を作る（今大会の成績）。
   //   載せる選手: 今大会に出場している選手のみ（黒子・プロ・出場試合数を限定された選手は載せない）
   //   順位・ポイント・対局数: 今大会の合計。今季通算: 選手データの通算ポイント（今大会の送信済みの分を含む）
-  const buildSheetRows = (_roundNos: number[], players: Player[] = dbPlayers): SheetRow[] => {
+  const buildSheetRows = (_roundNos: number[], players: Player[] = dbPlayers, upTo: number = effectiveSheetRound()): SheetRow[] => {
     // 今大会の回戦ごとの成績（送信済みの卓のみ）。得失点 = 合計点 − 順位点（チョンボなどは得失点に含む）
     const perRound = new Map<string, SheetRound[]>();
+    // 巻き戻し時、upTo より後の回戦のポイント（今季通算から差し引く）
+    const laterPoints = new Map<string, number>();
     seating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted || r.round < 1 || r.round > roundsCount) return;
+      if (r.round > upTo) {
+        t.players.forEach(pl => laterPoints.set(pl.playerId, (laterPoints.get(pl.playerId) || 0) + pl.point));
+        return;
+      }
       const scores = t.players.map(pl => pl.score);
       const shares = tableUmaShares(scores, rule.uma);
       const sortedScores = [...scores].sort((a, b) => b - a);
@@ -2226,7 +2234,7 @@ export default function Home() {
         if (!pl || isKuroko(pl.name) || isPro(pl.name) || isLimitedPlayer(id)) return null;
         const rounds = perRound.get(id) || (new Array(roundsCount).fill(null) as SheetRound[]);
         const point = rounds.reduce((sum, d) => sum + (d ? d.total : 0), 0);
-        return { name: pl.name, rounds, point, season: pl.totalPoint, games: rounds.filter(d => d).length };
+        return { name: pl.name, rounds, point, season: pl.totalPoint - (laterPoints.get(id) || 0), games: rounds.filter(d => d).length };
       })
       .filter((x): x is { name: string; rounds: SheetRound[]; point: number; season: number; games: number } => x !== null)
       .sort((a, b) => b.point - a.point || a.name.localeCompare(b.name, 'ja'));
@@ -2248,10 +2256,15 @@ export default function Home() {
   const pageTitle = (label: string) => `${sheetTitle()}${label ? `（${label}）` : ''}`;
   const latestFinishedRound = (): number => seating.filter(isRoundFinished).reduce((m, r) => Math.max(m, r.round), 0);
   // 成績表に出す回戦: 入力が始まっている回戦のうち最新の4つまで（横に長くなりすぎないように）
+  // 1卓でも送信済みの回戦のうち最新のもの（全卓が終わる前でも、入力済みの卓の分が出るように）
+  const latestStartedRound = (): number => seating.filter(r => r.tables.some(t => t.isSubmitted)).reduce((m, r) => Math.max(m, r.round), 0);
+  // 成績表に使う回戦: 選んだ回戦（なければ最新）
+  const effectiveSheetRound = (): number => {
+    const latest = latestStartedRound();
+    return sheetRound !== null && sheetRound >= 1 && sheetRound <= latest ? sheetRound : latest;
+  };
   const sheetRoundNos = (): number[] => {
-    // 1卓でも送信済みの回戦を含める（全卓が終わる前でも、入力済みの卓の分が出るように）
-    const latestStarted = seating.filter(r => r.tables.some(t => t.isSubmitted)).reduce((m, r) => Math.max(m, r.round), 0);
-    const latest = Math.min(Math.max(latestStarted, 1), Math.max(roundsCount, 1));
+    const latest = Math.min(Math.max(effectiveSheetRound(), 1), Math.max(roundsCount, 1));
     const from = Math.max(1, latest - 3);
     return Array.from({ length: latest - from + 1 }, (_, i) => from + i);
   };
@@ -5789,18 +5802,35 @@ export default function Home() {
                       <h3 className="text-base font-black text-slate-800">📋 成績表（Xポスト用）</h3>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
-                          onClick={() => copyText(xPostText(latestFinishedRound() || 1), '投稿文')}
+                          onClick={() => copyText(xPostText(effectiveSheetRound() || 1), '投稿文')}
                           className="text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white"
-                        >📝 {latestFinishedRound() > 0 ? `${latestFinishedRound()}回戦の` : ''}投稿文をコピー</button>
+                        >📝 {effectiveSheetRound() > 0 ? `${effectiveSheetRound()}回戦の` : ''}投稿文をコピー</button>
                         <button onClick={handleSaveSheetImages} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">🖼️ 画像を保存</button>
                         <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">{showSheet ? '閉じる ▲' : '開く ▼'}</button>
                       </div>
                     </div>
                     <p className="text-[11px] text-slate-500 leading-relaxed">
                       各回戦が終わったら、下の成績表を画面に出してスクリーンショットを撮り、「投稿文をコピー」の文面と一緒にXへ投稿してください（2回戦以降は、前の投稿への返信でつなぐと見やすくなります）。
-                      成績表は最新の4半荘分で、18人以内なら1枚、それより多いと上位・下位の2枚です。
+                      成績表は選んだ回戦までの最新4半荘分で、18人以内なら1枚、それより多いと上位・下位の2枚です。
                     </p>
                     {copyMsg && <p className="text-xs font-bold text-emerald-700">{copyMsg}</p>}
+
+                    {/* 何回戦終了時点の成績表にするか（投稿し忘れた回戦に巻き戻せる） */}
+                    {latestStartedRound() > 0 && (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] font-bold text-slate-500 mr-1">表示する回戦:</span>
+                        {Array.from({ length: latestStartedRound() }, (_, i) => i + 1).map(n => (
+                          <button
+                            key={n}
+                            onClick={() => setSheetRound(n === latestStartedRound() ? null : n)}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition ${effectiveSheetRound() === n ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                          >{n}回戦終了時</button>
+                        ))}
+                        {effectiveSheetRound() < latestStartedRound() && (
+                          <span className="text-[11px] font-bold text-amber-700">⏪ 巻き戻し表示中（最新は{latestStartedRound()}回戦）</span>
+                        )}
+                      </div>
+                    )}
 
                     {showSheet && (() => {
                       const roundNos = sheetRoundNos();
