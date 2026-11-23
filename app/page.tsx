@@ -4014,9 +4014,12 @@ export default function Home() {
   .tables { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
   .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:0 0 6px; overflow:hidden; page-break-inside: avoid; min-width:0; }
   .tblhead { background:#0f172a; color:#fff; font-weight:bold; font-size:11px; padding:4px 6px; margin-bottom:6px; }
-  .tbl table { width:calc(100% - 8px); margin:0 4px; font-size:10px; table-layout:fixed; }
-  .tbl th, .tbl td { padding:3px 3px; overflow-wrap:anywhere; }
+  .tbl table { width:calc(100% - 8px); margin:0 4px; font-size:10px; }
+  .tbl th, .tbl td { padding:3px 2px; white-space:nowrap; }
   .tbl th { font-size:9px; }
+  .tbl th:first-child, .tbl td:first-child { width:1%; }
+  .tbl th:nth-child(3), .tbl td:nth-child(3), .tbl th:nth-child(4), .tbl td:nth-child(4) { width:1%; }
+  .tbl th:nth-child(2), .tbl td:nth-child(2) { min-width:6em; white-space:normal; overflow-wrap:anywhere; }
   .tbl .tag { display:block; margin:2px 0 0; width:fit-content; }
   .tblhead .badge { background:#334155; color:#e2e8f0; font-size:9px; padding:1px 4px; margin-left:4px; }
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
