@@ -4041,12 +4041,12 @@ export default function Home() {
     <thead><tr><th>順位</th><th>選手名</th><th class="r">半荘数</th><th class="r">ポイント</th></tr></thead>
     <tbody>${standingRows || '<tr><td colspan="4" class="c">データなし</td></tr>'}</tbody>
   </table>
+  <h2>半荘ごとの成績</h2>
+  ${hanchanBlocks.length > 0 ? hanchanHtml : '<p class="note">半荘ごとの記録はありません。</p>'}
+
   ${penaltyRows ? `<h2>ペナルティ</h2>
   <table><thead><tr><th>選手名</th><th>内容</th><th class="r">ポイント</th></tr></thead><tbody>${penaltyRows}</tbody></table>
   <p class="note">※ ペナルティは最終成績に反映済みです。</p>` : ''}
-
-  <h2>半荘ごとの成績</h2>
-  ${hanchanBlocks.length > 0 ? hanchanHtml : '<p class="note">半荘ごとの記録はありません。</p>'}
 
 </body></html>`;
   };
