@@ -3897,7 +3897,6 @@ export default function Home() {
   .tblhead { font-weight:bold; font-size:12px; margin-bottom:6px; }
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
   .note { font-size:10px; color:#64748b; margin-top:6px; line-height:1.6; }
-  .credit { margin-top:18px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:10px; color:#64748b; line-height:1.7; }
   @media print { body { padding:10mm; } @page { size: A4; margin: 10mm; } }
 </style></head>
 <body>
@@ -3919,9 +3918,6 @@ export default function Home() {
   <h2>半荘ごとの成績</h2>
   ${hanchanBlocks ? `<div class="tables">${hanchanBlocks}</div>` : '<p class="note">半荘ごとの記録はありません。</p>'}
 
-  <div class="credit">
-    本システムは、${escapeHtml(CREDIT_AUTHOR)}が制作・公開されている麻雀大会運営ツール ${escapeHtml(CREDIT_TOOL_NAME)}（${escapeHtml(CREDIT_TOOL_URL)}）を参考にさせていただき、作成しました。素晴らしいツールを公開してくださっていることに心より感謝申し上げます。
-  </div>
 </body></html>`;
   };
 
