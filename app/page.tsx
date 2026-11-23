@@ -67,8 +67,7 @@ type Player = {
   totalPoint: number;
   totalGames: number;
   championshipRight?: boolean; // 年間チャンピオン大会 出場権（手動付与）
-  hasLoginCode?: boolean; // ログインコードが発行済みか（管理者の一覧でのみ取得できる）
-  loginCode?: string; // 発行した直後にだけ、この画面のメモリ上に保持する平文コード（DBには保存されない・再読み込みで消える）
+  loginCode?: string; // 選手ログイン用のパスワード（英数字6桁程度・ランダム発行）
 };
 
 type PlayerScore = {
@@ -328,6 +327,17 @@ const fromFullWidthDigits = (t: string) => t.replace(/[０-９]/g, c => String.f
 const encodeNamesWithDigits = (raw: string) =>
   NAMES_WITH_DIGITS.reduce((acc, n) => acc.split(n).join(toFullWidthDigits(n)), raw);
 const fmtPt = (n: number) => (n > 0 ? `+${n.toFixed(1)}` : n.toFixed(1));
+
+// 選手ログイン用コードの生成（見間違えやすい 0/O, 1/I/L を除いた英数字6桁）
+const LOGIN_CODE_CHARS = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const generateLoginCode = (existing: Set<string>): string => {
+  let code = '';
+  do {
+    code = Array.from({ length: 6 }, () => LOGIN_CODE_CHARS[Math.floor(Math.random() * LOGIN_CODE_CHARS.length)]).join('');
+  } while (existing.has(code));
+  existing.add(code);
+  return code;
+};
 
 // 名前の末尾が P の選手は麻雀プロ（"プロ"という文字を含むだけでは判定しない）
 const PRO_SUFFIX = /[PＰⓅⓟ]$/;
@@ -1206,145 +1216,172 @@ const parseMmcHanchanLog = (rawText: string): ParsedHanchan[] => {
 };
 
 
-// ==========================================
-// 3. サーバー・DB との通信
-//   ・読み取り（公開してよい情報）: anon キーで players_public / tournaments / tournament_archives を SELECT
-//   ・書き込み: すべて /api/** のサーバーエンドポイント経由。ブラウザから anon キーで書き込むことはしない。
-//     （認可・入力検証・DB 更新は、サーバー側で NextAuth のセッション／選手セッションを確認したうえで行う）
-// ==========================================
-class ApiError extends Error {
-  status: number; code?: string;
-  constructor(message: string, status: number, code?: string) { super(message); this.status = status; this.code = code; }
-}
-const callServer = async (path: string, method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', body?: unknown): Promise<any> => {
-  const res = await fetch(path, {
-    method,
-    credentials: 'same-origin',
-    headers: body !== undefined ? { 'Content-Type': 'application/json' } : undefined,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
-  });
-  let data: any = null;
-  try { data = await res.json(); } catch { /* 本文なし */ }
-  if (!res.ok) throw new ApiError(data?.error || `エラー (HTTP ${res.status})`, res.status, data?.code);
-  return data;
-};
-
-// 画面側の状態（表示用）。権限の判定はサーバーが行うので、ここは「どの一覧を取りに行くか」の判断にだけ使う。
-const apiState = {
-  isAdmin: false,
-  // 発行した直後の平文コード（印刷・配布用）。DB には保存されず、画面を再読み込みすると消える。
-  issuedCodes: {} as Record<string, string>,
-};
-
 const api = {
   getPlayers: async (): Promise<Player[]> => {
-    if (apiState.isAdmin) {
-      try {
-        const rows = await callServer('/api/admin/players', 'GET');
-        return rows.map((p: any) => ({
-          id: p.id, name: p.name, totalPoint: Number(p.total_point), totalGames: p.total_games,
-          championshipRight: p.championship_right, hasLoginCode: !!p.has_login_code,
-          loginCode: apiState.issuedCodes[p.id],
-        }));
-      } catch (e) { console.error('管理者用の選手一覧の取得に失敗（公開一覧にフォールバック）:', e); }
+    const { data, error } = await supabase
+      .from('players')
+      .select('*')
+      .order('created_at', { ascending: true });
+    
+    if (error) {
+      console.error('プレイヤー取得エラー:', error);
+      return [];
     }
-    // 公開一覧: login_code を含まないビュー
-    const { data, error } = await supabase.from('players_public').select('*');
-    if (error) { console.error('プレイヤー取得エラー:', error); return []; }
-    return (data || []).map((p: any) => ({
-      id: p.id, name: p.name, totalPoint: Number(p.total_point), totalGames: p.total_games,
+    
+    return data.map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      totalPoint: Number(p.total_point),
+      totalGames: p.total_games,
       championshipRight: p.championship_right,
+      loginCode: p.login_code || undefined,
     }));
   },
 
-  // 新規登録（管理者）。ログインコードはサーバーが発行して返す。
-  savePlayer: async (player: Player): Promise<{ id: string; loginCode: string | null } | null> => {
-    try {
-      const r = await callServer('/api/admin/players', 'POST', {
-        id: player.id, name: player.name, totalPoint: player.totalPoint, championshipRight: player.championshipRight ?? false,
-      });
-      if (r.loginCode) apiState.issuedCodes[r.id] = r.loginCode;
-      return r;
-    } catch (e) { console.error('プレイヤー保存エラー:', e); return null; }
+  savePlayer: async (player: Player) => {
+    const { error } = await supabase
+      .from('players')
+      .insert([{
+        id: player.id,
+        name: player.name,
+        total_point: player.totalPoint,
+        total_games: player.totalGames,
+        championship_right: player.championshipRight ?? false,
+        login_code: player.loginCode || null,
+      }]);
+    if (error) console.error('プレイヤー保存エラー:', error);
+    return !error;
   },
 
-  updatePlayer: async (p: Player) => {
-    try {
-      await callServer(`/api/admin/players/${encodeURIComponent(p.id)}`, 'PATCH', {
-        name: p.name, totalPoint: p.totalPoint, totalGames: p.totalGames, championshipRight: p.championshipRight ?? false,
-      });
-      return true;
-    } catch (e) { console.error('プレイヤー更新エラー:', e); return false; }
+  updatePlayer: async (updatedPlayer: Player) => {
+    const { error } = await supabase
+      .from('players')
+      .update({
+        name: updatedPlayer.name,
+        total_point: updatedPlayer.totalPoint,
+        total_games: updatedPlayer.totalGames,
+        championship_right: updatedPlayer.championshipRight ?? false,
+        login_code: updatedPlayer.loginCode || null,
+      })
+      .eq('id', updatedPlayer.id);
+    if (error) console.error('プレイヤー更新エラー:', error);
+    return !error;
   },
 
-  // ログインコードの発行・再発行・取り消し（管理者）。新しいコードは応答で1回だけ受け取れる。
-  manageLoginCodes: async (action: 'issue' | 'reissue' | 'revoke' | 'issue-missing' | 'reissue-all' | 'revoke-all', playerId?: string) => {
-    const r = await callServer('/api/admin/login-codes', 'POST', { action, playerId });
-    if (r?.codes) Object.assign(apiState.issuedCodes, r.codes);
-    if (action === 'revoke') { if (playerId) delete apiState.issuedCodes[playerId]; }
-    if (action === 'revoke-all') apiState.issuedCodes = {};
-    return (r?.codes || {}) as Record<string, string>;
-  },
-
-  // ---- 選手ログイン（サーバーで照合し、httpOnly Cookie のセッションを発行） ----
-  playerLogin: async (code: string): Promise<{ playerId: string; name: string }> => callServer('/api/player/login', 'POST', { code }),
-  playerSession: async (): Promise<string | null> => {
-    try { return (await callServer('/api/player/login', 'GET'))?.playerId ?? null; } catch { return null; }
-  },
-  playerLogout: async () => { await callServer('/api/player/login', 'DELETE'); },
-
-  // 通算ポイントの加減算・直接設定（管理者）。加減算はDB側で原子的に行う。
+  // 通算対局数はもう手動で加減算しない（過去大会＋今大会から自動計算するため）。
+  // ここではポイントの加減算のみ行う。失敗を握りつぶさず、1件でも失敗したら例外を投げる。
   updatePlayersScores: async (updates: { id: string; pointDelta: number }[]) => {
-    if (updates.length === 0) return;
-    await callServer('/api/admin/score-deltas', 'POST', { kind: 'delta', updates: updates.map(u => ({ id: u.id, delta: u.pointDelta })) });
-  },
-  setPlayerTotalPoints: async (items: { id: string; totalPoint: number }[]) => {
-    await callServer('/api/admin/score-deltas', 'POST', { kind: 'set', items });
+    const failures: string[] = [];
+    for (const u of updates) {
+      // 別の端末が同時に同じ選手のポイントを更新すると、読み取り→書き込みの間に値が変わり
+      // 片方の加算が消える（通算がズレる）。更新時に「読み取った値のままか」を条件にして、
+      // 変わっていたら読み取り直してやり直す。
+      let done = false;
+      for (let attempt = 0; attempt < 8 && !done; attempt++) {
+        const { data: current, error: selectError } = await supabase
+          .from('players')
+          .select('total_point')
+          .eq('id', u.id)
+          .single();
+
+        if (selectError || !current) {
+          console.error('プレイヤー取得エラー:', u.id, selectError);
+          break;
+        }
+
+        const newPoint = Math.round((Number(current.total_point) + u.pointDelta) * 10) / 10;
+        const { data: updatedRows, error: updateError } = await supabase
+          .from('players')
+          .update({ total_point: newPoint })
+          .eq('id', u.id)
+          .eq('total_point', current.total_point)
+          .select('id');
+
+        if (updateError) {
+          console.error('プレイヤー更新エラー:', u.id, updateError);
+          break;
+        }
+        if (updatedRows && updatedRows.length > 0) done = true;
+        else await new Promise(r => setTimeout(r, 80 + Math.random() * 120));
+      }
+      if (!done) failures.push(u.id);
+    }
+    if (failures.length > 0) {
+      throw new Error(`通算ポイントの更新に失敗した選手があります（${failures.length}件）。players テーブルの update 権限（RLSポリシー）を確認してください。`);
+    }
   },
 
-  // ---- 大会の進行状態 ----
+  // 通算ポイントを指定の値に直接書き換える（再計算による修復用）
+  setPlayerTotalPoints: async (items: { id: string; totalPoint: number }[]) => {
+    const failures: string[] = [];
+    for (const it of items) {
+      const { error } = await supabase
+        .from('players')
+        .update({ total_point: Math.round(it.totalPoint * 10) / 10 })
+        .eq('id', it.id);
+      if (error) { console.error('通算ポイント修正エラー:', it.id, error); failures.push(it.id); }
+    }
+    if (failures.length > 0) throw new Error(`修正に失敗した選手があります（${failures.length}件）`);
+  },
+
   getCurrentTournament: async (): Promise<any> => {
-    const { data, error } = await supabase.from('tournaments').select('data').eq('id', 'current').maybeSingle();
+    const { data, error } = await supabase
+      .from('tournaments')
+      .select('data')
+      .eq('id', 'current')
+      .single();
     if (error || !data) return null;
     return data.data;
   },
-  // 管理者の進行状態の保存。送信済みの卓は、この経路では変更されない（サーバーが保護する）。
-  saveCurrentTournament: async (tournamentData: any) => {
-    try { await callServer('/api/admin/tournament', 'PUT', tournamentData); }
-    catch (e) { console.error('大会状態保存エラー:', e); }
-  },
-  // 今大会のクリア。revert = true なら、送信済みの卓のポイントを通算から取り消す（サーバーが保存済みの値で計算）
-  clearCurrentTournament: async (revert = false) => {
-    try { await callServer(`/api/admin/tournament?revert=${revert ? 1 : 0}`, 'DELETE'); }
-    catch (e) { console.error('大会リセットエラー:', e); throw e; }
-  },
-  // 卓の得点の途中保存（管理者、またはその卓に着いている選手）
-  saveTableScores: async (round: number, tableNumber: number, players: { playerId: string; score: number; chonbo: number }[]) =>
-    (await callServer('/api/tournament/table', 'POST', { round, tableNumber, players })).tournament,
-  // 卓の送信。ポイントはサーバーが再計算し、通算への加算まで1トランザクションで行う。
-  submitTable: async (round: number, tableNumber: number, players: { playerId: string; score: number; chonbo: number }[]) =>
-    (await callServer('/api/tournament/submit', 'POST', { round, tableNumber, players })).tournament,
-  revokeTable: async (round: number, tableNumber: number) =>
-    (await callServer('/api/admin/tournament/revoke', 'POST', { round, tableNumber })).tournament,
-  saveTimer: async (timer: TimerState) => { await callServer('/api/tournament/timer', 'POST', { timer }); },
 
-  // ---- 次の大会の事前登録 ----
+  saveCurrentTournament: async (tournamentData: any) => {
+    // すでに過去大会として登録済みの大会の進行データは保存しない。
+    // （アーカイブ後に、古い画面を開いたままの端末が、クリアしたはずのデータを書き戻してしまうのを防ぐ）
+    try {
+      const no = parseInt(String(tournamentData?.tournamentNo), 10);
+      const hasSeating = Array.isArray(tournamentData?.seating) && tournamentData.seating.length > 0;
+      if (no && hasSeating) {
+        const { data: hit } = await supabase.from('tournament_archives').select('id').like('name', `第${no}回%`).limit(1);
+        if (hit && hit.length > 0) return;
+      }
+    } catch { /* 確認できなければ通常どおり保存 */ }
+    const { error } = await supabase
+      .from('tournaments')
+      .upsert({
+        id: 'current',
+        data: tournamentData,
+        updated_at: new Date().toISOString(),
+      });
+    if (error) console.error('大会状態保存エラー:', error);
+  },
+
+  clearCurrentTournament: async () => {
+    const { error } = await supabase
+      .from('tournaments')
+      .delete()
+      .eq('id', 'current');
+    if (error) console.error('大会リセットエラー:', error);
+  },
+
+  // 次の大会の参加選手の事前登録（tournaments テーブルの別の行 id='next_entry' に保存）
   getNextEntry: async (): Promise<any> => {
-    const { data, error } = await supabase.from('tournaments').select('data').eq('id', 'next_entry').maybeSingle();
+    const { data, error } = await supabase.from('tournaments').select('data').eq('id', 'next_entry').single();
     if (error || !data) return null;
     return data.data;
   },
   saveNextEntry: async (entry: NextEntry): Promise<boolean> => {
-    try { await callServer('/api/admin/next-entry', 'PUT', entry); return true; }
-    catch (e) { console.error('事前登録の保存エラー:', e); return false; }
+    const { error } = await supabase.from('tournaments').upsert({ id: 'next_entry', data: entry, updated_at: new Date().toISOString() });
+    if (error) { console.error('事前登録の保存エラー:', error); return false; }
+    return true;
   },
   clearNextEntry: async (): Promise<boolean> => {
-    try { await callServer('/api/admin/next-entry', 'DELETE'); return true; }
-    catch (e) { console.error('事前登録の削除エラー:', e); return false; }
+    const { error } = await supabase.from('tournaments').delete().eq('id', 'next_entry');
+    if (error) { console.error('事前登録の削除エラー:', error); return false; }
+    return true;
   },
 
   exportBackup: async () => {
-    const players = await api.getPlayers(); // ログインコードは含まれない
+    const players = await api.getPlayers();
     const tournament = await api.getCurrentTournament();
     const data = { players, tournament };
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1357,26 +1394,58 @@ const api = {
 
   // ---- 過去大会（アーカイブ） ----
   getArchives: async (): Promise<TournamentArchive[]> => {
-    const { data, error } = await supabase.from('tournament_archives').select('*').order('created_at', { ascending: false });
-    if (error) { console.error('過去大会取得エラー:', error); return []; }
+    const { data, error } = await supabase
+      .from('tournament_archives')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) {
+      console.error('過去大会取得エラー:', error);
+      return [];
+    }
     return (data || []).map((a: any) => ({
-      id: a.id, name: a.name, ruleName: a.rule_name, notes: a.notes,
-      standings: a.standings || [], hanchans: a.hanchans || [], penalties: a.penalties || [], createdAt: a.created_at,
+      id: a.id,
+      name: a.name,
+      ruleName: a.rule_name,
+      notes: a.notes,
+      standings: a.standings || [],
+      hanchans: a.hanchans || [],
+      penalties: a.penalties || [],
+      createdAt: a.created_at,
     }));
   },
+
   saveArchive: async (archive: { name: string; ruleName?: string; notes?: string; standings: ArchiveStanding[]; hanchans: ArchiveHanchan[]; penalties: ArchivePenalty[] }) => {
-    try { return (await callServer('/api/admin/archives', 'POST', archive)).archive; }
-    catch (e) { console.error('過去大会保存エラー:', e); throw e; }
+    const { data, error } = await supabase
+      .from('tournament_archives')
+      .insert([{
+        name: archive.name,
+        rule_name: archive.ruleName || null,
+        notes: archive.notes || null,
+        standings: archive.standings,
+        hanchans: archive.hanchans,
+        penalties: archive.penalties,
+      }])
+      .select()
+      .single();
+    if (error) { console.error('過去大会保存エラー:', error); throw error; }
+    return data;
   },
+
   // 過去大会の更新（管理者）: 最終成績・半荘・ペナルティのうち、渡したものだけを更新する
   updateArchive: async (id: string, patch: { standings?: ArchiveStanding[]; hanchans?: ArchiveHanchan[]; penalties?: ArchivePenalty[] }) => {
-    try { await callServer(`/api/admin/archives/${encodeURIComponent(id)}`, 'PATCH', patch); }
-    catch (e) { console.error('過去大会更新エラー:', e); throw e; }
+    const { data, error } = await supabase.from('tournament_archives').update(patch).eq('id', id).select();
+    if (error) { console.error('過去大会更新エラー:', error); throw error; }
+    if (!data || data.length === 0) throw new Error('更新できませんでした（0件）。tournament_archivesのUPDATEポリシーを確認してください。');
   },
   updateArchiveHanchans: async (id: string, hanchans: ArchiveHanchan[]) => api.updateArchive(id, { hanchans }),
   deleteArchive: async (id: string) => {
-    try { return (await callServer(`/api/admin/archives/${encodeURIComponent(id)}`, 'DELETE')).archive; }
-    catch (e) { console.error('過去大会削除エラー:', e); throw e; }
+    const { data, error } = await supabase.from('tournament_archives').delete().eq('id', id).select();
+    if (error) { console.error('過去大会削除エラー:', error); throw error; }
+    if (!data || data.length === 0) {
+      // RLSのDELETEポリシーが無い場合など、エラーにならず0件のまま「成功」扱いになることがあるための保険
+      throw new Error('削除できませんでした（0件）。tournament_archivesのDELETEポリシーを確認してください。');
+    }
+    return data[0];
   },
 };
 
@@ -1389,9 +1458,7 @@ export default function Home() {
   const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAIL || '')
     .split(',')
     .map((e) => e.trim());
-  // ※ これは「管理者向けの表示を出すか」の判断にだけ使う。実際の権限チェックは、すべてサーバー（/api/**）側で行う。
   const isAdmin = !!session?.user?.email && adminEmails.includes(session.user.email);
-  apiState.isAdmin = isAdmin;
 
   const [isLoaded, setIsLoaded] = useState(false);
   const [activeTab, setActiveTab] = useState<'tournament' | 'currentRanking' | 'totalRanking' | 'archives' | 'players' | 'data' | 'lifetime'>('tournament');
@@ -1523,33 +1590,36 @@ export default function Home() {
     }
   }, [isAdmin, activeTab, isLoaded]);
 
-  // 選手ログインはサーバーが発行した httpOnly Cookie で保持する（ブラウザの localStorage には何も保存しない）。
-  // ページを開いたときにサーバーへ問い合わせて、ログイン状態を復元する。
+  // 選手ログインをブラウザに保持し、再読み込みしてもログイン状態を維持する
+  const [loginRestored, setLoginRestored] = useState(false);
   useEffect(() => {
-    try { localStorage.removeItem('mahjong_player_login_id'); } catch { /* 旧バージョンの保存を消すだけ */ }
-    api.playerSession().then(id => { if (id) setLoggedInPlayerId(id); });
+    const saved = localStorage.getItem('mahjong_player_login_id');
+    if (saved) setLoggedInPlayerId(saved);
+    setLoginRestored(true);
   }, []);
+  useEffect(() => {
+    if (!loginRestored) return; // 復元前に保存内容を消してしまわないようにする
+    if (loggedInPlayerId) localStorage.setItem('mahjong_player_login_id', loggedInPlayerId);
+    else localStorage.removeItem('mahjong_player_login_id');
+  }, [loggedInPlayerId, loginRestored]);
 
   const loggedInPlayer = dbPlayers.find(p => p.id === loggedInPlayerId) || null;
 
-  // コードの照合はサーバーで行う。選手の一覧やコードは、ブラウザへ渡さない。
-  const handlePlayerLogin = async () => {
-    const code = loginCodeInput.trim();
+  const handlePlayerLogin = () => {
+    const code = loginCodeInput.trim().toUpperCase();
     if (!code) return;
-    try {
-      const r = await api.playerLogin(code);
-      setLoggedInPlayerId(r.playerId);
-      setShowPlayerLogin(false);
-      setLoginCodeInput('');
-      setLoginError('');
-    } catch (e) {
-      const err = e as ApiError;
-      setLoginError(err.status === 429 ? '試行回数が多すぎます。しばらく待ってからやり直してください。' : 'コードが正しくありません。もう一度確認してください。');
+    const found = dbPlayers.find(p => (p.loginCode || '').toUpperCase() === code);
+    if (!found) {
+      setLoginError('コードが正しくありません。もう一度確認してください。');
+      return;
     }
+    setLoggedInPlayerId(found.id);
+    setShowPlayerLogin(false);
+    setLoginCodeInput('');
+    setLoginError('');
   };
 
   const handlePlayerLogout = () => {
-    api.playerLogout().catch(() => { /* Cookie の破棄に失敗しても、画面上はログアウトにする */ });
     setLoggedInPlayerId(null);
   };
 
@@ -1566,12 +1636,6 @@ export default function Home() {
     };
     loadData();
   }, []);
-
-  // 管理者としてログインできたら、管理者用の一覧（ログインコードの発行状況つき）を取り直す
-  useEffect(() => {
-    if (!isLoaded || !isAdmin) return;
-    api.getPlayers().then(setDbPlayers);
-  }, [isLoaded, isAdmin]);
 
   // 大会状態（DB上のデータ）を画面の state に反映する
   const applyTournamentData = (current: any) => {
@@ -1621,43 +1685,13 @@ export default function Home() {
     return () => clearInterval(timer);
   }, [isLoaded, isAdmin, tournamentPhase]);
 
-  // 管理者: 大会の進行状態を保存（サーバーが、送信済みの卓を保護しつつ保存する）
   useEffect(() => {
-    if (!isLoaded || !isAdmin) return;
+    if (!isLoaded) return;
+    // 管理者以外が入力できるのは大会進行中だけ。それ以外の時間帯は保存しない
+    // （古い画面の内容で、管理者が更新した最新状態を上書きしてしまうのを防ぐため）
+    if (!isAdmin && tournamentPhase !== 'playing') return;
     api.saveCurrentTournament({ tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timer: timerState, tournamentNo, drawingAnnounced });
   }, [tournamentPhase, entryPlayerIds, roundsCount, seating, playerLimits, timerState, tournamentNo, drawingAnnounced, isLoaded, isAdmin]);
-
-  // 選手: 大会全体は書き換えられない。自分が着いている未送信の卓の「得点・チョンボ」だけを、サーバーへ保存する。
-  const lastSentScores = useRef<Record<string, string>>({});
-  useEffect(() => {
-    if (!isLoaded || isAdmin || !loggedInPlayerId || tournamentPhase !== 'playing') return;
-    const t = setTimeout(() => {
-      seating.forEach(r => r.tables.forEach(tb => {
-        if (tb.isSubmitted || !tb.players.some(p => p.playerId === loggedInPlayerId)) return;
-        const payload = tb.players.map(p => ({ playerId: p.playerId, score: p.score || 0, chonbo: p.chonbo || 0 }));
-        const key = `${r.round}-${tb.tableNumber}`;
-        const sig = JSON.stringify(payload);
-        if (lastSentScores.current[key] === undefined) { lastSentScores.current[key] = sig; return; } // 読み込み直後の内容は送らない
-        if (lastSentScores.current[key] === sig) return;
-        lastSentScores.current[key] = sig;
-        api.saveTableScores(r.round, tb.tableNumber, payload).catch(err => {
-          delete lastSentScores.current[key]; // 失敗したら、次の変更時に再送する
-          console.error('得点の保存に失敗:', err);
-          if ((err as ApiError)?.status === 401) setLoggedInPlayerId(null);
-        });
-      }));
-    }, 600);
-    return () => clearTimeout(t);
-  }, [seating, isLoaded, isAdmin, loggedInPlayerId, tournamentPhase]);
-
-  // 選手: 回戦が終わったときに決まる「次の回戦の開始時刻」を、サーバーへ送る（新しいものだけ採用される）
-  const lastTimerStampSent = useRef(0);
-  useEffect(() => {
-    if (!isLoaded || isAdmin || !loggedInPlayerId || tournamentPhase !== 'playing') return;
-    if (timerState.stamp <= lastTimerStampSent.current) return;
-    lastTimerStampSent.current = timerState.stamp;
-    api.saveTimer(timerState).catch(() => { /* 保存済みの方が新しい場合などは無視 */ });
-  }, [timerState, isLoaded, isAdmin, loggedInPlayerId, tournamentPhase]);
 
   // 大会進行中は5秒おきに最新状態を確認し、次の2点だけ取り込む（入力中の内容を壊さないため）
   //  ① タイマー（休憩時間・開始時刻）…新しい方を採用
@@ -1675,7 +1709,6 @@ export default function Home() {
       }
       if (current.timer) {
         const srv = normalizeTimer(current.timer);
-        lastTimerStampSent.current = Math.max(lastTimerStampSent.current, srv.stamp); // サーバー側の値を、再送しない
         setTimerState(prev => (srv.stamp > prev.stamp ? srv : prev));
       }
       if (Array.isArray(current.seating)) {
@@ -1728,39 +1761,52 @@ export default function Home() {
     e.preventDefault();
     if (!isAdmin) return;
     if (!newPlayerName.trim()) return;
-    const name = newPlayerName.trim();
-    // ログインコードはサーバーが発行する（DBにはハッシュだけを保存。コードは今回の応答でしか分からない）
-    const saved = await api.savePlayer({
+    const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+    const newPlayer: Player = {
       id: crypto.randomUUID(),
-      name,
+      name: newPlayerName.trim(),
       totalPoint: newPlayerPoint,
       totalGames: 0,
       championshipRight: isPro(newPlayerName) ? false : newPlayerRight,
-    });
+      loginCode: generateLoginCode(existingCodes),
+    };
+    const saved = await api.savePlayer(newPlayer);
     if (!saved) {
-      alert('登録に失敗しました。管理者としてログインしているか、入力内容を確認してください。（コンソールにエラーが出ています）');
+      alert('登録に失敗しました。Supabaseで add_player_login_code.sql を実行済みか確認してください。（コンソールにエラーが出ています）');
       return;
     }
     setDbPlayers(await api.getPlayers());
     setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerRight(false);
-    alert(`${name} を登録しました！\nログインコード: ${saved.loginCode ?? '（未発行）'}\n\n※このコードは今だけ表示されます（再表示はできません）。控えてから閉じてください。`);
+    alert(`${newPlayer.name} を登録しました！\nログインコード: ${newPlayer.loginCode}`);
   };
 
-  // まだログインコードを持っていない選手にまとめて発行する
+  // 既にログインコードを持っていない選手（旧データなど）にまとめて発行する
   const [isIssuingCodes, setIsIssuingCodes] = useState(false);
   const handleIssueMissingCodes = async () => {
     if (!isAdmin) return;
-    const missing = dbPlayers.filter(p => !p.hasLoginCode);
+    const missing = dbPlayers.filter(p => !p.loginCode);
     if (missing.length === 0) { alert('未発行の選手はいません。'); return; }
     if (!window.confirm(`${missing.length}名にログインコードを発行します。よろしいですか？`)) return;
     setIsIssuingCodes(true);
     try {
-      await api.manageLoginCodes('issue-missing');
-      setDbPlayers(await api.getPlayers());
-      alert(`${missing.length}名分のログインコードを発行しました。\n※コードは、この画面を開いている間だけ表示・印刷できます（再読み込みすると再表示できません）。`);
+      const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+      let failed = 0;
+      for (const p of missing) {
+        const loginCode = generateLoginCode(existingCodes);
+        const ok = await api.updatePlayer({ ...p, loginCode });
+        if (!ok) failed++;
+      }
+      const refreshed = await api.getPlayers();
+      setDbPlayers(refreshed);
+      const stillMissing = refreshed.filter(p => !p.loginCode).length;
+      if (failed > 0 || stillMissing > 0) {
+        alert(`コードを保存できませんでした（未発行 ${stillMissing}名）。\n\nSupabaseのSQL Editorで add_player_login_code.sql を実行済みか確認してください。\n（playersテーブルにlogin_code列が無い、または更新権限が無い場合に発生します）`);
+      } else {
+        alert(`${missing.length}名分のログインコードを発行しました。`);
+      }
     } catch (err) {
       console.error(err);
-      alert('発行中にエラーが発生しました。管理者としてログインしているか確認してください。');
+      alert('発行中にエラーが発生しました。コンソールを確認してください。');
     } finally {
       setIsIssuingCodes(false);
     }
@@ -1768,57 +1814,55 @@ export default function Home() {
 
   // 発行済みコードの取り消し（1人分）
   const handleRevokeCode = async (p: Player) => {
-    if (!isAdmin || !p.hasLoginCode) return;
-    if (!window.confirm(`${p.name} のログインコードを取り消しますか？\n取り消すと、この選手は現在のコードでログインできなくなります（ログイン中の端末も無効になります）。`)) return;
-    try {
-      await api.manageLoginCodes('revoke', p.id);
-    } catch (err) {
-      console.error(err);
-      alert('取り消しに失敗しました。コンソールを確認してください。');
-    }
+    if (!isAdmin || !p.loginCode) return;
+    if (!window.confirm(`${p.name} のログインコードを取り消しますか？\n取り消すと、この選手は現在のコードでログインできなくなります。`)) return;
+    const ok = await api.updatePlayer({ ...p, loginCode: undefined });
     setDbPlayers(await api.getPlayers());
+    if (!ok) alert('取り消しに失敗しました。コンソールを確認してください。');
   };
 
   // 発行済みコードの取り消し（全員分）
   const handleRevokeAllCodes = async () => {
     if (!isAdmin) return;
-    const targets = dbPlayers.filter(p => !!p.hasLoginCode);
+    const targets = dbPlayers.filter(p => !!p.loginCode);
     if (targets.length === 0) { alert('発行済みのコードはありません。'); return; }
     if (!window.confirm(`発行済みの ${targets.length}名分のログインコードを全て取り消しますか？\n取り消すと、全員が現在のコードでログインできなくなります。`)) return;
     setIsIssuingCodes(true);
     try {
-      await api.manageLoginCodes('revoke-all');
+      let failed = 0;
+      for (const p of targets) {
+        const ok = await api.updatePlayer({ ...p, loginCode: undefined });
+        if (!ok) failed++;
+      }
       setDbPlayers(await api.getPlayers());
-      alert(`${targets.length}名分のコードを取り消しました。`);
-    } catch (err) {
-      console.error(err);
-      alert('取り消しに失敗しました。コンソールを確認してください。');
+      alert(failed > 0 ? `${failed}名分の取り消しに失敗しました。コンソールを確認してください。` : `${targets.length}名分のコードを取り消しました。`);
     } finally {
       setIsIssuingCodes(false);
     }
   };
 
-  // 1人分のコードを新しく発行し直す（漏えい・紛失時など）。新しいコードは表の「ログインコード」欄に表示される。
+  // 1人分のコードを新しく発行し直す（漏えい・紛失時など）
   const handleReissueCode = async (p: Player) => {
     if (!isAdmin) return;
-    if (!window.confirm(`${p.name} のログインコードを${p.hasLoginCode ? '再発行（古いコードは無効に）' : '発行'}しますか？`)) return;
-    try {
-      await api.manageLoginCodes(p.hasLoginCode ? 'reissue' : 'issue', p.id);
-    } catch (err) {
-      console.error(err);
-      alert('保存に失敗しました。管理者としてログインしているか確認してください。');
-    }
+    if (!window.confirm(`${p.name} のログインコードを${p.loginCode ? '再発行（古いコードは無効に）' : '発行'}しますか？`)) return;
+    const existingCodes = new Set<string>(dbPlayers.map(x => x.loginCode || '').filter(c => c !== ''));
+    const ok = await api.updatePlayer({ ...p, loginCode: generateLoginCode(existingCodes) });
     setDbPlayers(await api.getPlayers());
+    if (!ok) alert('保存に失敗しました。add_player_login_code.sql を実行済みか確認してください。');
   };
 
   // 印刷対象から外す選手（デフォルトは全員が対象）
   const [printExcludedIds, setPrintExcludedIds] = useState<string[]>([]);
   const togglePrintTarget = (id: string) =>
     setPrintExcludedIds(prev => (prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]));
-  // 印刷できるのは、この画面で発行した直後のコードだけ（DBにはハッシュしか無く、平文には戻せないため）
   const printTargets = dbPlayers.filter(p => !!p.loginCode && !isKuroko(p.name) && !printExcludedIds.includes(p.id));
 
-  // ※ コードを取り消された選手のログインは、サーバーが次のリクエストで無効と判定する（401 → 画面側でログアウト）
+  // コードを取り消された（または削除された）選手が端末に残っているログインは自動で解除する
+  useEffect(() => {
+    if (!isLoaded || !loggedInPlayerId) return;
+    const me = dbPlayers.find(p => p.id === loggedInPlayerId);
+    if (!me || !me.loginCode) setLoggedInPlayerId(null);
+  }, [dbPlayers, isLoaded, loggedInPlayerId]);
 
   const startEditPlayer = (p: Player) => {
     if (!isAdmin) return;
@@ -2508,26 +2552,12 @@ export default function Home() {
   // 送信・取消の処理中は同じ卓を再度処理しない（連打・二重タップによる二重加算を防ぐ）
   const submittingTables = useRef<Set<string>>(new Set());
 
-  // サーバーから返ってきた大会データの中の、指定の卓
-  const pickServerTable = (tournament: any, round: number, tableNumber: number): Table | null => {
-    const t = (tournament?.seating as Round[] | undefined)?.find(r => r.round === round)?.tables.find(x => x.tableNumber === tableNumber);
-    return t ? { ...t, players: t.players.map(pl => ({ ...pl, chonbo: pl.chonbo || 0 })) } : null;
-  };
-  // 通信エラーの共通処理（セッション切れ・権限なしは、ログイン状態を見直させる）
-  const explainApiError = (err: unknown, fallback: string): string => {
-    const e = err as ApiError;
-    if (e?.status === 401) { if (!isAdmin) setLoggedInPlayerId(null); return 'ログインの有効期限が切れました。もう一度ログインしてください。'; }
-    if (e?.status === 403) return '権限がありません。この卓に着いている選手、または管理者のみ操作できます。';
-    return e?.message ? `${fallback}\n（${e.message}）` : fallback;
-  };
-
   const handleSubmitTable = async (rIdx: number, tIdx: number) => {
     const table = seating[rIdx].tables[tIdx];
     if (!canEditTable(table)) return;
     if (table.isSubmitted) return;
     if (!table.isCalculated) { alert('先にスコアを計算してください。'); return; }
-    const round = seating[rIdx].round;
-    const lockKey = `${round}-${table.tableNumber}`;
+    const lockKey = `${seating[rIdx].round}-${table.tableNumber}`;
     if (submittingTables.current.has(lockKey)) return;
     const confirmMsg = isAdmin
       ? 'クラウドに送信しますか？'
@@ -2535,35 +2565,44 @@ export default function Home() {
     if (!window.confirm(confirmMsg)) return;
 
     submittingTables.current.add(lockKey);
-    let serverTournament: any;
     try {
-      // 送るのは得点とチョンボだけ。ポイントはサーバーが再計算し、通算への加算まで1トランザクションで行う
-      // （二重送信・同時送信でも、二重には加算されない）。
-      serverTournament = await api.submitTable(round, table.tableNumber,
-        table.players.map(p => ({ playerId: p.playerId, score: p.score || 0, chonbo: p.chonbo || 0 })));
+      // 別の端末ですでに送信済みの卓なら、二重に加算しない
+      try {
+        const latest = await api.getCurrentTournament();
+        const srv = (latest?.seating as Round[] | undefined)?.find(x => x.round === seating[rIdx].round)
+          ?.tables.find(x => x.tableNumber === table.tableNumber);
+        if (srv?.isSubmitted) {
+          alert('この卓はすでに送信済みです（他の端末で送信されました）。画面を更新して確認してください。');
+          return;
+        }
+      } catch { /* 取得できなければ手元の状態で続行 */ }
+
+      const updates = table.players.map(p => ({ id: p.playerId, pointDelta: p.point }));
+      await api.updatePlayersScores(updates);
     } catch (err) {
       console.error(err);
-      alert(`送信できませんでした。\n${explainApiError(err, '通信に失敗しました。もう一度お試しください。')}`);
+      alert('通算ポイントの更新に失敗しました。送信は完了していません。もう一度お試しください。');
       return;
     } finally {
       submittingTables.current.delete(lockKey);
     }
     setDbPlayers(await api.getPlayers());
 
-    // サーバーが確定した卓（ポイントはサーバー計算）を反映
     const updated = [...seating];
-    const srvTable = pickServerTable(serverTournament, round, table.tableNumber);
-    if (srvTable) updated[rIdx].tables[tIdx] = srvTable;
-    else updated[rIdx].tables[tIdx].isSubmitted = true;
+    updated[rIdx].tables[tIdx].isSubmitted = true;
     setSeating(updated);
     // 送信した卓は自動的に畳む
-    setTableOpen(prev => ({ ...prev, [lockKey]: false }));
+    setTableOpen(prev => ({ ...prev, [`${seating[rIdx].round}-${table.tableNumber}`]: false }));
 
     // この回戦の全卓の送信が終わった瞬間に、次の回戦の開始時刻（＝今 + 休憩時間）を決める。
-    // 他の端末で送信された卓も、サーバーの最新状態（送信の応答）で確認する。
+    // 他の端末で送信された卓を見落とさないよう、サーバー上の最新状態も確認する。
     const thisRound = seating[rIdx];
     if (thisRound.round < roundsCount) {
-      const serverRound = (serverTournament?.seating as Round[] | undefined)?.find(x => x.round === thisRound.round);
+      let serverRound: Round | undefined;
+      try {
+        const latest = await api.getCurrentTournament();
+        serverRound = (latest?.seating as Round[] | undefined)?.find(x => x.round === thisRound.round);
+      } catch { /* 取得できなくても手元の状態で判定する */ }
       const allSubmitted = thisRound.tables.length > 0 && thisRound.tables.every(t =>
         t.isSubmitted || !!serverRound?.tables.find(x => x.tableNumber === t.tableNumber)?.isSubmitted);
       if (allSubmitted) {
@@ -2580,14 +2619,8 @@ export default function Home() {
     const table = seating[rIdx].tables[tIdx];
     if (!window.confirm('【警告】\nこの卓の送信を取り消し、成績を編集できるようにしますか？\n※通算成績に加算されたポイントは一旦マイナスされます。')) return;
 
-    try {
-      // 取り消すポイントは、サーバーが保存済みの値から計算する
-      await api.revokeTable(seating[rIdx].round, table.tableNumber);
-    } catch (err) {
-      console.error(err);
-      alert(`取り消せませんでした。\n${explainApiError(err, '通信に失敗しました。')}`);
-      return;
-    }
+    const reverses = table.players.map(p => ({ id: p.playerId, pointDelta: -p.point }));
+    await api.updatePlayersScores(reverses);
     setDbPlayers(await api.getPlayers());
 
     const updated = [...seating];
@@ -2631,16 +2664,24 @@ export default function Home() {
     setTimeout(async () => {
       if (window.confirm('【最終確認】待機時間が終了しました。\n本当に全てリセットしますか？')) {
         try {
-          // 送信済みの卓は既に通算成績へ加算されているため、リセット時に取り消す（取り消すポイントはサーバーが保存済みの値から計算する）。
-          // 今大会がすでに過去大会に登録済みなら、ポイントは過去大会側に含まれているので取り消さない。
-          await api.clearCurrentTournament(!currentTournamentArchived);
+          // 送信済みの卓は既に通算成績へ加算されているため、リセット前に取り消す
+          const reverses: { id: string; pointDelta: number }[] = [];
+          seating.forEach(r => r.tables.forEach(t => {
+            if (!t.isSubmitted) return;
+            t.players.forEach(p => {
+              reverses.push({ id: p.playerId, pointDelta: -p.point });
+            });
+          }));
+          // 今大会がすでに過去大会に登録済みなら、ポイントは過去大会側に含まれているので取り消さない
+          if (reverses.length > 0 && !currentTournamentArchived) await api.updatePlayersScores(reverses);
           setDbPlayers(await api.getPlayers());
         } catch (err) {
           console.error(err);
-          alert('リセット中にエラーが発生しました。処理を中断します。管理者としてログインしているか、コンソールを確認してください。');
+          alert('通算成績の取り消し中にエラーが発生しました。処理を中断します。コンソールを確認してください。');
           return;
         }
         setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false); updateTimer(prev => ({ ...prev, startAts: {} })); setTournamentPhase('entry'); setActiveTab('tournament');
+        await api.clearCurrentTournament();
         alert('大会状況をリセットしました。（送信済みだった分の通算成績も取り消し済みです）');
       }
     }, 100);
@@ -2833,8 +2874,9 @@ export default function Home() {
     const name = quickName.trim();
     if (!name) return;
     if (!window.confirm(`「${name}」を新規登録して今大会の参加者に追加しますか？`)) return;
-    const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false };
-    if (!(await api.savePlayer(newPlayer))) { alert('登録に失敗しました。管理者としてログインしているか確認してください。'); return; }
+    const existingCodes = new Set<string>(dbPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+    const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false, loginCode: generateLoginCode(existingCodes) };
+    await api.savePlayer(newPlayer);
     setDbPlayers(await api.getPlayers());
     setEntryPlayerIds([...entryPlayerIds, newPlayer.id]);
     setQuickName('');
@@ -2975,8 +3017,9 @@ export default function Home() {
           nameToId.set(name, legacyId);
           return legacyId;
         }
-        const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false };
-        if (!(await api.savePlayer(newPlayer))) throw new Error(`選手「${name}」の登録に失敗しました`);
+        const existingCodes = new Set<string>(workingPlayers.map(p => p.loginCode || '').filter(c => c !== ''));
+        const newPlayer: Player = { id: crypto.randomUUID(), name, totalPoint: 0, totalGames: 0, championshipRight: false, loginCode: generateLoginCode(existingCodes) };
+        await api.savePlayer(newPlayer);
         workingPlayers = [...workingPlayers, newPlayer];
         nameToId.set(name, newPlayer.id);
         return newPlayer.id;
@@ -4595,7 +4638,7 @@ export default function Home() {
               value={loginCodeInput}
               onChange={(e) => { setLoginCodeInput(e.target.value); setLoginError(''); }}
               onKeyDown={(e) => { if (e.key === 'Enter') handlePlayerLogin(); }}
-              placeholder="例: A3K7QZ9P"
+              placeholder="例: A3K7QZ"
               autoFocus
               className="w-full p-3 border-2 border-slate-200 focus:border-teal-500 rounded-lg text-center text-2xl font-mono font-bold tracking-widest uppercase outline-none"
             />
@@ -4927,13 +4970,13 @@ export default function Home() {
                           />
                         </td>
                         <td className="p-2 font-bold"><PlayerLabel name={p.name} /></td>
-                        <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || (p.hasLoginCode ? <span className="text-slate-400 font-sans font-normal text-xs">発行済み（再表示不可）</span> : <span className="text-slate-300 font-sans font-normal">未発行</span>)}</td>
+                        <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || <span className="text-slate-300 font-sans font-normal">未発行</span>}</td>
                         <td className="p-2 text-center">
                           <div className="inline-flex gap-1.5">
                             <button onClick={() => handleReissueCode(p)} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-md transition">
-                              {p.hasLoginCode ? '再発行' : '発行'}
+                              {p.loginCode ? '再発行' : '発行'}
                             </button>
-                            {p.hasLoginCode && (
+                            {p.loginCode && (
                               <button onClick={() => handleRevokeCode(p)} className="text-[11px] font-bold bg-red-50 hover:bg-red-100 text-red-600 px-2 py-1 rounded-md transition">取り消し</button>
                             )}
                           </div>
