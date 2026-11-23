@@ -330,26 +330,32 @@ const isPro = (name: string) => PRO_SUFFIX.test((name || '').trim());
 const baseName = (name: string) => (name || '').trim().replace(PRO_SUFFIX, '');
 const proMarkedName = (name: string) => (isPro(name) ? `${baseName(name)}Ⓟ` : name);
 
-// 今季の各大会での入賞回数（優勝・2位・3位）を、名前の横に出すバッジ
-type PodiumCount = { first: number; second: number; third: number };
+// 今季の各大会での入賞（優勝・2位・3位）を、名前の横に出すバッジ。どの大会かを「第7回優勝」のように表示する。
+// 各リストは入賞した大会の回数（回数が無い大会は大会名）。
+type PodiumCount = { first: string[]; second: string[]; third: string[] };
+const podiumLabel = (list: string[], suffix: string) => {
+  const sorted = [...list].sort((a, b) => (parseInt(a, 10) || 0) - (parseInt(b, 10) || 0) || a.localeCompare(b, 'ja'));
+  const allNumeric = sorted.every(x => /^\d+$/.test(x));
+  return allNumeric ? `第${sorted.join('・')}回${suffix}` : `${sorted.map(x => (/^\d+$/.test(x) ? `第${x}回` : x)).join('・')}${suffix}`;
+};
 const PodiumBadges = ({ podium }: { podium?: PodiumCount }) => {
-  if (!podium || (podium.first + podium.second + podium.third) === 0) return null;
+  if (!podium || (podium.first.length + podium.second.length + podium.third.length) === 0) return null;
   const base = 'inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-2 py-[2px] text-[10px] md:text-[11px] font-black leading-none tracking-tight ring-1 ';
   return (
     <span className="inline-flex flex-wrap items-center gap-1 ml-1.5 align-middle">
-      {podium.first > 0 && (
+      {podium.first.length > 0 && (
         <span className={base + 'bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500 text-amber-950 ring-amber-300 shadow-[0_1px_8px_rgba(245,158,11,0.55)]'}>
-          <span aria-hidden>🏆</span>{podium.first}回優勝
+          <span aria-hidden>🏆</span>{podiumLabel(podium.first, '優勝')}
         </span>
       )}
-      {podium.second > 0 && (
+      {podium.second.length > 0 && (
         <span className={base + 'bg-gradient-to-r from-slate-300 via-slate-50 to-slate-300 text-slate-700 ring-slate-300 shadow-[0_1px_6px_rgba(100,116,139,0.35)]'}>
-          <span aria-hidden>🥈</span>{podium.second}回2位
+          <span aria-hidden>🥈</span>{podiumLabel(podium.second, '2位')}
         </span>
       )}
-      {podium.third > 0 && (
+      {podium.third.length > 0 && (
         <span className={base + 'bg-gradient-to-r from-orange-300 via-amber-100 to-orange-400 text-orange-950 ring-orange-300 shadow-[0_1px_6px_rgba(234,88,12,0.35)]'}>
-          <span aria-hidden>🥉</span>{podium.third}回3位
+          <span aria-hidden>🥉</span>{podiumLabel(podium.third, '3位')}
         </span>
       )}
     </span>
@@ -3338,7 +3344,7 @@ export default function Home() {
   const dbIdByName = new Map<string, string>();
   dbPlayers.forEach(p => { if (!dbIdByName.has(p.name)) dbIdByName.set(p.name, p.id); });
   const lifetimeKeyOf = (playerId: string, name: string) => (dbNameById.has(playerId) ? playerId : (dbIdByName.get(name) ?? playerId));
-  // 今季の各大会（年間チャンピオン大会などの別枠は除く）で、3位までに入った回数。
+  // 今季の各大会（年間チャンピオン大会などの別枠は除く）で、3位までに入った大会。
   // 過去大会の選手IDが現在の選手IDと違っていても数え落とさないよう、生涯成績と同じく「ID → なければ名前」で選手に紐づける。
   // 同じ大会で同じ選手を二重に数えない。
   const seasonPodiums = new Map<string, PodiumCount>();
@@ -3350,8 +3356,10 @@ export default function Home() {
       const key = lifetimeKeyOf(st.playerId, st.name);
       if (counted.has(key)) return;
       counted.add(key);
-      const cur = seasonPodiums.get(key) || { first: 0, second: 0, third: 0 };
-      if (st.rank === 1) cur.first++; else if (st.rank === 2) cur.second++; else cur.third++;
+      const cur = seasonPodiums.get(key) || { first: [], second: [], third: [] };
+      const no = archiveTournamentNo(a.name);
+      const label = no !== null ? String(no) : a.name;
+      if (st.rank === 1) cur.first.push(label); else if (st.rank === 2) cur.second.push(label); else cur.third.push(label);
       seasonPodiums.set(key, cur);
     });
   });
