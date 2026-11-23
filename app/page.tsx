@@ -330,6 +330,32 @@ const isPro = (name: string) => PRO_SUFFIX.test((name || '').trim());
 const baseName = (name: string) => (name || '').trim().replace(PRO_SUFFIX, '');
 const proMarkedName = (name: string) => (isPro(name) ? `${baseName(name)}Ⓟ` : name);
 
+// 今季の各大会での入賞回数（優勝・2位・3位）を、名前の横に出すバッジ
+type PodiumCount = { first: number; second: number; third: number };
+const PodiumBadges = ({ podium }: { podium?: PodiumCount }) => {
+  if (!podium || (podium.first + podium.second + podium.third) === 0) return null;
+  const base = 'inline-flex items-center gap-0.5 whitespace-nowrap rounded-full px-2 py-[2px] text-[10px] md:text-[11px] font-black leading-none tracking-tight ring-1 ';
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 ml-1.5 align-middle">
+      {podium.first > 0 && (
+        <span className={base + 'bg-gradient-to-r from-amber-400 via-yellow-200 to-amber-500 text-amber-950 ring-amber-300 shadow-[0_1px_8px_rgba(245,158,11,0.55)]'}>
+          <span aria-hidden>🏆</span>{podium.first}回優勝
+        </span>
+      )}
+      {podium.second > 0 && (
+        <span className={base + 'bg-gradient-to-r from-slate-300 via-slate-50 to-slate-300 text-slate-700 ring-slate-300 shadow-[0_1px_6px_rgba(100,116,139,0.35)]'}>
+          <span aria-hidden>🥈</span>{podium.second}回2位
+        </span>
+      )}
+      {podium.third > 0 && (
+        <span className={base + 'bg-gradient-to-r from-orange-300 via-amber-100 to-orange-400 text-orange-950 ring-orange-300 shadow-[0_1px_6px_rgba(234,88,12,0.35)]'}>
+          <span aria-hidden>🥉</span>{podium.third}回3位
+        </span>
+      )}
+    </span>
+  );
+};
+
 // 名前表示用（プロバッジ付き）
 const PlayerLabel = ({ name, className = '', badgeClass = '' }: { name: string; className?: string; badgeClass?: string }) => (
   <span className={className}>
@@ -2041,6 +2067,8 @@ export default function Home() {
       entryPlayerIds.forEach(other => { matchHistory[id][other] = 0; });
     });
 
+    // プロ・黒子（この2種類は、2人以上を同卓にしない）
+    const specialIds = new Set(entryPlayerIds.filter(id => isSpecialName(dbPlayers.find(p => p.id === id)?.name || '')));
     const rainfId = dbPlayers.find(p => p.name === 'れいんえふ')?.id;
     const tokuId = dbPlayers.find(p => p.name === 'toku')?.id;
 
@@ -2063,6 +2091,10 @@ export default function Home() {
       const tables: Table[] = [];
       for (let t = 0; t < numTables; t++) {
         const tablePlayerIds: string[] = [];
+        // 残りの卓数で受けきれない人数のプロ・黒子がいるなら、この卓で1人受け持つ（最後の席を空けておく）
+        const specialsLeft = available.filter(id => specialIds.has(id)).length;
+        const mustTakeSpecial = specialsLeft > numTables - t - 1;
+        let tableHasSpecial = false;
         for (let wIdx = 0; wIdx < 4; wIdx++) {
           const wind = winds[wIdx];
           let bestCandidate = available[0];
@@ -2072,6 +2104,11 @@ export default function Home() {
           for (const candidate of candidates) {
             let overlapCost = 0;
             let isBannedPair = false;
+
+            // プロ・黒子は1卓に1人まで
+            const candSpecial = specialIds.has(candidate);
+            if (candSpecial && tableHasSpecial) continue;
+            if (!candSpecial && mustTakeSpecial && !tableHasSpecial && 4 - tablePlayerIds.length <= 1) continue;
 
             for (const seated of tablePlayerIds) {
               overlapCost += matchHistory[candidate][seated] || 0;
@@ -2096,8 +2133,9 @@ export default function Home() {
             }
           }
 
-          if (minCost === Infinity) bestCandidate = candidates[0];
+          if (minCost === Infinity) bestCandidate = candidates.find(c => !(specialIds.has(c) && tableHasSpecial)) ?? candidates[0];
 
+          if (specialIds.has(bestCandidate)) tableHasSpecial = true;
           tablePlayerIds.push(bestCandidate);
           available.splice(available.indexOf(bestCandidate), 1);
         }
@@ -2132,6 +2170,13 @@ export default function Home() {
       });
     }
 
+    // プロ・黒子が同卓する卓が避けられなかった場合は知らせる（人数の都合で、プロ・黒子が卓数より多いときなど）
+    const clashes: string[] = [];
+    generatedRounds.forEach(r => r.tables.forEach(t => {
+      if (t.players.filter(p => specialIds.has(p.playerId)).length >= 2) clashes.push(`${r.round}回戦 ${t.tableNumber}卓`);
+    }));
+    if (clashes.length > 0) alert(`プロ・黒子が2人以上同卓する卓が避けられませんでした。\n（${clashes.join('、')}）\n人数の都合です。必要なら、卓組を作り直してください。`);
+
     setSeating(generatedRounds);
     setRoundOpen({});
     setTableOpen({});
@@ -2154,7 +2199,38 @@ export default function Home() {
   // ----------------------------------------
   // 「黒子」と「出場試合数を限定された選手」が上位8位(上位2卓)に入らないよう、その下を繰り上げる。
   // 弾かれた選手は順位順に9位のところへ差し込む。
-  const isTopExcluded = (id: string, name: string) => isKuroko(name) || isLimitedPlayer(id);
+  // 「プロ」と「黒子」: この2種類の選手は、2人以上を同じ卓にしない
+  const isSpecialName = (name: string) => isKuroko(name) || isPro(name);
+  // 上位2卓（8位まで）に入れない選手: 黒子・プロ・出場試合数を限定された選手
+  const isTopExcluded = (id: string, name: string) => isSpecialName(name) || isLimitedPlayer(id);
+
+  // 順位順の並び（queue）を、卓の数（tableCount）に分ける。基本は順位どおり上から4人ずつだが、
+  // 「プロ・黒子は1卓に1人まで」を優先する。条件を満たせるよう、特別枠の人数を数えながら振り分ける。
+  const arrangeLowerTables = <T extends { id: string; name: string }>(queue: T[], tableCount: number): T[][] => {
+    const rest = [...queue];
+    const groups: T[][] = [];
+    for (let t = 0; t < tableCount; t++) {
+      const tablesLeft = tableCount - t;
+      const specialsLeft = rest.filter(p => isSpecialName(p.name)).length;
+      // 残りの卓数で受けきれない人数のプロ・黒子がいるなら、この卓で1人受け持つ
+      const mustTakeSpecial = specialsLeft > tablesLeft - 1;
+      const group: T[] = [];
+      let hasSpecial = false;
+      for (let i = 0; i < rest.length && group.length < 4; ) {
+        const p = rest[i];
+        const sp = isSpecialName(p.name);
+        const slotsLeft = 4 - group.length;
+        const reserveForSpecial = mustTakeSpecial && !hasSpecial && slotsLeft <= 1;
+        if ((sp && hasSpecial) || (!sp && reserveForSpecial)) { i++; continue; }
+        group.push(p); if (sp) hasSpecial = true;
+        rest.splice(i, 1);
+      }
+      // 人数の都合でどうしても満たせない場合は、順位順に埋める（同卓が避けられないケース）
+      while (group.length < 4 && rest.length > 0) group.push(rest.shift() as T);
+      groups.push(group);
+    }
+    return groups;
+  };
   const applyKurokoRule = <T extends { id: string; name: string }>(ranked: T[]): T[] => {
     const nonKuroko = ranked.filter(p => !isTopExcluded(p.id, p.name));
     const top8 = nonKuroko.slice(0, 8);
@@ -2205,9 +2281,15 @@ export default function Home() {
     const sitOut = ordered.slice(numTables * 4);
     const winds = ['東', '南', '西', '北'];
 
+    // 上位2卓は順位どおり（黒子・プロ・限定選手は入らない）。残りは、プロ・黒子が同卓しないことを優先して振り分ける
+    const topTables = Math.min(2, numTables);
+    const groups: typeof active[] = [];
+    for (let t = 0; t < topTables; t++) groups.push(active.slice(t * 4, t * 4 + 4));
+    if (numTables > topTables) groups.push(...arrangeLowerTables(active.slice(topTables * 4), numTables - topTables));
+
     const tables: Table[] = [];
     for (let t = 0; t < numTables; t++) {
-      const group = active.slice(t * 4, t * 4 + 4); // 卓内の上位→下位
+      const group = groups[t]; // 卓内の上位→下位
       const seatOrder = target.mode === 'rankBottomFirst' ? [...group].reverse() : group;
       tables.push({
         tableNumber: t + 1,
@@ -2652,7 +2734,8 @@ export default function Home() {
     setIsArchivingCurrent(true);
     try {
       // 1. 先にアーカイブを保存（失敗した場合は何も変更しない）
-      await api.saveArchive({ name, ruleName: RULE_NAME, standings, hanchans, penalties });
+      // 保存順は、取り込み済みの過去大会と同じ「新しい半荘が先」にそろえる（画面は反転して古い順に表示するため）
+      await api.saveArchive({ name, ruleName: RULE_NAME, standings, hanchans: [...hanchans].reverse().map((h, i) => ({ ...h, no: i + 1 })), penalties });
       // 2. 今大会の進行をクリア（通算ポイントは取り消さない）
       await api.clearCurrentTournament();
       setSeating([]); setEntryPlayerIds([]); setPlayerLimits({}); setDrawingAnnounced(false);
@@ -3023,6 +3106,14 @@ export default function Home() {
   const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
   // 今季の大会（第4回以降）。今季成績は、前季（第1〜3回）を含めずに集計する
   const seasonArchives = archives.filter(a => !isPreviousSeasonArchive(a));
+  // 今季の各大会（年間チャンピオン大会などの別枠は除く）で、3位までに入った回数
+  const seasonPodiums = new Map<string, PodiumCount>();
+  seasonArchives.filter(a => !isSeparateEventArchive(a)).forEach(a => a.standings.forEach(st => {
+    if (st.rank < 1 || st.rank > 3) return;
+    const cur = seasonPodiums.get(st.playerId) || { first: 0, second: 0, third: 0 };
+    if (st.rank === 1) cur.first++; else if (st.rank === 2) cur.second++; else cur.third++;
+    seasonPodiums.set(st.playerId, cur);
+  }));
   // 今季対局数 = 今季の過去大会（アーカイブ）の半荘数の合計 ＋ 今大会（進行中・送信済み）の半荘数
   // 手動で編集・加減算する値ではなく、常にここから計算する。
   const getTotalGames = (playerId: string): number => {
@@ -3728,6 +3819,100 @@ export default function Home() {
     if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return; }
     w.document.open();
     w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 600);
+  };
+
+  // 過去大会1つ分の成績レポート（最終成績・半荘ごとの成績・ペナルティ）
+  const buildArchiveReportHtml = (a: TournamentArchive) => {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}/${String(now.getMonth() + 1).padStart(2, '0')}/${String(now.getDate()).padStart(2, '0')}`;
+    const cls = (n: number) => (n > 0 ? 'plus' : n < 0 ? 'minus' : '');
+    const nm = (id: string, fallback: string) => nameForDoc(nameOf(id, fallback));
+    const standings = [...a.standings].sort((x, y) => x.rank - y.rank);
+    const standingRows = standings.map(s => `
+      <tr class="${s.rank <= 3 ? 'top' + s.rank : ''}">
+        <td class="c">${s.rank <= 3 ? ['🥇', '🥈', '🥉'][s.rank - 1] + ' ' : ''}${s.rank}</td>
+        <td>${nm(s.playerId, s.name)}</td>
+        <td class="r">${s.gameCount}</td>
+        <td class="r ${cls(s.totalPoint)}">${fmtPt(s.totalPoint)}</td>
+      </tr>`).join('');
+
+    // 保存順は「新しい半荘が先」なので、反転して古い順にする
+    const chrono = [...a.hanchans].reverse();
+    const hanchanBlocks = chrono.map((h, i) => {
+      const rows = [...h.results].sort((x, y) => x.rank - y.rank).map(r => `
+        <tr class="${r.excluded ? 'ex' : ''}">
+          <td class="c">${r.rank}位</td>
+          <td>${nm(r.playerId, r.name)}${r.excluded ? '<span class="tag">順位外</span>' : ''}</td>
+          <td class="r">${(r.score * 100).toLocaleString()}</td>
+          <td class="r ${cls(r.point)}">${fmtPt(r.point)}</td>
+        </tr>`).join('');
+      return `
+        <div class="tbl">
+          <div class="tblhead">${i + 1}半荘目${h.deposit > 0 ? `<span class="badge">供託 ${h.deposit.toFixed(1)}</span>` : ''}</div>
+          <table><thead><tr><th>着順</th><th>選手</th><th class="r">素点</th><th class="r">ポイント</th></tr></thead><tbody>${rows}</tbody></table>
+        </div>`;
+    }).join('');
+
+    const penaltyRows = a.penalties.map(p => `
+      <tr><td>${nm(p.playerId, p.name)}</td><td>${escapeHtml(p.reason || '')}</td><td class="r ${cls(p.point)}">${fmtPt(p.point)}</td></tr>`).join('');
+
+    return `<!DOCTYPE html>
+<html lang="ja"><head><meta charset="utf-8" />
+<title>${escapeHtml(a.name)} 成績</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Noto Sans JP", sans-serif; color:#0f172a; margin:0; padding:24px; }
+  h1 { font-size: 22px; margin:0 0 4px; }
+  h2 { font-size: 17px; margin:26px 0 10px; border-left:6px solid #0d9488; padding-left:10px; }
+  .sub { color:#64748b; font-size:12px; margin-bottom:14px; line-height:1.6; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th, td { border:1px solid #cbd5e1; padding:5px 8px; }
+  th { background:#f1f5f9; font-size:11px; }
+  .r { text-align:right; } .c { text-align:center; }
+  .plus { color:#1d4ed8; font-weight:bold; } .minus { color:#dc2626; font-weight:bold; }
+  .top1 { background:#fffbeb; font-weight:bold; } .top2 { background:#f8fafc; } .top3 { background:#fff7ed; }
+  .ex { color:#94a3b8; }
+  .tag { font-size:9px; background:#e2e8f0; color:#64748b; padding:1px 5px; border-radius:99px; margin-left:6px; }
+  .tables { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:8px; page-break-inside: avoid; }
+  .tblhead { font-weight:bold; font-size:12px; margin-bottom:6px; }
+  .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
+  .note { font-size:10px; color:#64748b; margin-top:6px; line-height:1.6; }
+  .credit { margin-top:18px; padding-top:10px; border-top:1px solid #e2e8f0; font-size:10px; color:#64748b; line-height:1.7; }
+  @media print { body { padding:10mm; } @page { size: A4; margin: 10mm; } }
+</style></head>
+<body>
+  <h1>${escapeHtml(APP_TITLE)} ／ ${escapeHtml(a.name)} 成績</h1>
+  <div class="sub">
+    ${escapeHtml(effectiveArchiveRuleName(a))} ／ 参加 ${a.standings.length}名 ／ 全${a.hanchans.length}半荘 ／ 出力日: ${dateStr}
+    ${a.notes ? `<br>📝 ${escapeHtml(a.notes)}` : ''}
+  </div>
+
+  <h2>最終成績</h2>
+  <table>
+    <thead><tr><th>順位</th><th>選手名</th><th class="r">半荘数</th><th class="r">ポイント</th></tr></thead>
+    <tbody>${standingRows || '<tr><td colspan="4" class="c">データなし</td></tr>'}</tbody>
+  </table>
+  ${penaltyRows ? `<h2>ペナルティ</h2>
+  <table><thead><tr><th>選手名</th><th>内容</th><th class="r">ポイント</th></tr></thead><tbody>${penaltyRows}</tbody></table>
+  <p class="note">※ ペナルティは最終成績に反映済みです。</p>` : ''}
+
+  <h2>半荘ごとの成績</h2>
+  ${hanchanBlocks ? `<div class="tables">${hanchanBlocks}</div>` : '<p class="note">半荘ごとの記録はありません。</p>'}
+
+  <div class="credit">
+    本システムは、${escapeHtml(CREDIT_AUTHOR)}が制作・公開されている麻雀大会運営ツール ${escapeHtml(CREDIT_TOOL_NAME)}（${escapeHtml(CREDIT_TOOL_URL)}）を参考にさせていただき、作成しました。素晴らしいツールを公開してくださっていることに心より感謝申し上げます。
+  </div>
+</body></html>`;
+  };
+
+  const handleExportArchivePdf = (a: TournamentArchive) => {
+    const w = window.open('', '_blank');
+    if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return; }
+    w.document.open();
+    w.document.write(buildArchiveReportHtml(a));
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); }, 600);
   };
@@ -4990,6 +5175,7 @@ export default function Home() {
                                 <span className="inline-flex items-center gap-1.5">
                                   <span className={`text-[10px] text-slate-400 transition ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                                   <PlayerLabel name={p.name} />
+                                  <PodiumBadges podium={seasonPodiums.get(p.id)} />
                                 </span>
                               </td>
                               <td className="p-2 md:p-3 text-right text-slate-500">{getTotalGames(p.id)} 半荘</td>
@@ -5256,6 +5442,11 @@ export default function Home() {
                           <span className="font-black text-slate-800">{a.name}</span>
                           <span className="text-xs text-slate-400 flex items-center gap-3">
                             {a.standings.length}名 ／ {a.hanchans.length}半荘
+                            <span
+                              role="button"
+                              onClick={(e) => { e.stopPropagation(); handleExportArchivePdf(a); }}
+                              className="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                            >📄 PDF</span>
                             {isAdmin && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleDeleteArchive(a); }}
@@ -6121,7 +6312,7 @@ export default function Home() {
                                 {r.round - 1}回戦までの全ての対局が終了した瞬間に、順位順（1234／5678…）で自動決定されます。
                               </p>
                               <p className="text-xs text-slate-400 mt-2">
-                                席順: {r.mode === 'rankBottomFirst' ? '卓内下位から 東→南→西→北' : '卓内上位から 東→南→西→北'} ／ 上位2卓（8位まで）に「黒子」は入りません
+                                席順: {r.mode === 'rankBottomFirst' ? '卓内下位から 東→南→西→北' : '卓内上位から 東→南→西→北'} ／ 上位2卓（8位まで）に「黒子」「プロ」は入りません。それ以外の卓も、プロ・黒子は1卓に1人までです
                               </p>
                             </div>
                           ) : (
