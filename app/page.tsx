@@ -1216,6 +1216,57 @@ const parseMmcHanchanLog = (rawText: string): ParsedHanchan[] => {
 };
 
 
+// ==========================================
+// バックアップ形式（version 2）
+//   選手・過去大会・今大会の進行状態・次の大会の事前登録を、1つのJSONにまとめる。
+//   ログインコード（ハッシュ）は含めない。復元しても、選手のログインコードはそのまま。
+// ==========================================
+type BackupPlayer = { id: string; name: string; totalPoint: number; totalGames: number; championshipRight: boolean };
+type BackupData = {
+  app: 'mahjong-tournament';
+  version: 2;
+  exportedAt: string;
+  players: BackupPlayer[];
+  archives?: TournamentArchive[];     // 無い（旧形式）場合は、過去大会には触れない
+  currentTournament?: any | null;     // null = バックアップ時点で大会なし / undefined = 触れない
+  nextEntry?: NextEntry | null;       // null = 事前登録なし / undefined = 触れない
+};
+// バックアップファイルを読み取って検証する。旧形式（version なし: players と tournament だけ）も読める。
+const parseBackup = (raw: any): BackupData => {
+  if (!raw || typeof raw !== 'object') throw new Error('バックアップファイルの形式が正しくありません。');
+  if (typeof raw.players === 'string') throw new Error('この形式のバックアップ（旧バージョン）は復元できません。');
+  if (!Array.isArray(raw.players)) throw new Error('バックアップファイルに選手のデータがありません。');
+  const isV2 = raw.version === 2;
+  const players: BackupPlayer[] = raw.players.map((p: any, i: number) => {
+    if (!p || typeof p.id !== 'string' || typeof p.name !== 'string') throw new Error(`選手データ（${i + 1}件目）が正しくありません。`);
+    return {
+      id: p.id, name: p.name,
+      totalPoint: Number.isFinite(Number(p.totalPoint)) ? Number(p.totalPoint) : 0,
+      totalGames: Number.isFinite(Number(p.totalGames)) ? Math.max(0, Math.floor(Number(p.totalGames))) : 0,
+      championshipRight: !!p.championshipRight,
+    };
+  });
+  let archives: TournamentArchive[] | undefined;
+  if (isV2) {
+    if (!Array.isArray(raw.archives)) throw new Error('バックアップファイルに過去大会のデータがありません。');
+    archives = raw.archives.map((a: any, i: number) => {
+      if (!a || typeof a.id !== 'string' || typeof a.name !== 'string' || !Array.isArray(a.standings) || !Array.isArray(a.hanchans) || !Array.isArray(a.penalties)) {
+        throw new Error(`過去大会のデータ（${i + 1}件目）が正しくありません。`);
+      }
+      return a as TournamentArchive;
+    });
+  }
+  const current = isV2 ? raw.currentTournament : raw.tournament;
+  return {
+    app: 'mahjong-tournament', version: 2,
+    exportedAt: typeof raw.exportedAt === 'string' ? raw.exportedAt : '',
+    players,
+    archives,
+    currentTournament: current === undefined ? undefined : (current && typeof current === 'object' ? current : null),
+    nextEntry: isV2 ? (raw.nextEntry === undefined ? undefined : normalizeNextEntry(raw.nextEntry)) : undefined,
+  };
+};
+
 const api = {
   getPlayers: async (): Promise<Player[]> => {
     const { data, error } = await supabase
@@ -1380,16 +1431,59 @@ const api = {
     return true;
   },
 
-  exportBackup: async () => {
-    const players = await api.getPlayers();
-    const tournament = await api.getCurrentTournament();
-    const data = { players, tournament };
+  // バックアップの作成（ファイルのダウンロード）。選手・過去大会・今大会・事前登録を1ファイルに保存する。
+  exportBackup: async (): Promise<BackupData> => {
+    const [players, archives, currentTournament, nextEntryRaw] = await Promise.all([
+      api.getPlayers(), api.getArchives(), api.getCurrentTournament(), api.getNextEntry(),
+    ]);
+    const data: BackupData = {
+      app: 'mahjong-tournament', version: 2, exportedAt: new Date().toISOString(),
+      players: players.map(p => ({ id: p.id, name: p.name, totalPoint: p.totalPoint, totalGames: p.totalGames, championshipRight: !!p.championshipRight })),
+      archives,
+      currentTournament: currentTournament ?? null,
+      nextEntry: normalizeNextEntry(nextEntryRaw),
+    };
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `mahjong_backup_${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `mahjong_backup_${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}.json`;
     a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    return data;
+  },
+
+  // バックアップからの復元（管理者）。バックアップにある選手・過去大会は同じIDで上書き（無ければ作成）。
+  // バックアップに無い選手・過去大会は削除しない。
+  restoreBackup: async (b: BackupData) => {
+    if (b.players.length > 0) {
+      const rows = b.players.map(p => ({ id: p.id, name: p.name, total_point: p.totalPoint, total_games: p.totalGames, championship_right: p.championshipRight }));
+      const { error } = await supabase.from('players').upsert(rows, { onConflict: 'id' });
+      if (error) throw new Error(`選手の復元に失敗: ${error.message}`);
+    }
+    if (b.archives && b.archives.length > 0) {
+      const rows = b.archives.map(a => ({
+        id: a.id, name: a.name, rule_name: a.ruleName ?? null, notes: a.notes ?? null,
+        standings: a.standings, hanchans: a.hanchans, penalties: a.penalties,
+        ...(a.createdAt ? { created_at: a.createdAt } : {}),
+      }));
+      const { error } = await supabase.from('tournament_archives').upsert(rows, { onConflict: 'id' });
+      if (error) throw new Error(`過去大会の復元に失敗: ${error.message}`);
+    }
+    if (b.currentTournament !== undefined) {
+      const { error } = b.currentTournament === null
+        ? await supabase.from('tournaments').delete().eq('id', 'current')
+        : await supabase.from('tournaments').upsert({ id: 'current', data: b.currentTournament, updated_at: new Date().toISOString() });
+      if (error) throw new Error(`今大会の復元に失敗: ${error.message}`);
+    }
+    if (b.nextEntry !== undefined) {
+      const { error } = b.nextEntry === null
+        ? await supabase.from('tournaments').delete().eq('id', 'next_entry')
+        : await supabase.from('tournaments').upsert({ id: 'next_entry', data: b.nextEntry, updated_at: new Date().toISOString() });
+      if (error) throw new Error(`事前登録の復元に失敗: ${error.message}`);
+    }
   },
 
   // ---- 過去大会（アーカイブ） ----
@@ -4179,19 +4273,60 @@ export default function Home() {
   // ==========================================
   // Render
   // ==========================================
+  // バックアップの作成（ファイルをダウンロード）
+  const handleExportBackup = async () => {
+    try {
+      const data = await api.exportBackup();
+      alert(`バックアップを保存しました。\n\n・選手 ${data.players.length}名\n・過去大会 ${data.archives?.length ?? 0}件\n・今大会の進行状態: ${data.currentTournament ? 'あり' : 'なし'}\n・次の大会の事前登録: ${data.nextEntry ? 'あり' : 'なし'}\n\n※ログインコードは含まれません。`);
+    } catch (err) {
+      console.error(err);
+      alert('バックアップを作成できませんでした。通信状況を確認して、もう一度お試しください。');
+    }
+  };
+
+  // バックアップからの復元。実行前に、いまの状態を自動でバックアップ（ダウンロード）してから書き戻す。
   const handleDataImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!isAdmin) return;
-    const file = e.target.files?.[0];
+    const input = e.target;
+    const file = input.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
-        const data = JSON.parse(ev.target?.result as string);
-        if (data.players) localStorage.setItem('mahjong_players', data.players);
-        if (data.tournament) localStorage.setItem('mahjong_current_tournament', data.tournament);
-        alert('データを復元しました。画面を再読み込みします。');
+        const backup = parseBackup(JSON.parse(String(ev.target?.result)));
+        const existingPlayerIds = new Set(dbPlayers.map(p => p.id));
+        const updP = backup.players.filter(p => existingPlayerIds.has(p.id)).length;
+        const keepP = dbPlayers.filter(p => !backup.players.some(b => b.id === p.id)).length;
+        const lines: string[] = [
+          `バックアップ（${backup.exportedAt ? new Date(backup.exportedAt).toLocaleString('ja-JP') : '日時不明'}）から復元します。`,
+          '',
+          `・選手: ${backup.players.length}名（上書き ${updP}名／新規 ${backup.players.length - updP}名）。通算ポイントもバックアップ時点に戻ります`,
+        ];
+        if (keepP > 0) lines.push(`　バックアップに無い選手 ${keepP}名は、そのまま残ります`);
+        if (backup.archives) {
+          const existingArchiveIds = new Set(archives.map(a => a.id));
+          const updA = backup.archives.filter(a => existingArchiveIds.has(a.id)).length;
+          const keepA = archives.filter(a => !backup.archives!.some(b => b.id === a.id)).length;
+          lines.push(`・過去大会: ${backup.archives.length}件（上書き ${updA}件／新規 ${backup.archives.length - updA}件）`);
+          if (keepA > 0) lines.push(`　バックアップに無い過去大会 ${keepA}件は、そのまま残ります`);
+        } else {
+          lines.push('・過去大会: このバックアップには含まれていないため、変更しません');
+        }
+        if (backup.currentTournament !== undefined) lines.push(`・今大会の進行状態: ${backup.currentTournament ? 'バックアップの内容に置き換えます' : '「大会なし」の状態にします（いまの進行状態は消えます）'}`);
+        if (backup.nextEntry !== undefined) lines.push(`・次の大会の事前登録: ${backup.nextEntry ? 'バックアップの内容に置き換えます' : '削除します'}`);
+        lines.push('', '実行前に、いまの状態を自動でバックアップ（ダウンロード）します。', '※ログインコードは変わりません。', '', 'よろしいですか？');
+        if (!window.confirm(lines.join('\n'))) return;
+
+        await api.exportBackup(); // 復元前の状態を保存（万一のやり直し用）
+        await api.restoreBackup(backup);
+        alert('復元しました。画面を再読み込みします。\n（復元前の状態も、別のファイルとしてダウンロードされています）');
         window.location.reload();
-      } catch(err) { alert('ファイルの読み込みに失敗しました。'); }
+      } catch (err) {
+        console.error(err);
+        alert(`復元できませんでした。\n${err instanceof Error ? err.message : 'ファイルの読み込みに失敗しました。'}`);
+      } finally {
+        input.value = ''; // 同じファイルをもう一度選べるようにする
+      }
     };
     reader.readAsText(file);
   };
@@ -4700,7 +4835,7 @@ export default function Home() {
             {isAdmin && (
               <div className="md:hidden flex-shrink-0 flex gap-2 items-center">
                 <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={api.exportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <button onClick={handleExportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
                 <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
@@ -4725,7 +4860,7 @@ export default function Home() {
                         className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
                       >⏱ 休憩設定</button>
                       <button
-                        onClick={() => { setShowAdminMenu(false); api.exportBackup(); }}
+                        onClick={() => { setShowAdminMenu(false); handleExportBackup(); }}
                         className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
                       >💾 バックアップ</button>
                       <label className="block w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition cursor-pointer">
