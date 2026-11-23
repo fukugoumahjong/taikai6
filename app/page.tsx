@@ -3106,14 +3106,6 @@ export default function Home() {
   const hasChampionshipRight = (p: Player) => !isPro(p.name) && !!p.championshipRight;
   // 今季の大会（第4回以降）。今季成績は、前季（第1〜3回）を含めずに集計する
   const seasonArchives = archives.filter(a => !isPreviousSeasonArchive(a));
-  // 今季の各大会（年間チャンピオン大会などの別枠は除く）で、3位までに入った回数
-  const seasonPodiums = new Map<string, PodiumCount>();
-  seasonArchives.filter(a => !isSeparateEventArchive(a)).forEach(a => a.standings.forEach(st => {
-    if (st.rank < 1 || st.rank > 3) return;
-    const cur = seasonPodiums.get(st.playerId) || { first: 0, second: 0, third: 0 };
-    if (st.rank === 1) cur.first++; else if (st.rank === 2) cur.second++; else cur.third++;
-    seasonPodiums.set(st.playerId, cur);
-  }));
   // 今季対局数 = 今季の過去大会（アーカイブ）の半荘数の合計 ＋ 今大会（進行中・送信済み）の半荘数
   // 手動で編集・加減算する値ではなく、常にここから計算する。
   const getTotalGames = (playerId: string): number => {
@@ -3346,6 +3338,23 @@ export default function Home() {
   const dbIdByName = new Map<string, string>();
   dbPlayers.forEach(p => { if (!dbIdByName.has(p.name)) dbIdByName.set(p.name, p.id); });
   const lifetimeKeyOf = (playerId: string, name: string) => (dbNameById.has(playerId) ? playerId : (dbIdByName.get(name) ?? playerId));
+  // 今季の各大会（年間チャンピオン大会などの別枠は除く）で、3位までに入った回数。
+  // 過去大会の選手IDが現在の選手IDと違っていても数え落とさないよう、生涯成績と同じく「ID → なければ名前」で選手に紐づける。
+  // 同じ大会で同じ選手を二重に数えない。
+  const seasonPodiums = new Map<string, PodiumCount>();
+  seasonArchives.filter(a => !isSeparateEventArchive(a)).forEach(a => {
+    const counted = new Set<string>();
+    a.standings.forEach(st => {
+      if (st.rank < 1 || st.rank > 3) return;
+      if (isKuroko(nameOf(st.playerId, st.name))) return;
+      const key = lifetimeKeyOf(st.playerId, st.name);
+      if (counted.has(key)) return;
+      counted.add(key);
+      const cur = seasonPodiums.get(key) || { first: 0, second: 0, third: 0 };
+      if (st.rank === 1) cur.first++; else if (st.rank === 2) cur.second++; else cur.third++;
+      seasonPodiums.set(key, cur);
+    });
+  });
   // 大会を最高位戦ルールに換算したときの、選手ごとの合計ポイント（ペナルティ込み）。参考値
   const convertedArchivePoints = (a: TournamentArchive): Map<string, number> => {
     const start = RULE_START_SCORE[effectiveArchiveRuleName(a)] ?? DEFAULT_START_SCORE;
