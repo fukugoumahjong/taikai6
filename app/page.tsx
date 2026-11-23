@@ -4020,7 +4020,8 @@ export default function Home() {
   .tbl th:first-child, .tbl td:first-child { width:1%; }
   .tbl th:nth-child(3), .tbl td:nth-child(3), .tbl th:nth-child(4), .tbl td:nth-child(4) { width:1%; }
   .tbl th:nth-child(2), .tbl td:nth-child(2) { min-width:6em; white-space:normal; overflow-wrap:anywhere; }
-  .tbl .tag { display:block; margin:2px 0 0; width:fit-content; }
+  .tbl tr.ex td:nth-child(2) { white-space:nowrap; }
+  .tbl .tag { display:inline-block; margin:0 0 0 3px; padding:1px 3px; white-space:nowrap; }
   .tblhead .badge { background:#334155; color:#e2e8f0; font-size:9px; padding:1px 4px; margin-left:4px; }
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
   .note { font-size:10px; color:#64748b; margin-top:6px; line-height:1.6; }
