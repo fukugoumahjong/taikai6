@@ -3974,7 +3974,7 @@ export default function Home() {
         <td class="r ${cls(s.totalPoint)}">${fmtPt(s.totalPoint)}</td>
       </tr>`).join('');
 
-    // 「N半荘目」ごとに、その回戦の全卓を並べる
+    // 卓ごとに「1半荘目-1卓」の見出しを付け、同じ回戦の卓は横に並べる（古い半荘が先）
     const hanchanBlocks = groupArchiveHanchans(a.hanchans).map(g => {
       const cards = g.items.map(h => {
         const rows = [...h.results].sort((x, y) => x.rank - y.rank).map(r => `
@@ -3984,11 +3984,10 @@ export default function Home() {
             <td class="r">${(r.score * 100).toLocaleString()}</td>
             <td class="r ${cls(r.point)}">${fmtPt(r.point)}</td>
           </tr>`).join('');
-        const head = typeof h.table === 'number' || h.deposit > 0
-          ? `<div class="tblhead">${typeof h.table === 'number' ? `${h.table}卓` : ''}${h.deposit > 0 ? `<span class="badge">供託 ${h.deposit.toFixed(1)}</span>` : ''}</div>` : '';
-        return `<div class="tbl">${head}<table><thead><tr><th>着順</th><th>選手</th><th class="r">素点</th><th class="r">ポイント</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        const label = typeof h.table === 'number' ? `${g.no}半荘目-${h.table}卓` : `${g.no}半荘目`;
+        return `<div class="tbl"><div class="tblhead">${label}${h.deposit > 0 ? `<span class="badge">供託 ${h.deposit.toFixed(1)}</span>` : ''}</div><table><thead><tr><th>着順</th><th>選手</th><th class="r">素点</th><th class="r">ポイント</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       }).join('');
-      return `<div class="round"><h3>${g.no}半荘目${g.items.length > 1 ? `<span class="time">全${g.items.length}卓</span>` : ''}</h3><div class="tables">${cards}</div></div>`;
+      return `<div class="round"><div class="tables">${cards}</div></div>`;
     }).join('');
 
     const penaltyRows = a.penalties.map(p => `
@@ -4011,12 +4010,12 @@ export default function Home() {
   .top1 { background:#fffbeb; font-weight:bold; } .top2 { background:#f8fafc; } .top3 { background:#fff7ed; }
   .ex { color:#94a3b8; }
   .tag { font-size:9px; background:#e2e8f0; color:#64748b; padding:1px 5px; border-radius:99px; margin-left:6px; }
-  h3 { font-size: 14px; margin:16px 0 8px; background:#0f172a; color:#fff; padding:5px 10px; border-radius:4px; }
-  .time { font-size:10px; font-weight:normal; color:#cbd5e1; margin-left:8px; }
   .round { page-break-inside: avoid; margin-bottom:10px; }
   .tables { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
-  .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:8px; page-break-inside: avoid; }
-  .tblhead { font-weight:bold; font-size:12px; margin-bottom:6px; }
+  .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:0 0 8px; overflow:hidden; page-break-inside: avoid; }
+  .tblhead { background:#0f172a; color:#fff; font-weight:bold; font-size:13px; padding:5px 10px; margin-bottom:8px; }
+  .tbl table { width:calc(100% - 16px); margin:0 8px; }
+  .tblhead .badge { background:#334155; color:#e2e8f0; }
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
   .note { font-size:10px; color:#64748b; margin-top:6px; line-height:1.6; }
   @media print { body { padding:10mm; } @page { size: A4; margin: 10mm; } }
@@ -4112,9 +4111,8 @@ export default function Home() {
   // 「今大会をアーカイブ」で、半荘を古い順のまま保存してしまった大会を直す。
   //   ・保存順を、取り込み済みの大会と同じ「新しい半荘が先」にそろえる
   //   ・同じ回戦（同じ選手が重ならない連続した卓）を「N半荘目」としてまとめ、卓番号を付ける
-  const handleRepairArchiveOrder = async (a: TournamentArchive) => {
-    if (!isAdmin) return;
-    if (!window.confirm(`「${a.name}」の半荘の並びと卓を直します。\n\n・「今大会をアーカイブ」で保存した大会（半荘が逆順に見える大会）にだけ実行してください。\n・取り込み済みの大会に実行すると、逆になってしまいます。\n\n実行しますか？`)) return;
+  // 古い順のまま保存された半荘を、「新しい半荘が先」の保存順にそろえ、同じ回戦の卓（同じ選手が重ならない連続した卓）をまとめて、回戦・卓番号を付ける
+  const buildRepairedHanchans = (a: TournamentArchive): ArchiveHanchan[] => {
     const asc = [...a.hanchans]; // いまの保存順 = 古い順（誤り）
     const rounds: { ids: Set<string>; items: ArchiveHanchan[] }[] = [];
     asc.forEach(h => {
@@ -4125,22 +4123,50 @@ export default function Home() {
     });
     const fixedAsc: ArchiveHanchan[] = [];
     rounds.forEach((r, ri) => r.items.forEach((h, ti) => fixedAsc.push({ ...h, round: ri + 1, table: ti + 1 })));
-    const stored = [...fixedAsc].reverse().map((h, i) => ({ ...h, no: i + 1 }));
+    return [...fixedAsc].reverse().map((h, i) => ({ ...h, no: i + 1 }));
+  };
+  // 卓の情報が無い（＝まだ直していない／取り込み済みの）大会か
+  const lacksTableInfo = (a: TournamentArchive) => a.hanchans.length > 0 && a.hanchans.every(h => h.round === undefined);
+
+  const handleRepairArchiveOrder = async (a: TournamentArchive) => {
+    if (!isAdmin) return;
+    if (!window.confirm(`「${a.name}」の半荘の並びと卓を直します。\n\n・「今大会をアーカイブ」で保存した大会（半荘が逆順に見える大会）にだけ実行してください。\n・取り込み済みの大会に実行すると、逆になってしまいます。\n\n実行しますか？`)) return;
+    const stored = buildRepairedHanchans(a);
     try {
       await api.updateArchiveHanchans(a.id, stored);
       setArchives(await api.getArchives());
-      alert(`直しました（${rounds.length}半荘目、全${stored.length}卓）。`);
+      alert(`直しました（${new Set(stored.map(h => h.round)).size}半荘目、全${stored.length}卓）。`);
     } catch (err) {
       console.error(err);
       alert('直せませんでした。管理者としてログインしているか、コンソールを確認してください。');
     }
   };
 
-  const handleExportArchivePdf = (a: TournamentArchive) => {
+  const handleExportArchivePdf = async (a: TournamentArchive) => {
+    // ポップアップがブロックされないよう、クリックの直後に先にウィンドウを開く
     const w = window.open('', '_blank');
     if (!w) { alert('ポップアップがブロックされました。ブラウザの設定を確認してください。'); return; }
     w.document.open();
-    w.document.write(buildArchiveReportHtml(a));
+    w.document.write('<p style="font-family:sans-serif;padding:24px">PDFを作成しています...</p>');
+    w.document.close();
+
+    let target = a;
+    // 卓の情報が無い大会は、PDFに「1半荘目-1卓」と書けない。管理者なら、その場で直してから出力できる。
+    if (isAdmin && lacksTableInfo(a) && window.confirm(
+      `「${a.name}」には、卓の情報がありません。\n\n【OK】半荘の並びと卓を直してから、PDFを作ります\n　（「今大会をアーカイブ」で保存した大会だけ。取り込み済みの大会では、キャンセルしてください）\n【キャンセル】そのままPDFを作ります`
+    )) {
+      try {
+        const stored = buildRepairedHanchans(a);
+        await api.updateArchiveHanchans(a.id, stored);
+        target = { ...a, hanchans: stored };
+        setArchives(await api.getArchives());
+      } catch (err) {
+        console.error(err);
+        alert('直せませんでした。このままPDFを作ります。');
+      }
+    }
+    w.document.open();
+    w.document.write(buildArchiveReportHtml(target));
     w.document.close();
     setTimeout(() => { w.focus(); w.print(); }, 600);
   };
@@ -5824,16 +5850,17 @@ export default function Home() {
                                     )}
                                     {groupArchiveHanchans(a.hanchans).map(g => (
                                       <div key={g.no} className="border border-indigo-100 rounded-xl overflow-hidden bg-white">
-                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                                          <span className="text-sm font-black text-indigo-900">{g.no}半荘目</span>
-                                          {g.items.length > 1 && <span className="text-[10px] font-bold text-indigo-400">全{g.items.length}卓</span>}
-                                        </div>
+                                        {!g.items.some(h => typeof h.table === 'number') && (
+                                          <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100">
+                                            <span className="text-sm font-black text-indigo-900">{g.no}半荘目</span>
+                                          </div>
+                                        )}
                                         <div className="p-2 grid gap-2 md:grid-cols-2">
                                           {g.items.map((h, k) => (
                                             <div key={k} className="border border-slate-200 rounded-lg overflow-hidden bg-white">
                                               {(typeof h.table === 'number' || h.deposit > 0) && (
                                                 <div className="flex items-center justify-between px-3 py-1 bg-slate-50 border-b border-slate-100">
-                                                  <span className="text-xs font-black text-slate-600">{typeof h.table === 'number' ? `${h.table}卓` : ''}</span>
+                                                  <span className="text-xs font-black text-indigo-900">{typeof h.table === 'number' ? `${g.no}半荘目-${h.table}卓` : ''}</span>
                                                   {h.deposit > 0 && <span className="text-[10px] text-slate-400">供託 {h.deposit.toFixed(1)}</span>}
                                                 </div>
                                               )}
