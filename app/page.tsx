@@ -5499,8 +5499,8 @@ export default function Home() {
                                   <PodiumBadges podium={seasonPodiums.get(p.id)} />
                                 </span>
                               </td>
-                              <td className="p-2 md:p-3 text-right text-slate-500">{getTotalGames(p.id)} 半荘</td>
-                              <td className={`p-3 text-right font-black text-lg ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                              <td className="p-2 md:p-3 text-right text-slate-500 tabular-nums">{getTotalGames(p.id)} 半荘</td>
+                              <td className={`p-3 text-right font-black text-lg tabular-nums ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                                 {fmtPt(p.totalPoint)}
                               </td>
                               <td className="p-2 md:p-3 text-center">
@@ -5694,7 +5694,7 @@ export default function Home() {
                                   <td className="py-1 pr-2 text-slate-400">{row.rank}</td>
                                   <td className="py-1 pr-2 font-bold text-slate-700">{row.name}</td>
                                   <td className="py-1 pr-2 text-right text-slate-500">{row.gameCount}</td>
-                                  <td className={`py-1 text-right font-bold ${row.point > 0 ? 'text-blue-600' : row.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(row.point)}</td>
+                                  <td className={`py-1 text-right font-bold tabular-nums ${row.point > 0 ? 'text-blue-600' : row.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(row.point)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -5819,7 +5819,7 @@ export default function Home() {
                                           <td className="py-1 pr-2 text-slate-400">{s.rank}</td>
                                           <td className="py-1 pr-2 font-bold text-slate-700"><PlayerLabel name={nameOf(s.playerId, s.name)} /></td>
                                           <td className="py-1 pr-2 text-right text-slate-500">{s.gameCount}</td>
-                                          <td className={`py-1 text-right font-bold ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
+                                          <td className={`py-1 text-right font-bold tabular-nums ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
                                         </tr>
                                         {isPlayerOpen && (
                                           <tr>
