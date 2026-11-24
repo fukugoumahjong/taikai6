@@ -455,6 +455,550 @@ const ArchiveHistoryMini = ({
   );
 };
 
+// ==========================================
+// 学校別成績（管理者のみ・非公開）。1卓の1半荘を1件の「対局」として、学校ごとに集計する
+// ==========================================
+type SGPlayer = { key: string; name: string; school: string; rank: number; score: number; point: number };
+type SGame = { id: string; tKey: string; tName: string; tOrder: number; season: boolean; label: string; players: SGPlayer[] };
+type SchoolScope = 'season' | 'all';
+type SchoolTournament = { tKey: string; tName: string; order: number; games: number; point: number; members: number; rank: number; total: number };
+type SchoolSummary = {
+  school: string;
+  members: Map<string, { name: string; games: number; point: number }>;
+  games: number; // 延べ半荘数（選手ごとの半荘の合計）
+  point: number;
+  rankSum: number;
+  dist: number[];
+  maxScore: { score: number; label: string } | null;
+  tournaments: SchoolTournament[]; // 新しい大会が先頭
+  tables: SGame[]; // その学校の選手がいた対局
+};
+type SchoolVs = { school: string; games: number; wins: number; losses: number; draws: number; diffSum: number };
+
+const schoolInScope = (g: SGame, scope: SchoolScope) => scope === 'all' || g.season;
+const schoolAvg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
+const schoolR1 = (v: number) => Math.round(v * 10) / 10;
+
+const emptySchoolSummary = (school: string): SchoolSummary => ({
+  school, members: new Map(), games: 0, point: 0, rankSum: 0, dist: [0, 0, 0, 0], maxScore: null, tournaments: [], tables: [],
+});
+
+const buildSchoolSummaries = (games: SGame[], scope: SchoolScope): Map<string, SchoolSummary> => {
+  const out = new Map<string, SchoolSummary>();
+  const tmap = new Map<string, Map<string, SchoolTournament & { memberSet: Set<string> }>>();
+  games.filter(g => schoolInScope(g, scope)).forEach(g => {
+    const seen = new Set<string>();
+    g.players.forEach(pl => {
+      if (!pl.school) return;
+      let s = out.get(pl.school);
+      if (!s) { s = emptySchoolSummary(pl.school); out.set(pl.school, s); }
+      const m = s.members.get(pl.key) || { name: pl.name, games: 0, point: 0 };
+      m.games += 1; m.point += pl.point;
+      s.members.set(pl.key, m);
+      s.games += 1; s.point += pl.point; s.rankSum += pl.rank;
+      if (pl.rank >= 1 && pl.rank <= 4) s.dist[pl.rank - 1] += 1;
+      if (!s.maxScore || pl.score > s.maxScore.score) s.maxScore = { score: pl.score, label: `${g.label}・${pl.name}` };
+      if (!seen.has(pl.school)) { seen.add(pl.school); s.tables.push(g); }
+      let tm = tmap.get(pl.school);
+      if (!tm) { tm = new Map(); tmap.set(pl.school, tm); }
+      let t = tm.get(g.tKey);
+      if (!t) { t = { tKey: g.tKey, tName: g.tName, order: g.tOrder, games: 0, point: 0, members: 0, rank: 0, total: 0, memberSet: new Set<string>() }; tm.set(g.tKey, t); }
+      t.games += 1; t.point += pl.point; t.memberSet.add(pl.key);
+    });
+  });
+  // 大会ごとの、学校どうしの順位（その大会の合計ポイント順。同点は同順位）
+  const byT = new Map<string, { school: string; point: number }[]>();
+  tmap.forEach((tm, school) => tm.forEach((t, k) => {
+    const arr = byT.get(k) || [];
+    arr.push({ school, point: schoolR1(t.point) });
+    byT.set(k, arr);
+  }));
+  byT.forEach((arr, k) => {
+    arr.sort((x, y) => y.point - x.point);
+    arr.forEach((x, i) => {
+      const rank = i > 0 && arr[i - 1].point === x.point ? (tmap.get(arr[i - 1].school)!.get(k)!.rank) : i + 1;
+      const t = tmap.get(x.school)!.get(k)!;
+      t.rank = rank; t.total = arr.length; t.members = t.memberSet.size;
+    });
+  });
+  out.forEach((s, school) => {
+    const tm = tmap.get(school);
+    s.tournaments = tm ? Array.from(tm.values()).map(({ memberSet: _ms, ...rest }) => rest).sort((x, y) => y.order - x.order) : [];
+    s.tables.sort((x, y) => (y.tOrder === x.tOrder ? 0 : y.tOrder - x.tOrder));
+  });
+  return out;
+};
+
+// 同じ卓にいた2校の比較: その卓での、各校の選手のポイント平均（人数が違っても公平になるよう平均で比べる）
+const schoolTablePair = (g: SGame, a: string, b: string) => {
+  const pa = g.players.filter(p => p.school === a);
+  const pb = g.players.filter(p => p.school === b);
+  if (pa.length === 0 || pb.length === 0) return null;
+  return { a: schoolAvg(pa.map(p => p.point)), b: schoolAvg(pb.map(p => p.point)) };
+};
+
+const buildSchoolVs = (games: SGame[], scope: SchoolScope, school: string): SchoolVs[] => {
+  const m = new Map<string, SchoolVs>();
+  games.filter(g => schoolInScope(g, scope)).forEach(g => {
+    if (!g.players.some(p => p.school === school)) return;
+    const others = new Set(g.players.map(p => p.school).filter(s => s && s !== school));
+    others.forEach(o => {
+      const r = schoolTablePair(g, school, o);
+      if (!r) return;
+      const cur = m.get(o) || { school: o, games: 0, wins: 0, losses: 0, draws: 0, diffSum: 0 };
+      const d = r.a - r.b;
+      cur.games += 1; cur.diffSum += d;
+      if (Math.abs(d) < 0.05) cur.draws += 1; else if (d > 0) cur.wins += 1; else cur.losses += 1;
+      m.set(o, cur);
+    });
+  });
+  return Array.from(m.values()).map(x => ({ ...x, diffSum: schoolR1(x.diffSum) })).sort((x, y) => y.diffSum - x.diffSum);
+};
+
+type SchoolH2H = { rows: { g: SGame; a: number; b: number }[]; aWins: number; bWins: number; draws: number; diffSum: number };
+const buildSchoolH2H = (games: SGame[], scope: SchoolScope, a: string, b: string): SchoolH2H => {
+  const rows: { g: SGame; a: number; b: number }[] = [];
+  let aWins = 0, bWins = 0, draws = 0, diffSum = 0;
+  games.filter(g => schoolInScope(g, scope)).forEach(g => {
+    const r = schoolTablePair(g, a, b);
+    if (!r) return;
+    rows.push({ g, a: r.a, b: r.b });
+    const d = r.a - r.b;
+    diffSum += d;
+    if (Math.abs(d) < 0.05) draws += 1; else if (d > 0) aWins += 1; else bWins += 1;
+  });
+  rows.sort((x, y) => (y.g.tOrder === x.g.tOrder ? 0 : y.g.tOrder - x.g.tOrder));
+  return { rows, aWins, bWins, draws, diffSum: schoolR1(diffSum) };
+};
+
+const ptClass = (v: number) => (v > 0 ? 'text-blue-600' : v < 0 ? 'text-red-600' : 'text-slate-400');
+const SCHOOL_RANK_LABELS = ['1着', '2着', '3着', '4着'];
+const SCHOOL_RANK_COLORS = ['bg-yellow-400', 'bg-slate-400', 'bg-amber-700', 'bg-slate-300'];
+
+// 卓の中身（同卓者）を表示する小さな部品。指定した学校の選手を強調する
+const SchoolTablePlayers = ({ players, highlight }: { players: SGPlayer[]; highlight: string[] }) => (
+  <div className="px-3 py-2 bg-slate-50 space-y-1">
+    {[...players].sort((x, y) => x.rank - y.rank).map((p, i) => (
+      <div key={`${p.key}-${i}`} className={`flex items-center gap-2 text-xs ${highlight.includes(p.school) ? 'font-black text-slate-800' : 'text-slate-500'}`}>
+        <span className="w-8">{p.rank}着</span>
+        <PlayerLabel name={p.name} className="flex-1 truncate" />
+        <span className={`text-[10px] px-1.5 rounded-full border ${highlight.includes(p.school) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}>{p.school || '学校なし'}</span>
+        <span className="tabular-nums w-16 text-right">{p.score.toLocaleString()}</span>
+        <span className={`tabular-nums w-14 text-right font-black ${ptClass(p.point)}`}>{fmtPt(p.point)}</span>
+      </div>
+    ))}
+  </div>
+);
+
+// 学校別成績（モーダル）。個人成績と同じ構成: 今季/通算のタブ・大会別成績・着順分布・半荘ごとの成績・対戦相性
+const SchoolDetailModal = ({
+  school, summaries, ranks, vs, initialScope, onCompare, onClose,
+}: {
+  school: string;
+  summaries: Record<SchoolScope, SchoolSummary | null>;
+  ranks: Record<SchoolScope, { rank: number; total: number } | null>;
+  vs: Record<SchoolScope, SchoolVs[]>;
+  initialScope: SchoolScope;
+  onCompare: (other: string) => void;
+  onClose: () => void;
+}) => {
+  const [tab, setTab] = useState<SchoolScope>(initialScope);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  const [openGame, setOpenGame] = useState<string | null>(null);
+  const s = summaries[tab] || emptySchoolSummary(school);
+  const rk = ranks[tab];
+  const vsList = vs[tab];
+  const total = schoolR1(s.point);
+  const groups = (() => {
+    const m = new Map<string, { key: string; label: string; rows: SGame[] }>();
+    s.tables.forEach(g => {
+      const cur = m.get(g.tKey) || { key: g.tKey, label: g.tName, rows: [] };
+      cur.rows.push(g);
+      m.set(g.tKey, cur);
+    });
+    return Array.from(m.values());
+  })();
+  const sum = s.dist.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-3 md:p-6" onClick={onClose}>
+      <div className="bg-white w-full max-w-3xl max-h-[94vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
+        <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
+          <div>
+            <p className="text-indigo-200 text-xs font-bold mb-1">学校別成績 <span className="ml-1 text-[10px] border border-white/30 rounded px-1.5 py-0.5">非公開</span></p>
+            <h2 className="text-2xl md:text-3xl font-black">🏫 {school}</h2>
+            <p className={`mt-2 text-2xl font-black tabular-nums ${total > 0 ? 'text-emerald-300' : total < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
+              {fmtPt(total)} <span className="text-sm font-bold text-indigo-200">（{tab === 'season' ? '今季' : '通算'} {s.games}半荘・{s.members.size}名）</span>
+              {rk ? (
+                <span className="ml-2 inline-flex items-baseline gap-0.5 align-middle bg-white/15 ring-1 ring-white/25 rounded-full px-2.5 py-0.5 text-white">
+                  <span className="text-lg font-black tabular-nums">{rk.rank}</span>
+                  <span className="text-xs font-bold">位</span>
+                  <span className="text-[10px] font-bold text-indigo-200 ml-1">/ {rk.total}校</span>
+                </span>
+              ) : null}
+            </p>
+            {s.maxScore && (
+              <p className="mt-2 text-xs font-bold text-indigo-200">
+                🎯 最高スコア <span className="text-white text-sm">{s.maxScore.score.toLocaleString()}点</span>（{s.maxScore.label}）
+              </p>
+            )}
+          </div>
+          <button onClick={onClose} className="text-indigo-200 hover:text-white text-2xl leading-none font-bold px-2">✕</button>
+        </div>
+
+        <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
+          {([['season', '今季成績'], ['all', '通算成績']] as const).map(([k, label]) => (
+            <button
+              key={k}
+              onClick={() => setTab(k)}
+              className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >{label}</button>
+          ))}
+        </div>
+
+        <div className="overflow-y-auto p-5 md:p-8 space-y-8">
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">大会別成績</h3>
+            {s.tournaments.length === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2">
+                {s.tournaments.map(t => (
+                  <div key={t.tKey} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
+                    <span className="text-slate-700 font-bold">{t.tName}</span>
+                    <RankPill rank={t.rank} playerCount={t.total} />
+                    <span className="text-slate-400 text-xs whitespace-nowrap">{t.members}名・{t.games}戦</span>
+                    <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(t.point)}`}>{fmtPt(schoolR1(t.point))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 mt-2">順位は、その大会に出場した学校どうしの合計ポイントの順位です。</p>
+          </section>
+
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">🎯 着順分布（{tab === 'season' ? '今季' : '通算'}合計 {sum}戦）</h3>
+            {sum === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="space-y-2">
+                {s.dist.map((count, idx) => {
+                  const pct = Math.round((count / sum) * 100);
+                  return (
+                    <div key={idx} className="flex items-center gap-3 text-sm">
+                      <span className="w-10 font-bold text-slate-500">{SCHOOL_RANK_LABELS[idx]}</span>
+                      <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                        <div className={`h-full ${SCHOOL_RANK_COLORS[idx]}`} style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                        <span className="inline-block w-7 text-right">{count}</span>
+                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">👥 所属選手別の成績</h3>
+            {s.members.size === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="space-y-1.5">
+                {Array.from(s.members.values()).sort((a, b) => b.point - a.point).map(m => (
+                  <div key={m.name} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                    <PlayerLabel name={m.name} className="text-slate-700 font-bold truncate flex-1" />
+                    <span className="text-slate-400 text-xs whitespace-nowrap">{m.games}戦</span>
+                    <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(m.point)}`}>{fmtPt(schoolR1(m.point))}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">🀄 半荘ごとの成績</h3>
+            {groups.length === 0 ? (
+              <p className="text-xs text-slate-400">記録がありません。</p>
+            ) : (
+              <div className="space-y-2">
+                {groups.map(g => {
+                  const open = !!openGroups[g.key];
+                  return (
+                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setOpenGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
+                      >
+                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
+                        <span className="text-xs text-slate-400 flex items-center gap-2">{g.rows.length}卓<span className="font-bold">{open ? '▲' : '▼'}</span></span>
+                      </button>
+                      {open && (
+                        <div className="divide-y divide-slate-100">
+                          {g.rows.map(game => {
+                            const mine = game.players.filter(p => p.school === school);
+                            const pt = schoolR1(mine.reduce((a, p) => a + p.point, 0));
+                            const isOpen = openGame === game.id;
+                            return (
+                              <div key={game.id}>
+                                <button onClick={() => setOpenGame(isOpen ? null : game.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50 text-xs">
+                                  <span className="font-bold text-slate-600 truncate">{game.label}</span>
+                                  <span className="text-slate-400 truncate flex-1 text-right">{mine.map(p => `${p.name} ${p.rank}着`).join('・')}</span>
+                                  <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(pt)}`}>{fmtPt(pt)}</span>
+                                </button>
+                                {isOpen && <SchoolTablePlayers players={game.players} highlight={[school]} />}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          <section>
+            <h3 className="text-sm font-black text-slate-700 mb-3">🤝 対戦相性（他校との直接対決）</h3>
+            {vsList.length === 0 ? (
+              <p className="text-xs text-slate-400">他校と同卓した記録がありません。</p>
+            ) : (
+              <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
+                {vsList.map(o => (
+                  <div key={o.school} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-slate-700 font-bold truncate flex-1">{o.school}</span>
+                    <span className="text-slate-400 text-xs whitespace-nowrap">{o.games}卓 {o.wins}勝{o.losses}敗{o.draws > 0 ? `${o.draws}分` : ''}</span>
+                    <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(o.diffSum)}`}>{fmtPt(o.diffSum)}</span>
+                    <button onClick={() => onCompare(o.school)} className="text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md whitespace-nowrap">比較</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-slate-400 mt-2">同じ卓になった半荘ごとに、各校の選手のポイント平均を比べています。プラスは「この学校が相手より合計で勝っている」ことを表します。</p>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 2校の直対成績・成績比較
+const SchoolH2HPanel = ({
+  schools, games, scope, a, b, setA, setB,
+}: {
+  schools: string[];
+  games: SGame[];
+  scope: SchoolScope;
+  a: string;
+  b: string;
+  setA: (v: string) => void;
+  setB: (v: string) => void;
+}) => {
+  const [showTables, setShowTables] = useState(false);
+  const [openGame, setOpenGame] = useState<string | null>(null);
+  const label = scope === 'season' ? '今季' : '通算';
+  const ready = !!a && !!b && a !== b;
+  const sums = ready ? buildSchoolSummaries(games, scope) : new Map<string, SchoolSummary>();
+  const sa = sums.get(a) || emptySchoolSummary(a);
+  const sb = sums.get(b) || emptySchoolSummary(b);
+  const h2h = ready ? buildSchoolH2H(games, scope, a, b) : null;
+
+  type Metric = { label: string; av: number; bv: number; fmt: (v: number) => string; better: 'high' | 'low' | 'none'; skip?: boolean };
+  const rate = (n: number, d: number) => (d > 0 ? (n / d) * 100 : 0);
+  const metrics: Metric[] = [
+    { label: '出場人数', av: sa.members.size, bv: sb.members.size, fmt: v => `${v}名`, better: 'none' },
+    { label: '半荘数（延べ）', av: sa.games, bv: sb.games, fmt: v => `${v}`, better: 'none' },
+    { label: '合計ポイント', av: schoolR1(sa.point), bv: schoolR1(sb.point), fmt: fmtPt, better: 'high' },
+    { label: '1半荘あたり', av: sa.games ? schoolR1(sa.point / sa.games) : 0, bv: sb.games ? schoolR1(sb.point / sb.games) : 0, fmt: fmtPt, better: 'high', skip: !sa.games || !sb.games },
+    { label: '平均着順', av: sa.games ? sa.rankSum / sa.games : 0, bv: sb.games ? sb.rankSum / sb.games : 0, fmt: v => v.toFixed(2), better: 'low', skip: !sa.games || !sb.games },
+    { label: '1着率', av: rate(sa.dist[0], sa.games), bv: rate(sb.dist[0], sb.games), fmt: v => `${v.toFixed(1)}%`, better: 'high', skip: !sa.games || !sb.games },
+    { label: '連対率（1・2着）', av: rate(sa.dist[0] + sa.dist[1], sa.games), bv: rate(sb.dist[0] + sb.dist[1], sb.games), fmt: v => `${v.toFixed(1)}%`, better: 'high', skip: !sa.games || !sb.games },
+    { label: 'ラス率（4着）', av: rate(sa.dist[3], sa.games), bv: rate(sb.dist[3], sb.games), fmt: v => `${v.toFixed(1)}%`, better: 'low', skip: !sa.games || !sb.games },
+    { label: '最高スコア', av: sa.maxScore?.score ?? 0, bv: sb.maxScore?.score ?? 0, fmt: v => (v ? `${v.toLocaleString()}点` : '-'), better: 'high', skip: !sa.maxScore || !sb.maxScore },
+  ];
+  const winner = (m: Metric): 'a' | 'b' | null => {
+    if (m.better === 'none' || m.skip || m.av === m.bv) return null;
+    return (m.better === 'high' ? m.av > m.bv : m.av < m.bv) ? 'a' : 'b';
+  };
+  const aWinCount = metrics.filter(m => winner(m) === 'a').length;
+  const bWinCount = metrics.filter(m => winner(m) === 'b').length;
+
+  const tourneys = (() => {
+    const m = new Map<string, { tName: string; order: number; a?: SchoolTournament; b?: SchoolTournament }>();
+    sa.tournaments.forEach(t => m.set(t.tKey, { tName: t.tName, order: t.order, a: t }));
+    sb.tournaments.forEach(t => { const cur = m.get(t.tKey) || { tName: t.tName, order: t.order }; cur.b = t; m.set(t.tKey, cur); });
+    return Array.from(m.entries()).map(([k, v]) => ({ key: k, ...v })).sort((x, y) => y.order - x.order);
+  })();
+  const distMax = Math.max(1, ...sa.dist.map(c => rate(c, sa.games)), ...sb.dist.map(c => rate(c, sb.games)));
+  const total = h2h ? h2h.aWins + h2h.bWins + h2h.draws : 0;
+
+  return (
+    <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+        <h4 className="text-sm font-black text-slate-800">⚔️ 学校対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+        <p className="text-[11px] text-slate-400 leading-snug">2つの学校を選ぶと、{label}の直接対決と成績の比較が見られます（上の「今季／通算」に連動します）。</p>
+      </div>
+      <div className="p-3 md:p-4 space-y-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <select value={a} onChange={e => setA(e.target.value)} className="flex-1 min-w-[8rem] p-2 border rounded-lg bg-white text-sm font-bold">
+            <option value="">学校Aを選ぶ</option>
+            {schools.map(sc => <option key={sc} value={sc} disabled={sc === b}>{sc}</option>)}
+          </select>
+          <span className="text-sm font-black text-slate-400">VS</span>
+          <select value={b} onChange={e => setB(e.target.value)} className="flex-1 min-w-[8rem] p-2 border rounded-lg bg-white text-sm font-bold">
+            <option value="">学校Bを選ぶ</option>
+            {schools.map(sc => <option key={sc} value={sc} disabled={sc === a}>{sc}</option>)}
+          </select>
+          <button onClick={() => { setA(b); setB(a); }} disabled={!a && !b} className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 disabled:opacity-40">⇄ 入れ替え</button>
+        </div>
+
+        {!ready ? (
+          <p className="text-xs text-slate-400 py-4 text-center">{schools.length < 2 ? '学校が2つ以上設定されると比較できます。' : '異なる2つの学校を選んでください。'}</p>
+        ) : (
+          <>
+            <div>
+              <h5 className="text-xs font-black text-slate-700 mb-2">🥊 直接対決（同じ卓になった半荘）</h5>
+              {total === 0 ? (
+                <p className="text-xs text-slate-400">{label}に、この2校が同卓した記録はありません。</p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between text-sm font-black mb-1">
+                    <span className="text-indigo-700">{a} <span className="tabular-nums">{h2h!.aWins}勝</span></span>
+                    <span className="text-slate-400 text-xs">{total}卓{h2h!.draws > 0 ? `（引分${h2h!.draws}）` : ''}</span>
+                    <span className="text-rose-600"><span className="tabular-nums">{h2h!.bWins}勝</span> {b}</span>
+                  </div>
+                  <div className="flex h-4 rounded-full overflow-hidden bg-slate-100">
+                    <div className="bg-indigo-500" style={{ width: `${(h2h!.aWins / total) * 100}%` }} />
+                    <div className="bg-slate-300" style={{ width: `${(h2h!.draws / total) * 100}%` }} />
+                    <div className="bg-rose-500" style={{ width: `${(h2h!.bWins / total) * 100}%` }} />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    ポイント差の合計（{a}−{b}）：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(h2h!.diffSum)}</span>
+                    　1卓あたり：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(schoolR1(h2h!.diffSum / total))}</span>
+                  </p>
+                </>
+              )}
+              <p className="text-[11px] text-slate-400 mt-1">同卓した半荘ごとに、各校の選手のポイント平均を比べて勝敗を決めています（人数が違っても公平になるよう平均です）。</p>
+            </div>
+
+            <div>
+              <h5 className="text-xs font-black text-slate-700 mb-2">📊 成績比較（{label}）</h5>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-slate-100 text-slate-600 text-xs">
+                      <th className="p-2 text-right font-bold w-1/3 text-indigo-700">{a}</th>
+                      <th className="p-2 text-center font-bold">項目</th>
+                      <th className="p-2 text-left font-bold w-1/3 text-rose-600">{b}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.map(m => {
+                      const w = winner(m);
+                      return (
+                        <tr key={m.label} className="border-b border-slate-100">
+                          <td className={`p-2 text-right tabular-nums ${w === 'a' ? 'font-black text-indigo-700 bg-indigo-50' : 'text-slate-600'}`}>{m.skip ? '-' : m.fmt(m.av)}{w === 'a' ? ' ◀' : ''}</td>
+                          <td className="p-2 text-center text-xs text-slate-500 whitespace-nowrap">{m.label}</td>
+                          <td className={`p-2 text-left tabular-nums ${w === 'b' ? 'font-black text-rose-600 bg-rose-50' : 'text-slate-600'}`}>{w === 'b' ? '▶ ' : ''}{m.skip ? '-' : m.fmt(m.bv)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[11px] text-slate-400 mt-1">優勢な項目数（人数・半荘数を除く）：{a} {aWinCount} ／ {b} {bWinCount}</p>
+            </div>
+
+            <div>
+              <h5 className="text-xs font-black text-slate-700 mb-2">🎯 着順分布の比較</h5>
+              {sa.games === 0 && sb.games === 0 ? (
+                <p className="text-xs text-slate-400">記録がありません。</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {[0, 1, 2, 3].map(i => {
+                    const pa = rate(sa.dist[i], sa.games);
+                    const pb = rate(sb.dist[i], sb.games);
+                    return (
+                      <div key={i} className="grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-xs">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <span className="tabular-nums text-slate-500">{pa.toFixed(0)}%</span>
+                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden flex justify-end"><div className="h-full bg-indigo-500" style={{ width: `${(pa / distMax) * 100}%` }} /></div>
+                        </div>
+                        <span className="text-center font-bold text-slate-500">{SCHOOL_RANK_LABELS[i]}</span>
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(pb / distMax) * 100}%` }} /></div>
+                          <span className="tabular-nums text-slate-500">{pb.toFixed(0)}%</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <h5 className="text-xs font-black text-slate-700 mb-2">🏆 大会別の比較（合計ポイントと、学校どうしの順位）</h5>
+              {tourneys.length === 0 ? (
+                <p className="text-xs text-slate-400">記録がありません。</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {tourneys.map(t => {
+                    const ap = t.a ? schoolR1(t.a.point) : null;
+                    const bp = t.b ? schoolR1(t.b.point) : null;
+                    const aw = ap !== null && bp !== null && ap > bp;
+                    const bw = ap !== null && bp !== null && bp > ap;
+                    return (
+                      <div key={t.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
+                        <div className={`text-right tabular-nums ${aw ? 'font-black text-indigo-700' : 'text-slate-500'}`}>
+                          {t.a ? <>{fmtPt(ap!)} <span className="text-[10px] text-slate-400">（{t.a.rank}/{t.a.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                        </div>
+                        <span className="font-bold text-slate-600 whitespace-nowrap">{t.tName}</span>
+                        <div className={`text-left tabular-nums ${bw ? 'font-black text-rose-600' : 'text-slate-500'}`}>
+                          {t.b ? <>{fmtPt(bp!)} <span className="text-[10px] text-slate-400">（{t.b.rank}/{t.b.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {h2h && h2h.rows.length > 0 && (
+              <div>
+                <button onClick={() => setShowTables(!showTables)} className="text-xs font-black text-slate-700 flex items-center gap-1">
+                  🀄 同卓した半荘の一覧（{h2h.rows.length}卓） <span className="text-slate-400">{showTables ? '▲' : '▼'}</span>
+                </button>
+                {showTables && (
+                  <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                    {h2h.rows.map(r => {
+                      const isOpen = openGame === r.g.id;
+                      return (
+                        <div key={r.g.id}>
+                          <button onClick={() => setOpenGame(isOpen ? null : r.g.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50 text-xs">
+                            <span className="font-bold text-slate-600 truncate flex-1">{r.g.label}</span>
+                            <span className={`tabular-nums font-black ${r.a > r.b ? 'text-indigo-700' : 'text-slate-400'}`}>{fmtPt(schoolR1(r.a))}</span>
+                            <span className="text-slate-300">-</span>
+                            <span className={`tabular-nums font-black ${r.b > r.a ? 'text-rose-600' : 'text-slate-400'}`}>{fmtPt(schoolR1(r.b))}</span>
+                          </button>
+                          {isOpen && <SchoolTablePlayers players={r.g.players} highlight={[a, b]} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </section>
+  );
+};
+
 // 個人成績（モーダル）：通算成績・大会別成績・着順分布・半荘ごとの成績・対戦相性・ペナルティ履歴をまとめて表示
 type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
@@ -1926,6 +2470,9 @@ export default function Home() {
   const [schoolEditId, setSchoolEditId] = useState<string | null>(null);
   const [schoolDraft, setSchoolDraft] = useState('');
   const [schoolUnsetOnly, setSchoolUnsetOnly] = useState(false);
+  const [schoolModal, setSchoolModal] = useState<string | null>(null); // 学校別成績の詳細（モーダル）
+  const [h2hA, setH2hA] = useState(''); // 学校対決で選んだ学校
+  const [h2hB, setH2hB] = useState('');
   const saveSchoolFor = async (playerId: string, school: string) => {
     if (!isAdmin) return;
     const name = school.trim();
@@ -3713,6 +4260,60 @@ export default function Home() {
   const needLifetime = activeTab === 'lifetime' || !!detailModalPlayerId;
   const lifetimeRows = needLifetime ? buildLifetimeRows('all') : [];
   const lifetimeRowsSaikoi = needLifetime ? buildLifetimeRows('saikoi') : [];
+
+  // 「学校の割り当て」の対象: 登録済みの全選手 ＋ 選手登録のない過去大会（前季など）だけの参加者。
+  // 登録のない参加者は、集計と同じキー（legacy:名前など）で学校を保存する
+  type SchoolRow = { id: string; name: string; legacy: boolean };
+  const schoolRows: SchoolRow[] = (() => {
+    if (!(isAdmin && activeTab === 'players')) return [];
+    const dbIds = new Set(dbPlayers.map(pl => pl.id));
+    const rows = new Map<string, SchoolRow>();
+    dbPlayers.forEach(pl => { if (!isKuroko(pl.name)) rows.set(pl.id, { id: pl.id, name: pl.name, legacy: false }); });
+    archives.forEach(a => a.hanchans.forEach(h => h.results.forEach(r => {
+      const nm = nameOf(r.playerId, r.name);
+      if (r.excluded || isKuroko(nm)) return;
+      const key = lifetimeKeyOf(r.playerId, nm);
+      if (dbIds.has(key) || rows.has(key)) return;
+      rows.set(key, { id: key, name: nm, legacy: true });
+    })));
+    return Array.from(rows.values()).sort((x, y) => x.name.localeCompare(y.name, 'ja'));
+  })();
+
+  // 学校別成績の元データ: 1卓の1半荘を1件の「対局」として、過去の全大会＋今大会（送信済み）から作る（データタブを開いている管理者のみ）
+  const schoolDataOn = isAdmin && activeTab === 'data';
+  const schoolGames: SGame[] = (() => {
+    if (!schoolDataOn) return [];
+    const out: SGame[] = [];
+    archives.forEach(a => {
+      const season = !isPreviousSeasonArchive(a);
+      const tOrder = tournamentSortKey(a.name);
+      // 保存順は新しい半荘が先頭なので、反転して古い順にする
+      [...a.hanchans].reverse().forEach((h, i) => {
+        const players: SGPlayer[] = [];
+        h.results.forEach(r => {
+          const nm = nameOf(r.playerId, r.name);
+          if (r.excluded || isKuroko(nm)) return;
+          const key = lifetimeKeyOf(r.playerId, nm);
+          players.push({ key, name: dbNameById.get(key) || nm, school: playerSchools[key] || '', rank: r.rank, score: r.score * 100, point: r.point });
+        });
+        if (players.length === 0) return;
+        out.push({ id: `${a.id}#${i}`, tKey: a.id, tName: a.name, tOrder, season, label: `${a.name} ${h.round ?? i + 1}半荘目${h.table ? ` ${h.table}卓` : ''}`, players });
+      });
+    });
+    countedSeating.forEach(r => r.tables.forEach(t => {
+      if (!t.isSubmitted) return;
+      const sorted = [...t.players].sort((x, y) => y.score - x.score);
+      const players: SGPlayer[] = [];
+      t.players.forEach(pl => {
+        const nm = nameOf(pl.playerId, pl.name);
+        if (isKuroko(nm)) return;
+        players.push({ key: pl.playerId, name: nm, school: playerSchools[pl.playerId] || '', rank: sorted.findIndex(sp => sp.playerId === pl.playerId) + 1, score: pl.score * 100, point: pl.point });
+      });
+      if (players.length === 0) return;
+      out.push({ id: `cur#${r.round}-${t.tableNumber}`, tKey: 'current', tName: '今大会', tOrder: Number.POSITIVE_INFINITY, season: true, label: `今大会 ${r.round}回戦 ${t.tableNumber}卓`, players });
+    }));
+    return out;
+  })();
   const getLifetimeSummary = (playerId: string, scope: LifetimeScope = 'all'): LifetimeSummary | null => (scope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).find(r => r.key === playerId) || null;
   // 指定選手の、全シーズン分の大会別成績（ルール名・ポイント・順位）。回数の若い順
   const getLifetimeHistory = (playerId: string, scope: LifetimeScope = 'all'): LifetimeHistoryItem[] => {
@@ -4746,25 +5347,10 @@ export default function Home() {
     }));
     return Array.from(map.values()).filter(x => x.n >= adminSynergyMin).map(x => ({ ...x, sum: r1(x.sum) }));
   })();
-  // ---- 学校別成績（管理者のみ・非公開）。選手に紐づけた学校ごとに、選択中の範囲（今季/通算）の全半荘を集計 ----
-  type SchoolMember = { name: string; games: number; point: number };
-  type SchoolStat = { school: string; members: Map<string, SchoolMember>; games: number; point: number; rankSum: number; dist: number[] };
-  const schoolStats: SchoolStat[] = (() => {
-    if (!adminOn) return [];
-    const m = new Map<string, SchoolStat>();
-    gameRecs.forEach(g => {
-      const sc = playerSchools[g.playerId];
-      if (!sc) return;
-      const cur = m.get(sc) || { school: sc, members: new Map<string, SchoolMember>(), games: 0, point: 0, rankSum: 0, dist: [0, 0, 0, 0] };
-      const mem = cur.members.get(g.playerId) || { name: g.name, games: 0, point: 0 };
-      mem.games += 1; mem.point += g.point;
-      cur.members.set(g.playerId, mem);
-      cur.games += 1; cur.point += g.point; cur.rankSum += g.rank;
-      if (g.rank >= 1 && g.rank <= 4) cur.dist[g.rank - 1] += 1;
-      m.set(sc, cur);
-    });
-    return Array.from(m.values()).sort((x, y) => y.point - x.point || y.games - x.games);
-  })();
+  // ---- 学校別成績（管理者のみ・非公開）。選択中の範囲（今季/通算）の、学校ごとの集計 ----
+  const schoolStats: SchoolSummary[] = schoolDataOn
+    ? Array.from(buildSchoolSummaries(schoolGames, dataScope).values()).sort((x, y) => y.point - x.point || y.games - x.games)
+    : [];
   const schoolUnsetCount = adminOn ? new Set(gameRecs.filter(g => !playerSchools[g.playerId]).map(g => g.playerId)).size : 0;
   const synergyRow = (x: { an: string; bn: string; sum: number; n: number }) => ({ name: `${x.an}（${x.bn}と同卓）`, value: fmtPt(x.sum), sub: `${x.n}半荘・平均${fmtPt(r1(x.sum / x.n))}` });
   const adminGoodMatch: AdminRow[] = adminOn ? toAdminRows([...adminPairs].sort((x, y) => y.sum - x.sum || y.n - x.n), x => x.sum, synergyRow) : [];
@@ -5246,8 +5832,8 @@ export default function Home() {
                 >{schoolUnsetOnly ? '未設定のみ表示中' : '未設定のみ表示'}</button>
               </div>
               <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-                今季の対局がない選手も含めて、全選手の学校を設定できます。学校名を押すと変更でき、登録済みの学校はボタンで選べます。管理者のみ閲覧でき、一般には表示されません。
-                （設定済み {dbPlayers.filter(p => !isKuroko(p.name) && playerSchools[p.id]).length}名 ／ 未設定 {dbPlayers.filter(p => !isKuroko(p.name) && !playerSchools[p.id]).length}名）
+                今季の対局がない選手や、過去の大会（前季など）にだけ参加した選手（「選手登録なし」）も含めて、学校を設定できます。学校名を押すと変更でき、登録済みの学校はボタンで選べます。管理者のみ閲覧でき、一般には表示されません。
+                （設定済み {schoolRows.filter(p => playerSchools[p.id]).length}名 ／ 未設定 {schoolRows.filter(p => !playerSchools[p.id]).length}名）
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
@@ -5258,15 +5844,16 @@ export default function Home() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[...dbPlayers]
-                      .filter(p => !isKuroko(p.name))
+                    {schoolRows
                       .filter(p => !schoolUnsetOnly || !playerSchools[p.id])
-                      .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
                       .map(p => {
                         const editing = schoolEditId === p.id;
                         return (
                           <tr key={p.id} className="border-b border-slate-100 align-top">
-                            <td className="p-2 font-bold whitespace-nowrap"><PlayerLabel name={p.name} /></td>
+                            <td className="p-2 font-bold whitespace-nowrap">
+                              <PlayerLabel name={p.name} />
+                              {p.legacy && <span className="ml-1.5 text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1 py-0.5 align-middle">選手登録なし</span>}
+                            </td>
                             <td className="p-2">
                               {editing ? (
                                 <div className="max-w-md">
@@ -5449,9 +6036,16 @@ export default function Home() {
                 {/* 学校別成績（管理者のみ・非公開） */}
                 <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
                   <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
-                    <h4 className="text-sm font-black text-slate-800">🏫 学校別成績（{dataScopeLabel}）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-black text-slate-800">🏫 学校別成績（{dataScopeLabel}）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+                      <div className="flex gap-1 ml-auto">
+                        {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
+                          <button key={v} onClick={() => setDataScope(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${dataScope === v ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
                     <p className="text-[11px] text-slate-400 leading-snug">
-                      選手に設定した学校ごとの、全半荘の合計です（黒子は除く）。学校は管理者でログインしているときだけ読み込まれ、一般の画面には表示されません。
+                      選手に設定した学校ごとの、全半荘の合計です（黒子は除く）。学校名を押すと、個人成績と同じ形式の詳細（大会別成績・着順分布・半荘ごとの成績・他校との対戦）が開きます。学校は管理者でログインしているときだけ読み込まれ、一般の画面には表示されません。
                       {schoolUnsetCount > 0 ? `学校が未設定の選手 ${schoolUnsetCount}名 は集計に含まれていません。` : ''}
                     </p>
                   </div>
@@ -5480,14 +6074,8 @@ export default function Home() {
                               <tr className="border-b border-slate-100 align-top">
                                 <td className="p-2 text-xs font-bold text-slate-400 tabular-nums">{i + 1}</td>
                                 <td className="p-2 font-bold">
-                                  <details>
-                                    <summary className="cursor-pointer">{sc.school}</summary>
-                                    <ul className="mt-1 text-xs font-normal text-slate-500 space-y-0.5">
-                                      {Array.from(sc.members.values()).sort((a, b) => b.point - a.point).map(mem => (
-                                        <li key={mem.name} className="tabular-nums">{mem.name}：{mem.games}半荘 {fmtPt(r1(mem.point))}</li>
-                                      ))}
-                                    </ul>
-                                  </details>
+                                  <button onClick={() => setSchoolModal(sc.school)} className="text-left text-indigo-700 hover:underline">{sc.school}</button>
+                                  <span className="ml-1 text-[10px] font-normal text-slate-400">詳細 ▸</span>
                                 </td>
                                 <td className="p-2 text-right tabular-nums">{sc.members.size}名</td>
                                 <td className="p-2 text-right tabular-nums">{sc.games}</td>
@@ -5505,6 +6093,9 @@ export default function Home() {
                     </div>
                   )}
                 </section>
+
+                {/* 学校対決（2校の直対成績・成績比較） */}
+                <SchoolH2HPanel schools={schoolOptions} games={schoolGames} scope={dataScope} a={h2hA} b={h2hB} setA={setH2hA} setB={setH2hB} />
 
                 {/* 連続記録 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -5853,6 +6444,29 @@ export default function Home() {
               }}
               upcoming={!isAdmin && dp.id === loggedInPlayerId ? getUpcomingMatches(dp.id) : undefined}
               onClose={() => setDetailModalPlayerId(null)}
+            />
+          );
+        })()}
+
+        {isAdmin && schoolDataOn && schoolModal && (() => {
+          const sums: Record<SchoolScope, Map<string, SchoolSummary>> = { season: buildSchoolSummaries(schoolGames, 'season'), all: buildSchoolSummaries(schoolGames, 'all') };
+          const rankOf = (scope: SchoolScope) => {
+            const mine = sums[scope].get(schoolModal);
+            if (!mine) return null;
+            const me = schoolR1(mine.point);
+            const pts = Array.from(sums[scope].values()).map(x => schoolR1(x.point));
+            return { rank: pts.filter(v => v > me).length + 1, total: pts.length };
+          };
+          return (
+            <SchoolDetailModal
+              key={schoolModal}
+              school={schoolModal}
+              summaries={{ season: sums.season.get(schoolModal) || null, all: sums.all.get(schoolModal) || null }}
+              ranks={{ season: rankOf('season'), all: rankOf('all') }}
+              vs={{ season: buildSchoolVs(schoolGames, 'season', schoolModal), all: buildSchoolVs(schoolGames, 'all', schoolModal) }}
+              initialScope={dataScope}
+              onCompare={other => { setH2hA(schoolModal); setH2hB(other); setSchoolModal(null); }}
+              onClose={() => setSchoolModal(null)}
             />
           );
         })()}
