@@ -1315,6 +1315,25 @@ const api = {
     return !error;
   },
 
+  // 選手の所属学校（非公開）。playersテーブルとは別の player_schools テーブルに保存し、
+  // 管理者のログイン（Supabase Auth）でしか読み書きできないようRLSで制限する（add_player_schools.sql）
+  getPlayerSchools: async (): Promise<Record<string, string>> => {
+    const { data, error } = await supabase.from('player_schools').select('player_id, school');
+    if (error) { console.error('学校の取得エラー:', error); return {}; }
+    const m: Record<string, string> = {};
+    (data || []).forEach((r: any) => { if (r.school) m[r.player_id] = r.school; });
+    return m;
+  },
+
+  setPlayerSchool: async (playerId: string, school: string): Promise<boolean> => {
+    const name = school.trim();
+    const { error } = name
+      ? await supabase.from('player_schools').upsert({ player_id: playerId, school: name, updated_at: new Date().toISOString() }, { onConflict: 'player_id' })
+      : await supabase.from('player_schools').delete().eq('player_id', playerId);
+    if (error) console.error('学校の保存エラー:', error);
+    return !error;
+  },
+
   updatePlayer: async (updatedPlayer: Player) => {
     const { error } = await supabase
       .from('players')
@@ -1862,7 +1881,17 @@ export default function Home() {
   const [newPlayerPoint, setNewPlayerPoint] = useState(0);
   const [newPlayerRight, setNewPlayerRight] = useState(false); // 出場権（デフォルトなし）
   const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', totalPoint: 0, championshipRight: false });
+  const [editForm, setEditForm] = useState({ name: '', totalPoint: 0, championshipRight: false, school: '' });
+  // 学校（非公開）: 管理者でログインしているときだけ取得する。一般の閲覧者の画面には読み込まない
+  const [playerSchools, setPlayerSchools] = useState<Record<string, string>>({});
+  const [newPlayerSchool, setNewPlayerSchool] = useState('');
+  useEffect(() => {
+    if (!isAdmin) { setPlayerSchools({}); return; }
+    let alive = true;
+    api.getPlayerSchools().then(m => { if (alive) setPlayerSchools(m); });
+    return () => { alive = false; };
+  }, [isAdmin]);
+  const schoolOptions = Array.from(new Set(Object.values(playerSchools))).sort();
 
   const handleRegisterPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1882,8 +1911,13 @@ export default function Home() {
       alert('登録に失敗しました。Supabaseで add_player_login_code.sql を実行済みか確認してください。（コンソールにエラーが出ています）');
       return;
     }
+    if (newPlayerSchool.trim()) {
+      const ok = await api.setPlayerSchool(newPlayer.id, newPlayerSchool);
+      if (ok) setPlayerSchools(prev => ({ ...prev, [newPlayer.id]: newPlayerSchool.trim() }));
+      else alert('学校の保存に失敗しました。Supabaseで add_player_schools.sql を実行済みか確認してください。');
+    }
     setDbPlayers(await api.getPlayers());
-    setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerRight(false);
+    setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerRight(false); setNewPlayerSchool('');
     alert(`${newPlayer.name} を登録しました！\nログインコード: ${newPlayer.loginCode}`);
   };
 
@@ -1974,7 +2008,7 @@ export default function Home() {
   const startEditPlayer = (p: Player) => {
     if (!isAdmin) return;
     setEditingPlayerId(p.id);
-    setEditForm({ name: p.name, totalPoint: p.totalPoint, championshipRight: !!p.championshipRight });
+    setEditForm({ name: p.name, totalPoint: p.totalPoint, championshipRight: !!p.championshipRight, school: playerSchools[p.id] || '' });
   };
 
   const saveEditPlayer = async () => {
@@ -1988,6 +2022,18 @@ export default function Home() {
         championshipRight: isPro(editForm.name) ? false : editForm.championshipRight,
       };
       await api.updatePlayer(updated);
+      if (editForm.school.trim() !== (playerSchools[player.id] || '')) {
+        const ok = await api.setPlayerSchool(player.id, editForm.school);
+        if (ok) {
+          setPlayerSchools(prev => {
+            const next = { ...prev };
+            if (editForm.school.trim()) next[player.id] = editForm.school.trim(); else delete next[player.id];
+            return next;
+          });
+        } else {
+          alert('学校の保存に失敗しました。Supabaseで add_player_schools.sql を実行済みか確認してください。');
+        }
+      }
       setDbPlayers(await api.getPlayers());
     }
     setEditingPlayerId(null);
@@ -4651,6 +4697,26 @@ export default function Home() {
     }));
     return Array.from(map.values()).filter(x => x.n >= adminSynergyMin).map(x => ({ ...x, sum: r1(x.sum) }));
   })();
+  // ---- 学校別成績（管理者のみ・非公開）。選手に紐づけた学校ごとに、選択中の範囲（今季/通算）の全半荘を集計 ----
+  type SchoolMember = { name: string; games: number; point: number };
+  type SchoolStat = { school: string; members: Map<string, SchoolMember>; games: number; point: number; rankSum: number; dist: number[] };
+  const schoolStats: SchoolStat[] = (() => {
+    if (!adminOn) return [];
+    const m = new Map<string, SchoolStat>();
+    gameRecs.forEach(g => {
+      const sc = playerSchools[g.playerId];
+      if (!sc) return;
+      const cur = m.get(sc) || { school: sc, members: new Map<string, SchoolMember>(), games: 0, point: 0, rankSum: 0, dist: [0, 0, 0, 0] };
+      const mem = cur.members.get(g.playerId) || { name: g.name, games: 0, point: 0 };
+      mem.games += 1; mem.point += g.point;
+      cur.members.set(g.playerId, mem);
+      cur.games += 1; cur.point += g.point; cur.rankSum += g.rank;
+      if (g.rank >= 1 && g.rank <= 4) cur.dist[g.rank - 1] += 1;
+      m.set(sc, cur);
+    });
+    return Array.from(m.values()).sort((x, y) => y.point - x.point || y.games - x.games);
+  })();
+  const schoolUnsetCount = adminOn ? new Set(gameRecs.filter(g => !playerSchools[g.playerId]).map(g => g.playerId)).size : 0;
   const synergyRow = (x: { an: string; bn: string; sum: number; n: number }) => ({ name: `${x.an}（${x.bn}と同卓）`, value: fmtPt(x.sum), sub: `${x.n}半荘・平均${fmtPt(r1(x.sum / x.n))}` });
   const adminGoodMatch: AdminRow[] = adminOn ? toAdminRows([...adminPairs].sort((x, y) => y.sum - x.sum || y.n - x.n), x => x.sum, synergyRow) : [];
   const adminBadMatch: AdminRow[] = adminOn ? toAdminRows([...adminPairs].sort((x, y) => x.sum - y.sum || y.n - x.n), x => x.sum, synergyRow) : [];
@@ -5092,6 +5158,11 @@ export default function Home() {
                   <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
                 </div>
                 <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-600 mb-1">学校 <span className="text-[11px] font-normal text-slate-400">（任意・管理者のみ閲覧／一般には非公開）</span></label>
+                  <input type="text" list="school-options" value={newPlayerSchool} onChange={e => setNewPlayerSchool(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
+                  <datalist id="school-options">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                </div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-600 mb-1">今季の通算ポイント</label>
                   <input type="number" step="0.1" value={newPlayerPoint} onChange={e => setNewPlayerPoint(Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
                   <p className="text-[11px] text-slate-400 mt-1">通算対局数は過去大会・今大会の記録から自動計算されるため、入力欄はありません。</p>
@@ -5262,6 +5333,66 @@ export default function Home() {
                   <AdminRankList title={`1️⃣ ${dataScopeLabel}の1戦目ランキング`} desc="各大会の1戦目のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminFirst} />
                   <AdminRankList title={`🏁 ${dataScopeLabel}の最終戦ランキング`} desc="各大会での、その選手の最後の半荘のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminLast} />
                 </div>
+
+                {/* 学校別成績（管理者のみ・非公開） */}
+                <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+                    <h4 className="text-sm font-black text-slate-800">🏫 学校別成績（{dataScopeLabel}）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+                    <p className="text-[11px] text-slate-400 leading-snug">
+                      選手に設定した学校ごとの、全半荘の合計です（黒子は除く）。学校は管理者でログインしているときだけ読み込まれ、一般の画面には表示されません。
+                      {schoolUnsetCount > 0 ? `学校が未設定の選手 ${schoolUnsetCount}名 は集計に含まれていません。` : ''}
+                    </p>
+                  </div>
+                  {schoolStats.length === 0 ? (
+                    <p className="px-3 py-4 text-center text-xs text-slate-400">学校が設定された選手の記録がありません。選手の編集（今季タブ）か、新規登録で学校を入力してください。</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm whitespace-nowrap">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-600 text-xs">
+                            <th className="p-2 font-bold">順位</th>
+                            <th className="p-2 font-bold">学校</th>
+                            <th className="p-2 font-bold text-right">人数</th>
+                            <th className="p-2 font-bold text-right">半荘数</th>
+                            <th className="p-2 font-bold text-right">合計pt</th>
+                            <th className="p-2 font-bold text-right">1半荘平均</th>
+                            <th className="p-2 font-bold text-right">平均着順</th>
+                            <th className="p-2 font-bold text-right">1着率</th>
+                            <th className="p-2 font-bold text-right">連対率</th>
+                            <th className="p-2 font-bold text-right">ラス率</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {schoolStats.map((sc, i) => (
+                            <React.Fragment key={sc.school}>
+                              <tr className="border-b border-slate-100 align-top">
+                                <td className="p-2 text-xs font-bold text-slate-400 tabular-nums">{i + 1}</td>
+                                <td className="p-2 font-bold">
+                                  <details>
+                                    <summary className="cursor-pointer">{sc.school}</summary>
+                                    <ul className="mt-1 text-xs font-normal text-slate-500 space-y-0.5">
+                                      {Array.from(sc.members.values()).sort((a, b) => b.point - a.point).map(mem => (
+                                        <li key={mem.name} className="tabular-nums">{mem.name}：{mem.games}半荘 {fmtPt(r1(mem.point))}</li>
+                                      ))}
+                                    </ul>
+                                  </details>
+                                </td>
+                                <td className="p-2 text-right tabular-nums">{sc.members.size}名</td>
+                                <td className="p-2 text-right tabular-nums">{sc.games}</td>
+                                <td className={`p-2 text-right font-black tabular-nums ${sc.point > 0 ? 'text-blue-600' : sc.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r1(sc.point))}</td>
+                                <td className="p-2 text-right tabular-nums">{fmtPt(r1(sc.point / sc.games))}</td>
+                                <td className="p-2 text-right tabular-nums">{(sc.rankSum / sc.games).toFixed(2)}</td>
+                                <td className="p-2 text-right tabular-nums">{((sc.dist[0] / sc.games) * 100).toFixed(1)}%</td>
+                                <td className="p-2 text-right tabular-nums">{(((sc.dist[0] + sc.dist[1]) / sc.games) * 100).toFixed(1)}%</td>
+                                <td className="p-2 text-right tabular-nums">{((sc.dist[3] / sc.games) * 100).toFixed(1)}%</td>
+                              </tr>
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
 
                 {/* 連続記録 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
@@ -5494,7 +5625,11 @@ export default function Home() {
                           <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-slate-400">{i + 1}</td>
                           {editingPlayerId === p.id && isAdmin ? (
                             <>
-                              <td className="p-2"><input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" /></td>
+                              <td className="p-2">
+                                <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" />
+                                <input type="text" list="school-options-edit" value={editForm.school} onChange={e => setEditForm({...editForm, school: e.target.value})} placeholder="学校（非公開）" className="border p-1 w-full rounded mt-1 text-xs" />
+                                <datalist id="school-options-edit">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                              </td>
                               <td className="p-2 text-right text-slate-400">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
                               <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
                               <td className="p-2 text-center">
