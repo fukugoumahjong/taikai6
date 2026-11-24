@@ -5625,10 +5625,12 @@ export default function Home() {
                           <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-slate-400">{i + 1}</td>
                           {editingPlayerId === p.id && isAdmin ? (
                             <>
-                              <td className="p-2">
-                                <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="border p-1 w-full rounded" />
-                                <input type="text" list="school-options-edit" value={editForm.school} onChange={e => setEditForm({...editForm, school: e.target.value})} placeholder="学校（非公開）" className="border p-1 w-full rounded mt-1 text-xs" />
-                                <datalist id="school-options-edit">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                              <td className="p-2 align-top">
+                                <div className="w-36 md:w-44">
+                                  <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="block box-border w-full min-w-0 border p-1 rounded" />
+                                  <input type="text" list="school-options-edit" value={editForm.school} onChange={e => setEditForm({...editForm, school: e.target.value})} placeholder="学校（非公開）" className="block box-border w-full min-w-0 border p-1 rounded mt-1 text-xs" />
+                                  <datalist id="school-options-edit">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                                </div>
                               </td>
                               <td className="p-2 text-right text-slate-400">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
                               <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
