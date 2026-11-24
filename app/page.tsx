@@ -3304,7 +3304,8 @@ export default function Home() {
       const standing = a.standings.find(s => s.playerId === p.id);
       if (standing && standing.gameCount >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
     });
-    if (getCurrentTournamentGameCount(p.id) >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
+    // 今大会は、大会進行でエントリーされている選手も参加1回として数える（半荘数は未確定のため）
+    if (entryPlayerIds.includes(p.id) || getCurrentTournamentGameCount(p.id) >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
     return qualifyingTournaments >= CHAMPIONSHIP_MIN_TOURNAMENTS;
   };
 
@@ -3979,20 +3980,16 @@ export default function Home() {
       const cards = g.items.map(h => {
         const rows = [...h.results].sort((x, y) => x.rank - y.rank).map(r => `
           <tr class="${r.excluded ? 'ex' : ''}">
-            <td class="c rk">${r.rank}位</td>
-            <td><span class="nmw">${nm(r.playerId, r.name)}${r.excluded ? '<span class="tag">順位外</span>' : ''}</span></td>
-            <td class="r sc">${(r.score * 100).toLocaleString()}</td>
-            <td class="r pt ${cls(r.point)}">${fmtPt(r.point)}</td>
+            <td class="c">${r.rank}位</td>
+            <td>${nm(r.playerId, r.name)}${r.excluded ? '<span class="tag">順位外</span>' : ''}</td>
+            <td class="r">${(r.score * 100).toLocaleString()}</td>
+            <td class="r ${cls(r.point)}">${fmtPt(r.point)}</td>
           </tr>`).join('');
         const label = typeof h.table === 'number' ? `${g.no}半荘目-${h.table}卓` : `${g.no}半荘目`;
-        return `<div class="tbl"><div class="tblhead">${label}${h.deposit > 0 ? `<span class="badge">供託 ${h.deposit.toFixed(1)}</span>` : ''}</div><table><thead><tr><th class="rk">着順</th><th>選手</th><th class="r sc">素点</th><th class="r pt">ポイント</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+        return `<div class="tbl"><div class="tblhead">${label}${h.deposit > 0 ? `<span class="badge">供託 ${h.deposit.toFixed(1)}</span>` : ''}</div><table><thead><tr><th>着順</th><th>選手</th><th class="r">素点</th><th class="r">ポイント</th></tr></thead><tbody>${rows}</tbody></table></div>`;
       }).join('');
-      return { cards };
-    });
-    // 卓の情報がある大会は、半荘目ごとに1行（3卓ずつ）。無い大会は、全ての卓を3列で続けて並べる
-    const hanchanHtml = a.hanchans.some(h => typeof h.table === 'number')
-      ? hanchanBlocks.map(b => `<div class="round"><div class="tables">${b.cards}</div></div>`).join('')
-      : `<div class="tables">${hanchanBlocks.map(b => b.cards).join('')}</div>`;
+      return `<div class="round"><div class="tables">${cards}</div></div>`;
+    }).join('');
 
     const penaltyRows = a.penalties.map(p => `
       <tr><td>${nm(p.playerId, p.name)}</td><td>${escapeHtml(p.reason || '')}</td><td class="r ${cls(p.point)}">${fmtPt(p.point)}</td></tr>`).join('');
@@ -4013,18 +4010,20 @@ export default function Home() {
   .plus { color:#1d4ed8; font-weight:bold; } .minus { color:#dc2626; font-weight:bold; }
   .top1 { background:#fffbeb; font-weight:bold; } .top2 { background:#f8fafc; } .top3 { background:#fff7ed; }
   .ex { color:#94a3b8; }
-  .tag { display:inline-block; font-size:7px; line-height:1.2; background:#e2e8f0; color:#64748b; padding:0 3px; border-radius:99px; margin-left:3px; vertical-align:middle; white-space:nowrap; }
+  .tag { font-size:9px; background:#e2e8f0; color:#64748b; padding:1px 5px; border-radius:99px; margin-left:6px; }
   .round { page-break-inside: avoid; margin-bottom:10px; }
   .tables { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:6px; }
-  .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:0 0 5px; overflow:hidden; page-break-inside: avoid; }
-  .tblhead { background:#0f172a; color:#fff; font-weight:bold; font-size:11px; padding:3px 8px; margin-bottom:5px; white-space:nowrap; }
-  .tblhead .badge { background:#334155; color:#e2e8f0; font-size:8px; padding:1px 5px; }
-  /* 半荘ごとの表: 着順・素点・ポイントは内容の幅まで狭め、選手の枠は全角6文字分を最低限確保。1行に収める */
-  .tbl table { width:calc(100% - 10px); margin:0 5px; font-size:10px; }
-  .tbl th, .tbl td { padding:2px 4px; white-space:nowrap; line-height:1.3; }
+  .tbl { border:1px solid #cbd5e1; border-radius:6px; padding:0 0 6px; overflow:hidden; page-break-inside: avoid; min-width:0; }
+  .tblhead { background:#0f172a; color:#fff; font-weight:bold; font-size:11px; padding:4px 6px; margin-bottom:6px; }
+  .tbl table { width:calc(100% - 8px); margin:0 4px; font-size:10px; }
+  .tbl th, .tbl td { padding:3px 2px; white-space:nowrap; }
   .tbl th { font-size:9px; }
-  .tbl .rk, .tbl .sc, .tbl .pt { width:1%; }
-  .nmw { display:inline-block; min-width:6em; }
+  .tbl th:first-child, .tbl td:first-child { width:1%; }
+  .tbl th:nth-child(3), .tbl td:nth-child(3), .tbl th:nth-child(4), .tbl td:nth-child(4) { width:1%; }
+  .tbl th:nth-child(2), .tbl td:nth-child(2) { min-width:6em; white-space:normal; overflow-wrap:anywhere; }
+  .tbl tr.ex td:nth-child(2) { white-space:nowrap; }
+  .tbl .tag { display:inline-block; margin:0 0 0 2px; padding:0 3px; font-size:7px; line-height:1.2; vertical-align:middle; white-space:nowrap; }
+  .tblhead .badge { background:#334155; color:#e2e8f0; font-size:9px; padding:1px 4px; margin-left:4px; }
   .badge { font-size:10px; background:#e2e8f0; padding:2px 6px; border-radius:99px; margin-left:6px; font-weight:normal; }
   .note { font-size:10px; color:#64748b; margin-top:6px; line-height:1.6; }
   @media print { body { padding:10mm; } @page { size: A4; margin: 10mm; } }
@@ -4041,12 +4040,12 @@ export default function Home() {
     <thead><tr><th>順位</th><th>選手名</th><th class="r">半荘数</th><th class="r">ポイント</th></tr></thead>
     <tbody>${standingRows || '<tr><td colspan="4" class="c">データなし</td></tr>'}</tbody>
   </table>
-  <h2>半荘ごとの成績</h2>
-  ${hanchanBlocks.length > 0 ? hanchanHtml : '<p class="note">半荘ごとの記録はありません。</p>'}
-
   ${penaltyRows ? `<h2>ペナルティ</h2>
   <table><thead><tr><th>選手名</th><th>内容</th><th class="r">ポイント</th></tr></thead><tbody>${penaltyRows}</tbody></table>
   <p class="note">※ ペナルティは最終成績に反映済みです。</p>` : ''}
+
+  <h2>半荘ごとの成績</h2>
+  ${hanchanBlocks || '<p class="note">半荘ごとの記録はありません。</p>'}
 
 </body></html>`;
   };
