@@ -711,6 +711,8 @@ const PlayerDetailModal = ({
   upcoming,
   lifetimeData,
   lifetimeOnly,
+  seasonRank,
+  seasonRankTotal,
   onClose,
 }: {
   player: Player;
@@ -724,6 +726,8 @@ const PlayerDetailModal = ({
   upcoming?: UpcomingMatch[];
   lifetimeData: LifetimeScopeData;
   lifetimeOnly?: boolean; // 選手登録のない選手（今季の成績が無い）: 生涯成績だけを表示
+  seasonRank?: number | null; // 今季成績ランキングでの順位（ランキングに載っていなければ null）
+  seasonRankTotal?: number; // 今季成績ランキングの人数
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
@@ -825,6 +829,13 @@ const PlayerDetailModal = ({
             </h2>
             <p className={`mt-2 text-2xl font-black tabular-nums ${headPoint > 0 ? 'text-emerald-300' : headPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
               {fmtPt(headPoint)} <span className="text-sm font-bold text-indigo-200">{showLifetime ? (lifeScope === 'all' ? `（生涯 ${lifetime?.games ?? 0}半荘・※換算の参考値）` : `（最高位戦ルール ${lifetime?.games ?? 0}半荘）`) : `（今季 ${totalGames}半荘）`}</span>
+              {!showLifetime && seasonRank ? (
+                <span className="ml-2 inline-flex items-baseline gap-0.5 align-middle bg-white/15 ring-1 ring-white/25 rounded-full px-2.5 py-0.5 text-white">
+                  <span className="text-lg font-black tabular-nums">{seasonRank}</span>
+                  <span className="text-xs font-bold">位</span>
+                  {seasonRankTotal ? <span className="text-[10px] font-bold text-indigo-200 ml-1">/ {seasonRankTotal}名</span> : null}
+                </span>
+              ) : null}
             </p>
             {maxScore && !showLifetime && (
               <p className="mt-2 text-xs font-bold text-indigo-200">
@@ -1593,6 +1604,7 @@ export default function Home() {
   const nextEntryRef = useRef<NextEntry | null>(null);
   const nextSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
+  const [dataScope, setDataScope] = useState<'all' | 'season'>('all'); // データ・管理用データ: 集計範囲（通算=全大会 / 今季=今季の大会のみ）
   const [adminStreakAcross, setAdminStreakAcross] = useState(false); // 管理用データ: 連続記録を大会をまたいで数えるか（既定: 同じ大会のみ）
   const [adminSynergyMin, setAdminSynergyMin] = useState(5); // 管理用データ: 相性ランキングの対象にする、同卓した半荘数の下限
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
@@ -4390,12 +4402,16 @@ export default function Home() {
     return out;
   };
 
+  // 集計の対象範囲: 通算=過去の全大会、今季=今季の大会のみ（今大会は常に含む）
+  const dataArchives = dataScope === 'season' ? seasonArchives : archives;
+  const dataScopeLabel = dataScope === 'season' ? '今季' : '通算';
+
   // 全半荘の記録（1人1半荘につき1件）。score は実点（100点単位ではなく点）。
   // source は大会名（過去大会名 / 今大会）、seq はその大会の中での対局の順番（連勝の判定に使う）
   type GameRec = { playerId: string; name: string; source: string; seq: number; rank: number; score: number; point: number };
   const gameRecs: GameRec[] = [];
   // データタブを開いているときだけ集計する
-  (activeTab === 'data' ? archives : []).forEach(a => a.hanchans.forEach(h => {
+  (activeTab === 'data' ? dataArchives : []).forEach(a => a.hanchans.forEach(h => {
     h.results.forEach(r => {
       const nm = nameOf(r.playerId, r.name);
       if (r.excluded || isKuroko(nm)) return;
@@ -4592,7 +4608,7 @@ export default function Home() {
         out.push({ where, rankNo: 1 + items.filter(x => x.score > score).length, names: grp.map(x => x.name), score, sk, ord });
       });
     };
-    archives.forEach(a => {
+    dataArchives.forEach(a => {
       // 保存順は新しい半荘が先頭なので、反転して古い順にし「◯半荘目」を付ける
       [...a.hanchans].reverse().forEach((h, i) => {
         scan(`${a.name} ${i + 1}半荘目`, tournamentSortKey(a.name), i,
@@ -4624,7 +4640,7 @@ export default function Home() {
         map.set(k, cur);
       }));
     };
-    archives.forEach(a => a.hanchans.forEach(h => addTable(h.results.map(r => {
+    dataArchives.forEach(a => a.hanchans.forEach(h => addTable(h.results.map(r => {
       const nm = nameOf(r.playerId, r.name);
       const key = lifetimeKeyOf(r.playerId, nm);
       return { key, name: dbNameById.get(key) || nm, point: r.point, real: !r.excluded && !isKuroko(nm) };
@@ -5172,7 +5188,16 @@ export default function Home() {
             <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-700 via-purple-700 to-indigo-800 text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">📊</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">データ</h2>
-              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">過去の全ての大会（{archives.length}大会）＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
+              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
+              <div className="flex gap-1 mt-3">
+                {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
+                  <button
+                    key={v}
+                    onClick={() => setDataScope(v)}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${dataScope === v ? 'bg-white text-fuchsia-700 shadow' : 'bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/20'}`}
+                  >{label}</button>
+                ))}
+              </div>
             </div>
 
             {gameRecs.length === 0 ? (
@@ -5210,12 +5235,12 @@ export default function Home() {
               <div className="space-y-3">
                 <div className="flex flex-wrap items-baseline gap-2">
                   <h3 className="text-base font-black text-slate-800">🛠️ 管理用データ</h3>
-                  <span className="text-[11px] text-slate-400">管理者のみに表示・上位{ADMIN_TOP_N}名まで・過去の全大会＋今大会の記録</span>
+                  <span className="text-[11px] text-slate-400">管理者のみに表示・上位{ADMIN_TOP_N}名まで・{dataScope === 'season' ? '今季の大会' : '過去の全大会'}＋今大会の記録（{dataScopeLabel}）</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
-                  <AdminRankList title="💎 素点ランキング" desc="素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の通算合計。順位点は含みません" rows={adminRaw} />
-                  <AdminRankList title="🏅 順位点ランキング" desc="ポイントから素点を引いた分（順位点・オカ・供託など）の通算合計。素点は含みません" rows={adminUma} />
+                  <AdminRankList title="💎 素点ランキング" desc={`素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の${dataScopeLabel}合計。順位点は含みません`} rows={adminRaw} />
+                  <AdminRankList title="🏅 順位点ランキング" desc={`ポイントから素点を引いた分（順位点・オカ・供託など）の${dataScopeLabel}合計。素点は含みません`} rows={adminUma} />
                   <AdminRankList
                     title="📊 順位別率ランキング"
                     desc={`各順位になった割合の高い順（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象）`}
@@ -5233,9 +5258,9 @@ export default function Home() {
                       </div>
                     }
                   />
-                  <AdminRankList title="⏩ 通算の5戦目以降ランキング" desc="各大会の5戦目以降に積み上げたポイントの、全大会の合計（5半荘以上出場した大会が対象。年間チャンピオン戦は除く）" rows={adminFifth} emptyText="5半荘以上出場した大会がありません。" />
-                  <AdminRankList title="1️⃣ 通算の1戦目ランキング" desc="各大会の1戦目のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminFirst} />
-                  <AdminRankList title="🏁 通算の最終戦ランキング" desc="各大会での、その選手の最後の半荘のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminLast} />
+                  <AdminRankList title={`⏩ ${dataScopeLabel}の5戦目以降ランキング`} desc="各大会の5戦目以降に積み上げたポイントの、全大会の合計（5半荘以上出場した大会が対象。年間チャンピオン戦は除く）" rows={adminFifth} emptyText="5半荘以上出場した大会がありません。" />
+                  <AdminRankList title={`1️⃣ ${dataScopeLabel}の1戦目ランキング`} desc="各大会の1戦目のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminFirst} />
+                  <AdminRankList title={`🏁 ${dataScopeLabel}の最終戦ランキング`} desc="各大会での、その選手の最後の半荘のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminLast} />
                 </div>
 
                 {/* 連続記録 */}
@@ -5257,7 +5282,7 @@ export default function Home() {
 
                 {/* 相性 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <h4 className="text-sm font-black text-slate-700">通算の相性</h4>
+                  <h4 className="text-sm font-black text-slate-700">{dataScopeLabel}の相性</h4>
                   <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
                     同卓
                     <select value={adminSynergyMin} onChange={e => setAdminSynergyMin(Number(e.target.value))} className="p-1 border rounded-md bg-white text-xs font-bold">
@@ -5571,6 +5596,8 @@ export default function Home() {
               maxScore={getMaxScore(dp.id)}
               hanchanGroups={getPlayerHanchanGroups(dp.id)}
               lifetimeOnly={!dbp}
+              seasonRank={(() => { const ix = totalRankingPlayers.findIndex(x => x.id === dp.id); return ix >= 0 ? ix + 1 : null; })()}
+              seasonRankTotal={totalRankingPlayers.length}
               lifetimeData={{
                 all: { summary: getLifetimeSummary(dp.id, 'all'), history: getLifetimeHistory(dp.id, 'all'), groups: getPlayerHanchanGroups(dp.id, true, false) },
                 saikoi: { summary: getLifetimeSummary(dp.id, 'saikoi'), history: getLifetimeHistory(dp.id, 'saikoi'), groups: getPlayerHanchanGroups(dp.id, true, true) },
