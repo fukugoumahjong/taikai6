@@ -1315,23 +1315,33 @@ const api = {
     return !error;
   },
 
-  // 選手の所属学校（非公開）。playersテーブルとは別の player_schools テーブルに保存し、
-  // 管理者のログイン（Supabase Auth）でしか読み書きできないようRLSで制限する（add_player_schools.sql）
+  // 選手の所属学校（非公開）。ブラウザからSupabaseへ直接は読み書きせず、管理者ログインを確認するサーバーAPI
+  // （app/api/player-schools/route.ts）を経由する。テーブル player_schools はブラウザから一切アクセスできない（add_player_schools.sql）
   getPlayerSchools: async (): Promise<Record<string, string>> => {
-    const { data, error } = await supabase.from('player_schools').select('player_id, school');
-    if (error) { console.error('学校の取得エラー:', error); return {}; }
-    const m: Record<string, string> = {};
-    (data || []).forEach((r: any) => { if (r.school) m[r.player_id] = r.school; });
-    return m;
+    try {
+      const res = await fetch('/api/player-schools', { cache: 'no-store' });
+      if (!res.ok) { console.error('学校の取得エラー:', res.status, await res.text()); return {}; }
+      const json = await res.json();
+      return (json && json.schools) || {};
+    } catch (err) {
+      console.error('学校の取得エラー:', err);
+      return {};
+    }
   },
 
   setPlayerSchool: async (playerId: string, school: string): Promise<boolean> => {
-    const name = school.trim();
-    const { error } = name
-      ? await supabase.from('player_schools').upsert({ player_id: playerId, school: name, updated_at: new Date().toISOString() }, { onConflict: 'player_id' })
-      : await supabase.from('player_schools').delete().eq('player_id', playerId);
-    if (error) console.error('学校の保存エラー:', error);
-    return !error;
+    try {
+      const res = await fetch('/api/player-schools', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ playerId, school: school.trim() }),
+      });
+      if (!res.ok) { console.error('学校の保存エラー:', res.status, await res.text()); return false; }
+      return true;
+    } catch (err) {
+      console.error('学校の保存エラー:', err);
+      return false;
+    }
   },
 
   updatePlayer: async (updatedPlayer: Player) => {
@@ -1914,7 +1924,7 @@ export default function Home() {
     if (newPlayerSchool.trim()) {
       const ok = await api.setPlayerSchool(newPlayer.id, newPlayerSchool);
       if (ok) setPlayerSchools(prev => ({ ...prev, [newPlayer.id]: newPlayerSchool.trim() }));
-      else alert('学校の保存に失敗しました。Supabaseで add_player_schools.sql を実行済みか確認してください。');
+      else alert('学校の保存に失敗しました。add_player_schools.sql の実行と、app/api/player-schools/route.ts の配置・環境変数 SUPABASE_SERVICE_ROLE_KEY の設定を確認してください。（コンソールにエラーが出ています）');
     }
     setDbPlayers(await api.getPlayers());
     setNewPlayerName(''); setNewPlayerPoint(0); setNewPlayerRight(false); setNewPlayerSchool('');
@@ -2031,7 +2041,7 @@ export default function Home() {
             return next;
           });
         } else {
-          alert('学校の保存に失敗しました。Supabaseで add_player_schools.sql を実行済みか確認してください。');
+          alert('学校の保存に失敗しました。add_player_schools.sql の実行と、app/api/player-schools/route.ts の配置・環境変数 SUPABASE_SERVICE_ROLE_KEY の設定を確認してください。（コンソールにエラーが出ています）');
         }
       }
       setDbPlayers(await api.getPlayers());
