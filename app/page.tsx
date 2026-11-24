@@ -1922,6 +1922,25 @@ export default function Home() {
     return () => { alive = false; };
   }, [isAdmin]);
   const schoolOptions = Array.from(new Set(Object.values(playerSchools))).sort();
+  // 選手タブの「学校の割り当て」: 今季の対局がない選手も含めて、全選手の学校を設定できる
+  const [schoolEditId, setSchoolEditId] = useState<string | null>(null);
+  const [schoolDraft, setSchoolDraft] = useState('');
+  const [schoolUnsetOnly, setSchoolUnsetOnly] = useState(false);
+  const saveSchoolFor = async (playerId: string, school: string) => {
+    if (!isAdmin) return;
+    const name = school.trim();
+    const ok = await api.setPlayerSchool(playerId, name);
+    if (!ok) {
+      alert('学校の保存に失敗しました。add_player_schools.sql の実行と、app/api/player-schools/route.ts の配置・環境変数 SUPABASE_SERVICE_ROLE_KEY の設定を確認してください。（コンソールにエラーが出ています）');
+      return;
+    }
+    setPlayerSchools(prev => {
+      const next = { ...prev };
+      if (name) next[playerId] = name; else delete next[playerId];
+      return next;
+    });
+    setSchoolEditId(null);
+  };
 
   const handleRegisterPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -5216,6 +5235,69 @@ export default function Home() {
 
                 <button type="submit" className="md:col-span-4 mt-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition">登録して保存</button>
               </form>
+            </div>
+
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+                <h2 className="text-xl font-bold">🏫 学校の割り当て <span className="ml-1 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h2>
+                <button
+                  onClick={() => setSchoolUnsetOnly(!schoolUnsetOnly)}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition ${schoolUnsetOnly ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-500'}`}
+                >{schoolUnsetOnly ? '未設定のみ表示中' : '未設定のみ表示'}</button>
+              </div>
+              <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+                今季の対局がない選手も含めて、全選手の学校を設定できます。学校名を押すと変更でき、登録済みの学校はボタンで選べます。管理者のみ閲覧でき、一般には表示されません。
+                （設定済み {dbPlayers.filter(p => !isKuroko(p.name) && playerSchools[p.id]).length}名 ／ 未設定 {dbPlayers.filter(p => !isKuroko(p.name) && !playerSchools[p.id]).length}名）
+              </p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-sm">
+                  <thead>
+                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-600">
+                      <th className="p-2 font-bold whitespace-nowrap">選手名</th>
+                      <th className="p-2 font-bold">学校</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {[...dbPlayers]
+                      .filter(p => !isKuroko(p.name))
+                      .filter(p => !schoolUnsetOnly || !playerSchools[p.id])
+                      .sort((a, b) => a.name.localeCompare(b.name, 'ja'))
+                      .map(p => {
+                        const editing = schoolEditId === p.id;
+                        return (
+                          <tr key={p.id} className="border-b border-slate-100 align-top">
+                            <td className="p-2 font-bold whitespace-nowrap"><PlayerLabel name={p.name} /></td>
+                            <td className="p-2">
+                              {editing ? (
+                                <div className="max-w-md">
+                                  <div className="flex gap-1.5">
+                                    <input
+                                      type="text"
+                                      autoFocus
+                                      value={schoolDraft}
+                                      onChange={e => setSchoolDraft(e.target.value)}
+                                      onKeyDown={e => { if (e.key === 'Enter') saveSchoolFor(p.id, schoolDraft); if (e.key === 'Escape') setSchoolEditId(null); }}
+                                      placeholder="新しい学校は直接入力"
+                                      className="min-w-0 flex-1 border p-1.5 rounded text-sm"
+                                    />
+                                    <button onClick={() => saveSchoolFor(p.id, schoolDraft)} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">保存</button>
+                                    <button onClick={() => setSchoolEditId(null)} className="text-slate-400 text-xs font-bold whitespace-nowrap">取消</button>
+                                  </div>
+                                  <SchoolChips options={schoolOptions} value={schoolDraft} onPick={setSchoolDraft} />
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); }}
+                                  className={`text-left rounded-md px-2 py-1 text-sm font-bold transition ${playerSchools[p.id] ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-100 hover:text-slate-500'}`}
+                                >{playerSchools[p.id] || '未設定（押して設定）'}</button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
