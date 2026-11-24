@@ -648,6 +648,26 @@ const StandingsSheetTable = ({ rows, roundNos, title }: { rows: SheetRow[]; roun
 };
 
 // 管理用データの順位表（軽く表示するため簡素な作り）
+// 登録済みの学校をクリックで選べるチップ（同じ学校を何度も打ち込まなくて済む）。選択中をもう一度押すと解除
+const SchoolChips = ({ options, value, onPick, compact }: { options: string[]; value: string; onPick: (school: string) => void; compact?: boolean }) => {
+  if (options.length === 0) return null;
+  return (
+    <div className={`flex flex-wrap gap-1 ${compact ? 'mt-1 max-h-24 overflow-y-auto' : 'mt-2'}`}>
+      {options.map(sc => {
+        const on = value.trim() === sc;
+        return (
+          <button
+            key={sc}
+            type="button"
+            onClick={() => onPick(on ? '' : sc)}
+            className={`rounded-full border font-bold transition ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400 hover:text-indigo-700'}`}
+          >{sc}</button>
+        );
+      })}
+    </div>
+  );
+};
+
 type AdminRow = { rank: number; name: string; value: string; sub?: string };
 const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string; desc: string; rows: AdminRow[]; extra?: React.ReactNode; emptyText?: string }) => (
   <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
@@ -5169,8 +5189,8 @@ export default function Home() {
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-600 mb-1">学校 <span className="text-[11px] font-normal text-slate-400">（任意・管理者のみ閲覧／一般には非公開）</span></label>
-                  <input type="text" list="school-options" value={newPlayerSchool} onChange={e => setNewPlayerSchool(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
-                  <datalist id="school-options">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                  <input type="text" value={newPlayerSchool} onChange={e => setNewPlayerSchool(e.target.value)} placeholder="新しい学校は直接入力" className="w-full p-2.5 border rounded-lg bg-slate-50"/>
+                  <SchoolChips options={schoolOptions} value={newPlayerSchool} onPick={setNewPlayerSchool} />
                 </div>
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-600 mb-1">今季の通算ポイント</label>
@@ -5638,8 +5658,8 @@ export default function Home() {
                               <td className="p-2 align-top">
                                 <div className="w-36 md:w-44">
                                   <input type="text" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} className="block box-border w-full min-w-0 border p-1 rounded" />
-                                  <input type="text" list="school-options-edit" value={editForm.school} onChange={e => setEditForm({...editForm, school: e.target.value})} placeholder="学校（非公開）" className="block box-border w-full min-w-0 border p-1 rounded mt-1 text-xs" />
-                                  <datalist id="school-options-edit">{schoolOptions.map(sc => <option key={sc} value={sc} />)}</datalist>
+                                  <input type="text" value={editForm.school} onChange={e => setEditForm({...editForm, school: e.target.value})} placeholder="学校（非公開）" className="block box-border w-full min-w-0 border p-1 rounded mt-1 text-xs" />
+                                  <SchoolChips compact options={schoolOptions} value={editForm.school} onPick={sc => setEditForm({...editForm, school: sc})} />
                                 </div>
                               </td>
                               <td className="p-2 text-right text-slate-400">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
