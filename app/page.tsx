@@ -1637,6 +1637,7 @@ export default function Home() {
 
   // 今大会成績まわりの表示状態
   const [showKuroko, setShowKuroko] = useState(false); // デフォルトは非表示
+  const [csOnly, setCsOnly] = useState(false); // 今季成績ランキング: 年間CS対象選手のみ表示
   const [openPlayerId, setOpenPlayerId] = useState<string | null>(null);
   const [openGameKey, setOpenGameKey] = useState<string | null>(null);
 
@@ -3308,6 +3309,12 @@ export default function Home() {
     if (entryPlayerIds.includes(p.id) || getCurrentTournamentGameCount(p.id) >= CHAMPIONSHIP_MIN_HANCHAN_PER_TOURNAMENT) qualifyingTournaments++;
     return qualifyingTournaments >= CHAMPIONSHIP_MIN_TOURNAMENTS;
   };
+
+  // 年間CSの出場権保持者＋対象選手（今季ポイント順）。8人目の下にボーダー線を引く
+  const CS_BORDER_COUNT = 8;
+  const csEligibleIds = totalRankingPlayers
+    .filter(p => hasChampionshipRight(p) || isChampionshipCandidate(p))
+    .map(p => p.id);
 
   // 今大会成績: 黒子の表示/非表示を選択可能 (デフォルト非表示)
   const currentRankingAll = entryPlayerIds
@@ -5425,6 +5432,15 @@ export default function Home() {
               <span className="inline-block w-3 h-3 rounded-sm bg-amber-100 border border-amber-300 align-middle mr-1"></span>
               🏆 は出場権が個別に付与されている選手 ／ 麻雀プロ（Ⓟ）は半荘数に関わらず出場権の対象外です
             </p>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <button
+                onClick={() => setCsOnly(!csOnly)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold border-2 transition ${csOnly ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-emerald-700 border-emerald-300 hover:border-emerald-500'}`}
+              >
+                {csOnly ? '🏆 年間CS対象のみ: 表示中' : '🏆 年間CS対象のみ表示'}
+              </button>
+              <span className="text-[11px] text-slate-500">出場権・対象 {csEligibleIds.length}名（上位{CS_BORDER_COUNT}名の下にボーダー線）</span>
+            </div>
             <p className="text-[11px] text-slate-400 mb-3">選手名をクリックすると大会別成績が表示され、「個人成績」から着順分布・対戦相性・半荘ごとの成績なども確認できます。</p>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
@@ -5445,6 +5461,8 @@ export default function Home() {
                     const candidate = isChampionshipCandidate(p);
                     const isOpen = openTotalPlayerId === p.id;
                     const colSpan = isAdmin ? 6 : 5;
+                    const csPos = csEligibleIds.indexOf(p.id) + 1; // 0 = 対象外
+                    if (csOnly && csPos === 0) return null;
                     return (
                       <React.Fragment key={p.id}>
                         <tr className={`border-b border-slate-100 transition ${isOpen ? 'bg-indigo-50/60' : granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
@@ -5512,6 +5530,18 @@ export default function Home() {
                                 history={getPlayerArchiveHistory(p.id)}
                                 onOpenDetail={() => setDetailModalPlayerId(p.id)}
                               />
+                            </td>
+                          </tr>
+                        )}
+
+                        {csPos === CS_BORDER_COUNT && (
+                          <tr aria-hidden="true">
+                            <td colSpan={colSpan} className="p-0">
+                              <div className="relative h-0 border-t-[3px] border-dashed border-rose-500">
+                                <span className="absolute right-2 -top-[9px] bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
+                                  ▲ 年間CS ボーダー（上位{CS_BORDER_COUNT}名）
+                                </span>
+                              </div>
                             </td>
                           </tr>
                         )}
