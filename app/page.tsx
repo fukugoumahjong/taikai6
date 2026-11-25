@@ -1483,6 +1483,148 @@ const AdminSection = ({ id, icon, title, desc, children }: { id: string; icon: s
   </section>
 );
 
+// ==========================================
+// 卓組抽選（通常回戦の卓組と席順）
+// 優先順位: ① 席順（東南西北）を全員できるだけ公平に → ② 同じ相手とできるだけ同卓しない
+// ③ 過去の大会の同卓の偏り（期待値との差）は、同点のときに効く程度の、ごくわずかな参考
+// 卓の分け方（誰と同卓するか）と席順（卓内の東南西北）は独立に決められるので、
+//   手順1: 焼きなまし法で「同卓の重複が最小になる卓分け」を探す
+//   手順2: その卓分けのまま、卓内の席順を入れ替えて「全員の東南西北の回数が均等」になるよう調整する
+// を何度も繰り返し、席順の偏りが最小（なるべく0）のものの中から、同卓の重複が最小のものを採用する
+// ==========================================
+type SeatPlan = {
+  tables: string[][][]; // [回戦][卓] = 東南西北の順の選手ID
+  windPenalty: number;  // 0 = 全員の東南西北の回数が、可能な限り均等
+  pairSq: number;       // 同卓回数の二乗和（小さいほど、同じ相手との同卓が少ない）
+  maxPair: number;      // 同じ相手との同卓の最大回数
+  repeatPairs: number;  // 2回以上同卓する組の数
+  attempts: number;
+};
+
+const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 1200, maxAttempts = 80 }: {
+  rounds: string[][];                      // 各回戦の出場者（抜け番を除いた4の倍数）
+  specialIds: Set<string>;                 // プロ・黒子（1卓に1人まで）
+  banPair?: [string, string] | null;       // 同卓は通算1回までの組
+  histBias: (a: string, b: string) => number; // 過去の同卓の偏りによる、ごくわずかな加点（正=避けたい、負=歓迎）
+  timeBudgetMs?: number;
+  maxAttempts?: number;
+}): SeatPlan => {
+  const ids = Array.from(new Set(rounds.flat()));
+  const P = ids.length;
+  const idx = new Map(ids.map((id, i) => [id, i] as [string, number]));
+  const R = rounds.length;
+  const act = rounds.map(r => r.map(id => idx.get(id)!));
+  const isSp = ids.map(id => specialIds.has(id));
+  const hist = new Float64Array(P * P);
+  for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) { const h = histBias(ids[i], ids[j]); hist[i * P + j] = h; hist[j * P + i] = h; }
+  const banA = banPair && idx.has(banPair[0]) ? idx.get(banPair[0])! : -1;
+  const banB = banPair && idx.has(banPair[1]) ? idx.get(banPair[1])! : -1;
+  const WP = 100, HEAVY = 100000;
+  const spPen = (n: number) => (n > 1 ? HEAVY * (n - 1) : 0);
+  const shuffle = <T,>(a: T[]) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+  const gamesOf = new Int32Array(P);
+  act.forEach(a => a.forEach(i => { gamesOf[i] += 1; }));
+  const minWindSq = (g: number) => { const q = Math.floor(g / 4), r = g % 4; return (4 - r) * q * q + r * (q + 1) * (q + 1); };
+
+  const attempt = () => {
+    const seat = act.map(a => shuffle([...a]));
+    const cnt = new Int32Array(P * P);
+    const spCount = seat.map(s => { const arr: number[] = []; for (let t = 0; t < s.length / 4; t++) arr.push(0); return arr; });
+    seat.forEach((s, r) => {
+      for (let t = 0; t < s.length / 4; t++) {
+        for (let u = 0; u < 4; u++) {
+          if (isSp[s[t * 4 + u]]) spCount[r][t] += 1;
+          for (let v = u + 1; v < 4; v++) { const a = s[t * 4 + u], b = s[t * 4 + v]; cnt[a * P + b] += 1; cnt[b * P + a] += 1; }
+        }
+      }
+    });
+    const isBan = (i: number, j: number) => (i === banA && j === banB) || (i === banB && j === banA);
+    const change = (i: number, j: number, d: number) => {
+      const k = i * P + j; const old = cnt[k]; const nw = old + d;
+      let delta = WP * (nw * nw - old * old) + hist[k] * d;
+      if (isBan(i, j)) delta += HEAVY * (Math.max(0, nw - 1) - Math.max(0, old - 1));
+      cnt[k] = nw; cnt[j * P + i] = nw;
+      return delta;
+    };
+    const movable: number[] = [];
+    seat.forEach((s, r) => { if (s.length >= 8) movable.push(r); });
+    const iters = movable.length ? 2500 * R + 4000 : 0;
+    const T0 = 45, T1 = 0.6;
+    for (let it = 0; it < iters; it++) {
+      const T = T0 * Math.pow(T1 / T0, it / iters);
+      const r = movable[Math.floor(Math.random() * movable.length)];
+      const s = seat[r];
+      const nT = s.length / 4;
+      const t1 = Math.floor(Math.random() * nT);
+      let t2 = Math.floor(Math.random() * (nT - 1)); if (t2 >= t1) t2 += 1;
+      const u1 = Math.floor(Math.random() * 4), u2 = Math.floor(Math.random() * 4);
+      const a = s[t1 * 4 + u1], b = s[t2 * 4 + u2];
+      let delta = 0;
+      for (let u = 0; u < 4; u++) {
+        if (u !== u1) { const m = s[t1 * 4 + u]; delta += change(a, m, -1); delta += change(b, m, +1); }
+        if (u !== u2) { const m = s[t2 * 4 + u]; delta += change(b, m, -1); delta += change(a, m, +1); }
+      }
+      const sa = isSp[a] ? 1 : 0, sb = isSp[b] ? 1 : 0;
+      const c1 = spCount[r][t1], c2 = spCount[r][t2];
+      delta += spPen(c1 - sa + sb) + spPen(c2 - sb + sa) - spPen(c1) - spPen(c2);
+      if (delta <= 0 || Math.random() < Math.exp(-delta / T)) {
+        s[t1 * 4 + u1] = b; s[t2 * 4 + u2] = a;
+        spCount[r][t1] = c1 - sa + sb; spCount[r][t2] = c2 - sb + sa;
+      } else {
+        for (let u = 0; u < 4; u++) {
+          if (u !== u1) { const m = s[t1 * 4 + u]; change(a, m, +1); change(b, m, -1); }
+          if (u !== u2) { const m = s[t2 * 4 + u]; change(b, m, +1); change(a, m, -1); }
+        }
+      }
+    }
+    // 手順2: 卓分けはそのままで、卓内の席順（東南西北）を調整して、全員の風の回数を均等にする
+    let bestWind = Infinity; let bestSeat: number[][] = seat;
+    for (let w = 0; w < 4 && bestWind > 0; w++) {
+      const cur = seat.map(s => { const c = [...s]; for (let t = 0; t < c.length / 4; t++) { const g = shuffle(c.slice(t * 4, t * 4 + 4)); for (let u = 0; u < 4; u++) c[t * 4 + u] = g[u]; } return c; });
+      const wc = new Int32Array(P * 4);
+      cur.forEach(s => s.forEach((p, k) => { wc[p * 4 + (k % 4)] += 1; }));
+      const tablesList: [number, number][] = [];
+      cur.forEach((s, r) => { for (let t = 0; t < s.length / 4; t++) tablesList.push([r, t]); });
+      const wIters = 1500 + tablesList.length * 400;
+      for (let it = 0; it < wIters; it++) {
+        const [r, t] = tablesList[Math.floor(Math.random() * tablesList.length)];
+        const u = Math.floor(Math.random() * 4); let v = Math.floor(Math.random() * 3); if (v >= u) v += 1;
+        const s = cur[r]; const a = s[t * 4 + u], b = s[t * 4 + v];
+        const ca = wc[a * 4 + u], cav = wc[a * 4 + v], cb = wc[b * 4 + v], cbu = wc[b * 4 + u];
+        const delta = ((cav + 1) * (cav + 1) - cav * cav) + ((ca - 1) * (ca - 1) - ca * ca) + ((cbu + 1) * (cbu + 1) - cbu * cbu) + ((cb - 1) * (cb - 1) - cb * cb);
+        if (delta < 0 || (delta === 0 && Math.random() < 0.5) || (delta === 2 && Math.random() < 0.02)) {
+          s[t * 4 + u] = b; s[t * 4 + v] = a;
+          wc[a * 4 + u] -= 1; wc[a * 4 + v] += 1; wc[b * 4 + v] -= 1; wc[b * 4 + u] += 1;
+        }
+      }
+      let pen = 0;
+      for (let p = 0; p < P; p++) { let sq = 0; for (let k = 0; k < 4; k++) sq += wc[p * 4 + k] * wc[p * 4 + k]; pen += sq - minWindSq(gamesOf[p]); }
+      if (pen < bestWind) { bestWind = pen; bestSeat = cur.map(s => [...s]); }
+    }
+    let pairSq = 0, maxPair = 0, repeatPairs = 0, histSum = 0;
+    for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) {
+      const c = cnt[i * P + j]; pairSq += c * c; if (c > maxPair) maxPair = c; if (c > 1) repeatPairs += 1; histSum += hist[i * P + j] * c;
+      if (isBan(i, j) && c > 1) pairSq += 1000;
+    }
+    return { seat: bestSeat, windPenalty: bestWind, pairSq, repeatPairs, maxPair, histSum };
+  };
+
+  const started = Date.now();
+  let best: ReturnType<typeof attempt> | null = null;
+  let attempts = 0;
+  while (attempts < maxAttempts && (attempts < 3 || Date.now() - started < timeBudgetMs)) {
+    const a = attempt(); attempts += 1;
+    // 席順の偏り → 同卓の重複 → （ごくわずかな参考）過去の同卓の偏り の順に比べる
+    if (!best || a.windPenalty < best.windPenalty
+      || (a.windPenalty === best.windPenalty && (a.pairSq < best.pairSq || (a.pairSq === best.pairSq && a.histSum < best.histSum)))) best = a;
+  }
+  const b = best!;
+  return {
+    tables: b.seat.map(s => { const out: string[][] = []; for (let t = 0; t < s.length / 4; t++) out.push(s.slice(t * 4, t * 4 + 4).map(i => ids[i])); return out; }),
+    windPenalty: b.windPenalty, pairSq: b.pairSq, maxPair: b.maxPair, repeatPairs: b.repeatPairs, attempts,
+  };
+};
+
 // 個人成績（モーダル）：通算成績・大会別成績・着順分布・半荘ごとの成績・対戦相性・ペナルティ履歴をまとめて表示
 type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
@@ -2959,6 +3101,8 @@ export default function Home() {
   const [h2hB, setH2hB] = useState('');
   const [phA, setPhA] = useState(''); // 個人対決で選んだ選手（キー）
   const [phB, setPhB] = useState('');
+  const [drawReport, setDrawReport] = useState<{ windPenalty: number; maxPair: number; repeatPairs: number; attempts: number; rounds: number } | null>(null); // 直近の卓組抽選の結果の要約（管理者向け）
+  const [nameDraft, setNameDraft] = useState(''); // 選手の名前の編集（新規登録タブ）
   const saveSchoolFor = async (playerId: string, school: string) => {
     if (!isAdmin) return;
     const name = school.trim();
@@ -2972,6 +3116,34 @@ export default function Home() {
       if (name) next[playerId] = name; else delete next[playerId];
       return next;
     });
+    setSchoolEditId(null);
+  };
+  // 選手の名前と学校をまとめて保存する（今季ランキングに載っていない選手も編集できる）。選手登録のない人は学校のみ
+  const savePlayerProfile = async (row: { id: string; name: string; legacy: boolean }, name: string, school: string) => {
+    if (!isAdmin) return;
+    const newName = name.trim();
+    if (!row.legacy && newName !== row.name) {
+      if (!newName) { alert('選手名を入力してください。'); return; }
+      if (dbPlayers.some(pl => pl.id !== row.id && pl.name === newName)) { alert(`「${newName}」は、すでに他の選手の名前として登録されています。`); return; }
+      const target = dbPlayers.find(pl => pl.id === row.id);
+      if (target) {
+        await api.updatePlayer({ ...target, name: newName, championshipRight: isPro(newName) ? false : target.championshipRight });
+        setDbPlayers(await api.getPlayers());
+      }
+    }
+    const sc = school.trim();
+    if (sc !== (playerSchools[row.id] || '')) {
+      const ok = await api.setPlayerSchool(row.id, sc);
+      if (ok) {
+        setPlayerSchools(prev => {
+          const next = { ...prev };
+          if (sc) next[row.id] = sc; else delete next[row.id];
+          return next;
+        });
+      } else {
+        alert('学校の保存に失敗しました。add_player_schools.sql の実行と、app/api/player-schools/route.ts の配置・環境変数 SUPABASE_SERVICE_ROLE_KEY の設定を確認してください。（コンソールにエラーが出ています）');
+      }
+    }
     setSchoolEditId(null);
   };
 
@@ -3320,106 +3492,57 @@ export default function Home() {
     const normalCount = Math.max(1, roundsCount - 2);
     const pendingCount = Math.max(0, roundsCount - normalCount);
     
-    const matchHistory: Record<string, Record<string, number>> = {};
-    const windHistory: Record<string, Record<string, number>> = {};
-    const sitOuts: Record<string, number> = {};
-
-    entryPlayerIds.forEach(id => {
-      matchHistory[id] = {};
-      windHistory[id] = { '東': 0, '南': 0, '西': 0, '北': 0 };
-      sitOuts[id] = 0;
-      entryPlayerIds.forEach(other => { matchHistory[id][other] = 0; });
-    });
-
     // プロ・黒子（この2種類は、2人以上を同卓にしない）
     const specialIds = new Set(entryPlayerIds.filter(id => isSpecialName(dbPlayers.find(p => p.id === id)?.name || '')));
     const rainfId = dbPlayers.find(p => p.name === 'れいんえふ')?.id;
     const tokuId = dbPlayers.find(p => p.name === 'toku')?.id;
 
-    const generatedRounds: Round[] = [];
+    // 各回戦の出場者を決める（その回戦に出場できる選手のみ。抜け番は、抜け番の少ない人を優先して出場させて均等にする）
+    const sitOuts: Record<string, number> = {};
+    entryPlayerIds.forEach(id => { sitOuts[id] = 0; });
+    const roundActive: string[][] = [];
+    const roundSitOut: string[][] = [];
     for (let r = 0; r < normalCount; r++) {
-      // その回戦に出場できる選手のみ対象（出場限定の選手は範囲外の回戦には入らない）
       const eligibleIds = entryPlayerIds.filter(id => isAvailableInRound(id, r + 1));
       const numTables = Math.floor(eligibleIds.length / 4);
-      // 抜け番を均等にするため、抜け番回数が少ない人を優先してアクティブに
       const sortedForActive = [...eligibleIds].sort((a, b) => {
         if (sitOuts[a] !== sitOuts[b]) return sitOuts[a] - sitOuts[b];
         return Math.random() - 0.5;
       });
-      
-      const activeIds = sortedForActive.slice(0, numTables * 4);
-      const sittingOutIds = sortedForActive.slice(numTables * 4);
-      sittingOutIds.forEach(id => sitOuts[id]++);
-
-      const available = [...activeIds];
-      const tables: Table[] = [];
-      for (let t = 0; t < numTables; t++) {
-        const tablePlayerIds: string[] = [];
-        // 残りの卓数で受けきれない人数のプロ・黒子がいるなら、この卓で1人受け持つ（最後の席を空けておく）
-        const specialsLeft = available.filter(id => specialIds.has(id)).length;
-        const mustTakeSpecial = specialsLeft > numTables - t - 1;
-        let tableHasSpecial = false;
-        for (let wIdx = 0; wIdx < 4; wIdx++) {
-          const wind = winds[wIdx];
-          let bestCandidate = available[0];
-          let minCost = Infinity;
-          const candidates = [...available].sort(() => Math.random() - 0.5);
-
-          for (const candidate of candidates) {
-            let overlapCost = 0;
-            let isBannedPair = false;
-
-            // プロ・黒子は1卓に1人まで
-            const candSpecial = specialIds.has(candidate);
-            if (candSpecial && tableHasSpecial) continue;
-            if (!candSpecial && mustTakeSpecial && !tableHasSpecial && 4 - tablePlayerIds.length <= 1) continue;
-
-            for (const seated of tablePlayerIds) {
-              overlapCost += matchHistory[candidate][seated] || 0;
-              
-              // 特例ルール: れいんえふ と toku は2回以上同卓しない
-              if (
-                ((candidate === rainfId && seated === tokuId) || (candidate === tokuId && seated === rainfId)) &&
-                matchHistory[rainfId || ''][tokuId || ''] >= 1
-              ) {
-                isBannedPair = true;
-              }
-            }
-
-            if (isBannedPair) continue;
-
-            const windCost = windHistory[candidate][wind] || 0;
-            const totalCost = (overlapCost * 100) + (windCost * 10);
-            
-            if (totalCost < minCost) { 
-              minCost = totalCost; 
-              bestCandidate = candidate; 
-            }
-          }
-
-          if (minCost === Infinity) bestCandidate = candidates.find(c => !(specialIds.has(c) && tableHasSpecial)) ?? candidates[0];
-
-          if (specialIds.has(bestCandidate)) tableHasSpecial = true;
-          tablePlayerIds.push(bestCandidate);
-          available.splice(available.indexOf(bestCandidate), 1);
-        }
-        
-        for (let i = 0; i < 4; i++) {
-          const p1 = tablePlayerIds[i];
-          windHistory[p1][winds[i]]++;
-          for (let j = 0; j < 4; j++) {
-            if (i !== j) matchHistory[p1][tablePlayerIds[j]]++;
-          }
-        }
-        tables.push({
-          tableNumber: t + 1, isCalculated: false, isSubmitted: false,
-          players: tablePlayerIds.map((id, i) => ({
-            playerId: id, wind: winds[i], name: dbPlayers.find(p => p.id === id)?.name || '不明', score: 300, point: 0.0, chonbo: 0,
-          })),
-        });
-      }
-      generatedRounds.push({ round: r + 1, tables, mode: 'normal', isPending: false, sitOutIds: sittingOutIds });
+      roundActive.push(sortedForActive.slice(0, numTables * 4));
+      const out = sortedForActive.slice(numTables * 4);
+      out.forEach(id => { sitOuts[id]++; });
+      roundSitOut.push(out);
     }
+
+    // 過去の大会の同卓の偏り（期待値との差）。「ほんの少しだけ」参考にする（同じ条件の候補があるとき、よく同卓してきた組を避ける程度）
+    const histMap = new Map<string, CoSeatPair>();
+    try {
+      buildCoSeatStats(buildTableGames(false), 'all').forEach(pr => histMap.set(coSeatKey(pr.ka, pr.kb), pr));
+    } catch (err) {
+      console.error('過去の同卓データの集計に失敗（参考情報なので、そのまま卓組を作ります）:', err);
+    }
+    const histBias = (a: string, b: string) => {
+      const pr = histMap.get(coSeatKey(a, b));
+      if (!pr || pr.e < 1) return 0;
+      return 0.4 * Math.max(-3, Math.min(3, pr.z));
+    };
+
+    // ① 席順（東南西北）を全員できるだけ公平に ② 同じ相手となるべく同卓しない、を最適化して卓組を作る
+    const plan = planSeating({ rounds: roundActive, specialIds, banPair: rainfId && tokuId ? [rainfId, tokuId] : null, histBias });
+    const generatedRounds: Round[] = plan.tables.map((tablesIds, r) => ({
+      round: r + 1,
+      tables: tablesIds.map((ids, t) => ({
+        tableNumber: t + 1, isCalculated: false, isSubmitted: false,
+        players: ids.map((id, i) => ({
+          playerId: id, wind: winds[i], name: dbPlayers.find(p => p.id === id)?.name || '不明', score: 300, point: 0.0, chonbo: 0,
+        })),
+      })),
+      mode: 'normal' as const,
+      isPending: false,
+      sitOutIds: roundSitOut[r],
+    }));
+    setDrawReport({ windPenalty: plan.windPenalty, maxPair: plan.maxPair, repeatPairs: plan.repeatPairs, attempts: plan.attempts, rounds: normalCount });
 
     // 後決めの回戦
     for (let k = 0; k < pendingCount; k++) {
@@ -4767,8 +4890,7 @@ export default function Home() {
 
   // 学校別成績の元データ: 1卓の1半荘を1件の「対局」として、過去の全大会＋今大会（送信済み）から作る（データタブを開いている管理者のみ）
   const schoolDataOn = isAdmin && activeTab === 'admin';
-  const schoolGames: SGame[] = (() => {
-    if (!schoolDataOn) return [];
+  const buildTableGames = (withCurrent: boolean): SGame[] => {
     const out: SGame[] = [];
     archives.forEach(a => {
       const season = !isPreviousSeasonArchive(a);
@@ -4786,7 +4908,7 @@ export default function Home() {
         out.push({ id: `${a.id}#${i}`, tKey: a.id, tName: a.name, tOrder, season, round: h.round ?? null, label: `${a.name} ${h.round ?? i + 1}半荘目${h.table ? ` ${h.table}卓` : ''}`, players });
       });
     });
-    countedSeating.forEach(r => r.tables.forEach(t => {
+    if (withCurrent) countedSeating.forEach(r => r.tables.forEach(t => {
       if (!t.isSubmitted) return;
       const sorted = [...t.players].sort((x, y) => y.score - x.score);
       const players: SGPlayer[] = [];
@@ -4799,7 +4921,8 @@ export default function Home() {
       out.push({ id: `cur#${r.round}-${t.tableNumber}`, tKey: 'current', tName: '今大会', tOrder: Number.POSITIVE_INFINITY, season: true, round: r.round, label: `今大会 ${r.round}回戦 ${t.tableNumber}卓`, players });
     }));
     return out;
-  })();
+  };
+  const schoolGames: SGame[] = schoolDataOn ? buildTableGames(true) : [];
 
   // 選手の選択肢（個人対決・同卓数の絞り込み用）: 記録のある全選手（選手登録のない前季のみの選手も含む）
   const playerOptions: PlayerOption[] = schoolDataOn
@@ -5976,9 +6099,8 @@ export default function Home() {
     return (
       <button
         onClick={() => setActiveTab(key)}
-        className={`flex items-center gap-1.5 px-3 lg:px-4 py-1.5 rounded-full font-bold text-[13px] whitespace-nowrap transition ${on ? '!bg-white !text-slate-900 shadow-[0_0_22px_rgba(129,140,248,0.8)]' : 'text-slate-300 hover:text-white hover:bg-white/10'}`}
+        className={`flex items-center gap-1.5 px-3 lg:px-4 h-11 font-bold text-[13px] whitespace-nowrap transition border-b-[3px] ${on ? 'text-white border-amber-400 bg-white/[0.08]' : 'text-slate-400 hover:text-white border-transparent hover:bg-white/[0.05]'}`}
       >
-        {on && <span className={`w-1.5 h-1.5 rounded-full ${TAB_DOTS[color] || 'bg-indigo-500'}`} aria-hidden="true" />}
         {label}
       </button>
     );
@@ -6023,94 +6145,87 @@ export default function Home() {
     <main
       className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
       style={{
-        backgroundColor: '#eceffd',
-        backgroundImage: 'radial-gradient(900px 420px at 6% -6%, rgba(139,92,246,.22), transparent 60%), radial-gradient(760px 420px at 100% 0%, rgba(34,211,238,.17), transparent 58%), radial-gradient(rgba(99,102,241,.13) 1px, transparent 1.4px), linear-gradient(180deg, #e6eaff 0px, #eef0fb 520px)',
-        backgroundSize: 'auto, auto, 24px 24px, auto',
-        backgroundRepeat: 'no-repeat, no-repeat, repeat, no-repeat',
+        backgroundColor: '#f3f5f9',
+        backgroundImage: 'linear-gradient(rgba(15,23,42,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,.04) 1px, transparent 1px), linear-gradient(180deg, #e7ebff 0px, #f3f5f9 360px)',
+        backgroundSize: '36px 36px, 36px 36px, auto',
+        backgroundRepeat: 'repeat, repeat, no-repeat',
       }}
     >
       {/* スマホ向けの共通調整: 入力欄の自動ズーム防止（16px）、タップ時の青いハイライト抑止、横スクロールの慣性など */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
         html { -webkit-text-size-adjust: 100%; }
         body { -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
         @media (max-width: 767px) {
           input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px !important; }
           .overflow-x-auto { -webkit-overflow-scrolling: touch; }
         }
-        /* ===== ネオン × ガラス（軽量版）=====
+        /* ===== ARENA デザイン（ライトテーマ・軽量）=====
+           スコアシート風の格子の紙面に、墨色のヘッダーと金のアクセント。数字は細身のコンデンスフォント。
            ぼかし(backdrop-filter)・多重の影・属性セレクタ・文字の発光は、重くなるので使わない */
-        main .shadow-sm { box-shadow: 0 4px 14px -8px rgba(99,102,241,.35); }
-        main .border-slate-200 { border-color: rgba(129,140,248,.24); }
-        main .bg-white.rounded-2xl, main .bg-white.rounded-3xl {
-          background-color: rgba(255,255,255,.68);
-          border-color: rgba(255,255,255,.92);
-          box-shadow: 0 0 0 1px rgba(129,140,248,.16), 0 6px 18px -10px rgba(99,102,241,.42);
-        }
-        main .fixed.inset-0 .bg-white { background-color: #fff; }
-        main input:not([type="checkbox"]):not([type="radio"]), main select, main textarea { background-color: rgba(255,255,255,.85); border-color: rgba(129,140,248,.34); }
-        /* ボタン: ネオンのグラデーション（影は1つだけ） */
-        main button.bg-indigo-600:not(:disabled) { background-image: linear-gradient(135deg, #6366f1, #8b5cf6 55%, #d946ef); box-shadow: 0 4px 14px -4px rgba(139,92,246,.7); }
-        main button.bg-green-500:not(:disabled), main button.bg-emerald-600:not(:disabled) { background-image: linear-gradient(135deg, #34d399, #06b6d4); box-shadow: 0 4px 14px -4px rgba(16,185,129,.7); }
-        main button.bg-teal-600:not(:disabled), main button.bg-teal-500:not(:disabled) { background-image: linear-gradient(135deg, #2dd4bf, #0ea5e9); box-shadow: 0 4px 14px -4px rgba(20,184,166,.7); }
-        main button.bg-amber-500:not(:disabled), main button.bg-amber-600:not(:disabled) { background-image: linear-gradient(135deg, #fbbf24, #f97316); box-shadow: 0 4px 14px -4px rgba(249,115,22,.7); }
-        main button.bg-red-500:not(:disabled), main button.bg-red-600:not(:disabled) { background-image: linear-gradient(135deg, #fb7185, #e11d48); box-shadow: 0 4px 14px -4px rgba(244,63,94,.7); }
-        main .bg-slate-900.rounded-t-2xl, main thead.bg-slate-900 { background-image: linear-gradient(90deg, #0b1020, #1e1b4b 50%, #0b1020); box-shadow: inset 0 -2px 0 rgba(129,140,248,.95); }
-        main h2, main h3 { letter-spacing: .01em; }
-        main button:not(:disabled):active { transform: scale(.975); }
-        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.24); }
-        ::selection { background: #c7d2fe; color: #1e1b4b; }
-        html { scrollbar-width: thin; scrollbar-color: #cbd5e1 transparent; }
-        .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
-        .no-scrollbar::-webkit-scrollbar { display: none; }
+        main { font-family: 'Inter', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', system-ui, sans-serif; color: #121733; -webkit-font-smoothing: antialiased; }
+        main .tabular-nums { font-family: 'Barlow Condensed', 'Inter', 'Noto Sans JP', sans-serif; font-variant-numeric: tabular-nums lining-nums; font-weight: 700; font-size: 1.1em; letter-spacing: .01em; }
+        main h2, main h3 { letter-spacing: .02em; }
 
-        /* ===== デザインの底上げ（軽量: ぼかし・多重の影・文字の発光は使わない）===== */
-        main { font-family: 'Inter', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-        main .tabular-nums { font-variant-numeric: tabular-nums lining-nums; }
-        /* ヘッダー下のアクセントライン */
-        main > header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none; background: linear-gradient(90deg, transparent, #6366f1 18%, #d946ef 50%, #22d3ee 82%, transparent); }
-        /* ページ上部のバナー: 格子模様と光沢（背景のグラデーションに重ねる） */
-        main .relative.overflow-hidden.rounded-2xl.text-white { isolation: isolate; border: 1px solid rgba(255,255,255,.16); box-shadow: 0 18px 36px -22px rgba(79,70,229,.75), inset 0 1px 0 rgba(255,255,255,.22); }
+        /* ヘッダー: 墨色＋下端に金のストライプ */
+        main > header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; pointer-events: none; background: linear-gradient(90deg, #f5b301, #f43f5e 38%, #6366f1 70%, #22d3ee); }
+
+        /* カード: 白＋細い罫線＋1つの影。パネルは上端に墨色の太い線 */
+        main .shadow-sm { box-shadow: 0 10px 22px -18px rgba(15,23,42,.45); }
+        main .border-slate-200 { border-color: #e2e6ef; }
+        main .bg-white.rounded-2xl, main .bg-white.rounded-3xl { background-color: #fff; border-radius: 16px; border-color: #e2e6ef; box-shadow: 0 14px 28px -22px rgba(15,23,42,.5); }
+        main .bg-white.rounded-2xl.border:not(.overflow-hidden) { border-top: 3px solid #111936; }
+        main .bg-white.rounded-xl.border { border-color: #e2e6ef; border-radius: 14px; box-shadow: 0 12px 24px -20px rgba(15,23,42,.45); }
+        main .fixed.inset-0 .bg-white { background-color: #fff; }
+        /* カード見出しの菱形マーカー（金→赤） */
+        main .bg-white.rounded-2xl > h2:first-child::before { content: ''; display: inline-block; flex-shrink: 0; width: .5em; height: .5em; margin: 0 .7rem 0 .2rem; border-radius: 2px; transform: rotate(45deg); background: linear-gradient(135deg, #f5b301, #f43f5e); vertical-align: .08em; }
+
+        /* ページ上部のバナー: 斜めのストライプ＋下端のレーシングストライプ */
+        main .relative.overflow-hidden.rounded-2xl.text-white { isolation: isolate; border-radius: 18px; border: 0; box-shadow: 0 22px 40px -26px rgba(17,25,54,.9); }
         main .relative.overflow-hidden.rounded-2xl.text-white::before {
           content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-          background-image: radial-gradient(circle at 100% 0%, rgba(255,255,255,.28), transparent 42%), linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.07) 1px, transparent 1px);
-          background-size: auto, 26px 26px, 26px 26px;
-          -webkit-mask-image: linear-gradient(115deg, #000 15%, rgba(0,0,0,.2) 85%); mask-image: linear-gradient(115deg, #000 15%, rgba(0,0,0,.2) 85%);
+          background-image: radial-gradient(circle at 100% 0%, rgba(255,255,255,.22), transparent 45%), repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 2px, transparent 2px 16px);
         }
+        main .relative.overflow-hidden.rounded-2xl.text-white::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; z-index: 1; pointer-events: none; background: linear-gradient(90deg, #f5b301, #f43f5e 40%, #6366f1 72%, #22d3ee); }
         main .relative.overflow-hidden.rounded-2xl.text-white > *:not(.absolute) { position: relative; z-index: 1; }
-        main .relative.overflow-hidden.rounded-2xl.text-white h2 { font-size: clamp(1.45rem, 1.1rem + 1.3vw, 2.1rem); letter-spacing: .05em; font-weight: 900; }
-        /* 表: 行のホバーと、見出し行の上品な区切り */
-        main tbody tr { transition: background-color .12s ease; }
-        main tbody tr:hover { background-color: rgba(99,102,241,.06); }
+        main .relative.overflow-hidden.rounded-2xl.text-white h2 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.2rem); letter-spacing: .06em; font-weight: 900; }
+
+        /* 表: 墨色の見出し＋金の下線、行のホバー */
+        main .bg-slate-900.rounded-t-2xl, main thead.bg-slate-900 { background-image: none; background-color: #0b1020; }
+        main thead.bg-slate-900 th { box-shadow: inset 0 -2px 0 #f5b301; letter-spacing: .05em; }
         main thead th { letter-spacing: .04em; }
-        /* ボタンの手触り */
+        main tbody tr { transition: background-color .12s ease; }
+        main tbody tr:hover { background-color: rgba(79,70,229,.055); }
+
+        /* 入力欄 */
+        main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), main select, main textarea { border-radius: 10px; border: 1px solid #cdd4e6; background-color: #fff; transition: border-color .14s ease, box-shadow .14s ease; }
+        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.2); }
+
+        /* ボタン: 色ごとに落ち着いたグラデーション（影は1つだけ） */
         main button { transition: transform .14s ease, filter .14s ease, background-color .14s ease, box-shadow .14s ease, border-color .14s ease; }
-        main button.bg-indigo-600:not(:disabled):hover, main button.bg-emerald-600:not(:disabled):hover, main button.bg-teal-600:not(:disabled):hover, main button.bg-amber-500:not(:disabled):hover, main button.bg-amber-600:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); }
-        /* モーダル */
-        main .fixed.inset-0 > .bg-white.rounded-2xl, main .fixed.inset-0 > .bg-white.rounded-t-3xl { border: 1px solid rgba(255,255,255,.7); box-shadow: 0 30px 70px -20px rgba(30,27,75,.55); }
-        /* ===== デザイン v2（ライトテーマ・軽量）===== */
-        main { color: #1b1936; }
-        /* カード: 細い罫線とやわらかい1つの影。角は少し大きく */
-        main .bg-white.rounded-2xl { border-radius: 20px; }
-        main .bg-white.rounded-xl.border { border-color: rgba(99,102,241,.17); border-radius: 16px; box-shadow: 0 12px 26px -20px rgba(67,56,202,.5); }
-        /* 白いカードの見出し: 左に縦のアクセントバー */
-        main .bg-white.rounded-2xl > h2:first-child::before { content: ''; display: inline-block; flex-shrink: 0; width: 4px; height: 1.15em; margin-right: .6rem; border-radius: 3px; background: linear-gradient(180deg, #6366f1, #d946ef); vertical-align: -.2em; }
-        main h2, main h3 { letter-spacing: .02em; }
-        /* バナー: 上端のハイライト線と見出しのグラデーション文字 */
-        main .relative.overflow-hidden.rounded-2xl.text-white::after { content: ''; position: absolute; left: 8%; right: 8%; top: 0; height: 1px; z-index: 1; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent); }
-        main .relative.overflow-hidden.rounded-2xl.text-white h2 { background-image: linear-gradient(90deg, #fff 35%, rgba(255,255,255,.7)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-        /* 入力欄とボタン */
-        main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), main select, main textarea { border-radius: 12px; border: 1px solid rgba(99,102,241,.3); background-color: #fff; transition: border-color .14s ease, box-shadow .14s ease; }
-        main button.bg-slate-800:not(:disabled), main button.bg-slate-900:not(:disabled) { background-image: linear-gradient(135deg, #1e1b4b, #4338ca 62%, #7c3aed); box-shadow: 0 10px 20px -10px rgba(67,56,202,.75); }
-        main button.bg-slate-800:not(:disabled):hover, main button.bg-slate-900:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-1px); }
+        main button.bg-indigo-600:not(:disabled) { background-image: linear-gradient(135deg, #3730a3, #4f46e5 60%, #6366f1); box-shadow: 0 8px 16px -8px rgba(55,48,163,.8); }
+        main button.bg-green-500:not(:disabled), main button.bg-emerald-600:not(:disabled), main button.bg-teal-600:not(:disabled), main button.bg-teal-500:not(:disabled) { background-image: linear-gradient(135deg, #047857, #10b981); box-shadow: 0 8px 16px -8px rgba(4,120,87,.8); }
+        main button.bg-amber-500:not(:disabled), main button.bg-amber-600:not(:disabled) { background-image: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 8px 16px -8px rgba(234,88,12,.8); }
+        main button.bg-red-500:not(:disabled), main button.bg-red-600:not(:disabled) { background-image: linear-gradient(135deg, #e11d48, #f43f5e); box-shadow: 0 8px 16px -8px rgba(225,29,72,.8); }
+        main button.bg-slate-800:not(:disabled), main button.bg-slate-900:not(:disabled) { background-image: linear-gradient(135deg, #0b1020, #1e2a5a); box-shadow: 0 8px 16px -8px rgba(11,16,32,.9); }
+        main button.bg-indigo-600:not(:disabled):hover, main button.bg-emerald-600:not(:disabled):hover, main button.bg-teal-600:not(:disabled):hover, main button.bg-amber-500:not(:disabled):hover, main button.bg-amber-600:not(:disabled):hover, main button.bg-slate-800:not(:disabled):hover, main button.bg-slate-900:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); }
+        main button:not(:disabled):active { transform: scale(.975); }
+
         /* 1〜3位のメダル */
         main .rounded-full.bg-gradient-to-br.from-yellow-300 { box-shadow: 0 0 0 3px rgba(251,191,36,.28); }
         main .rounded-full.bg-gradient-to-br.from-slate-300 { box-shadow: 0 0 0 3px rgba(148,163,184,.25); }
         main .rounded-full.bg-gradient-to-br.from-orange-300 { box-shadow: 0 0 0 3px rgba(251,146,60,.25); }
-        /* スクロールバー */
+
+        /* モーダル */
+        main .fixed.inset-0 > .bg-white.rounded-2xl, main .fixed.inset-0 > .bg-white.rounded-t-3xl { border: 0; border-radius: 18px; box-shadow: 0 30px 70px -20px rgba(11,16,32,.6); }
+
+        ::selection { background: #fde68a; color: #1c1917; }
+        html { scrollbar-width: thin; scrollbar-color: #b6bfd6 transparent; }
+        .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, #a5b4fc, #c4b5fd); border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb { background: #b6bfd6; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
       `}</style>
       
       {isResetting && (
@@ -6154,7 +6269,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-x-4 md:gap-y-0">
           {/* タイトル */}
           <div className="order-1 min-w-0 flex-1 mr-1 md:h-12 flex items-center gap-2.5">
-            <span className="flex-shrink-0 w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-400 via-violet-500 to-fuchsia-500 flex items-center justify-center text-lg shadow-lg shadow-indigo-900/50 ring-1 ring-white/25" aria-hidden="true">🀄</span>
+            <span className="flex-shrink-0 w-9 h-10 rounded-md bg-gradient-to-b from-amber-50 to-amber-200 border-b-[5px] border-emerald-700 flex items-center justify-center text-lg shadow ring-1 ring-black/20" aria-hidden="true">🀄</span>
             <div className="min-w-0 leading-tight">
             <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">{APP_TITLE}</h1>
             <p className="text-[10px] text-indigo-300/70 whitespace-nowrap">{RULE_NAME}</p>
@@ -6166,7 +6281,7 @@ export default function Home() {
 
           {/* タブ（PCのみ。スマホは下部ナビ） */}
           <div className="hidden md:flex order-4 h-11 items-center flex-shrink-0">
-          <nav className="flex flex-shrink-0 bg-white/[0.06] ring-1 ring-white/[0.12] p-1 rounded-full gap-0.5">
+          <nav className="flex flex-shrink-0 items-stretch h-11 gap-0.5">
             {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
             {tabBtn('totalRanking', '今季成績', 'bg-indigo-600')}
@@ -6429,14 +6544,14 @@ export default function Home() {
 
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
-                <h2 className="text-xl font-bold">🏫 学校の割り当て <span className="ml-1 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h2>
+                <h2 className="text-xl font-bold">🏫 選手の名前・学校の管理 <span className="ml-1 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h2>
                 <button
                   onClick={() => setSchoolUnsetOnly(!schoolUnsetOnly)}
                   className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition ${schoolUnsetOnly ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-500'}`}
                 >{schoolUnsetOnly ? '未設定のみ表示中' : '未設定のみ表示'}</button>
               </div>
               <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
-                今季の対局がない選手や、過去の大会（前季など）にだけ参加した選手（「選手登録なし」）も含めて、学校を設定できます。学校名を押すと変更でき、登録済みの学校はボタンで選べます。管理者のみ閲覧でき、一般には表示されません。
+                今季ランキングに載っていない選手も含めて、登録済みの全選手の名前と学校を変更できます（行の「✏️ 編集」または学校名を押します）。過去の大会にだけ参加した選手（「選手登録なし」）は学校のみ設定できます。学校は管理者のみ閲覧でき、一般には表示されません。
                 （設定済み {schoolRows.filter(p => playerSchools[p.id]).length}名 ／ 未設定 {schoolRows.filter(p => !playerSchools[p.id]).length}名）
               </p>
               <div className="overflow-x-auto">
@@ -6454,9 +6569,24 @@ export default function Home() {
                         const editing = schoolEditId === p.id;
                         return (
                           <tr key={p.id} className="border-b border-slate-100 align-top">
-                            <td className="p-2 font-bold whitespace-nowrap">
-                              <PlayerLabel name={p.name} />
-                              {p.legacy && <span className="ml-1.5 text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1 py-0.5 align-middle">選手登録なし</span>}
+                            <td className="p-2 font-bold align-top">
+                              {editing && !p.legacy ? (
+                                <input
+                                  type="text"
+                                  value={nameDraft}
+                                  onChange={e => setNameDraft(e.target.value)}
+                                  onKeyDown={e => { if (e.key === 'Enter') savePlayerProfile(p, nameDraft, schoolDraft); if (e.key === 'Escape') setSchoolEditId(null); }}
+                                  placeholder="選手名"
+                                  className="w-40 border p-1.5 rounded text-sm font-bold"
+                                />
+                              ) : (
+                                <span className="whitespace-nowrap">
+                                  <PlayerLabel name={p.name} />
+                                  {p.legacy
+                                    ? <span className="ml-1.5 text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1 py-0.5 align-middle">選手登録なし</span>
+                                    : <button onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); setNameDraft(p.name); }} className="ml-1.5 text-[10px] font-bold text-slate-400 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded px-1.5 py-0.5 align-middle">✏️ 編集</button>}
+                                </span>
+                              )}
                             </td>
                             <td className="p-2">
                               {editing ? (
@@ -6467,18 +6597,18 @@ export default function Home() {
                                       autoFocus
                                       value={schoolDraft}
                                       onChange={e => setSchoolDraft(e.target.value)}
-                                      onKeyDown={e => { if (e.key === 'Enter') saveSchoolFor(p.id, schoolDraft); if (e.key === 'Escape') setSchoolEditId(null); }}
+                                      onKeyDown={e => { if (e.key === 'Enter') savePlayerProfile(p, nameDraft, schoolDraft); if (e.key === 'Escape') setSchoolEditId(null); }}
                                       placeholder="新しい学校は直接入力"
                                       className="min-w-0 flex-1 border p-1.5 rounded text-sm"
                                     />
-                                    <button onClick={() => saveSchoolFor(p.id, schoolDraft)} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">保存</button>
+                                    <button onClick={() => savePlayerProfile(p, nameDraft, schoolDraft)} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">保存</button>
                                     <button onClick={() => setSchoolEditId(null)} className="text-slate-400 text-xs font-bold whitespace-nowrap">取消</button>
                                   </div>
                                   <SchoolChips options={schoolOptions} value={schoolDraft} onPick={setSchoolDraft} />
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); }}
+                                  onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); setNameDraft(p.name); }}
                                   className={`text-left rounded-md px-2 py-1 text-sm font-bold transition ${playerSchools[p.id] ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-100 hover:text-slate-500'}`}
                                 >{playerSchools[p.id] || '未設定（押して設定）'}</button>
                               )}
@@ -7842,6 +7972,17 @@ export default function Home() {
                     卓組は生成済みです。内容を確認・編集（🛠️ 選手の追加・差し替え）してから「大会開始」を押してください。<br />
                     開始するまで得点入力はできません。{drawingAnnounced ? '一般の画面には「卓組抽選中」と表示されています。' : '一般の画面は、「抽選」ボタンを押すまで、これまでどおりの表示です。'}
                   </p>
+                  {drawReport && (
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-bold">
+                      <span className={`px-2 py-1 rounded-full border ${drawReport.windPenalty === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-orange-50 text-orange-700 border-orange-200'}`}>
+                        {drawReport.windPenalty === 0 ? '✅ 席順: 全員の東南西北の回数が均等' : `⚠️ 席順: 偏りあり（${drawReport.windPenalty}）。人数の都合で均等にできませんでした`}
+                      </span>
+                      <span className={`px-2 py-1 rounded-full border ${drawReport.repeatPairs === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
+                        {drawReport.repeatPairs === 0 ? '✅ 同卓: 通常回戦で同じ相手との同卓はありません' : `同卓: 2回以上同卓する組が${drawReport.repeatPairs}組（最大${drawReport.maxPair}回）`}
+                      </span>
+                      <span className="px-2 py-1 rounded-full border bg-white text-slate-500 border-slate-200">{drawReport.rounds}回戦・{drawReport.attempts}パターンから最良を採用</span>
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2 w-full md:w-auto">
                   {!drawingAnnounced ? (
