@@ -6024,8 +6024,9 @@ export default function Home() {
       className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
       style={{
         backgroundColor: '#eceffd',
-        backgroundImage: 'radial-gradient(900px 420px at 6% -6%, rgba(139,92,246,.22), transparent 60%), radial-gradient(760px 420px at 100% 0%, rgba(34,211,238,.17), transparent 58%), linear-gradient(180deg, #e6eaff 0px, #eef0fb 520px)',
-        backgroundRepeat: 'no-repeat',
+        backgroundImage: 'radial-gradient(900px 420px at 6% -6%, rgba(139,92,246,.22), transparent 60%), radial-gradient(760px 420px at 100% 0%, rgba(34,211,238,.17), transparent 58%), radial-gradient(rgba(99,102,241,.13) 1px, transparent 1.4px), linear-gradient(180deg, #e6eaff 0px, #eef0fb 520px)',
+        backgroundSize: 'auto, auto, 24px 24px, auto',
+        backgroundRepeat: 'no-repeat, no-repeat, repeat, no-repeat',
       }}
     >
       {/* スマホ向けの共通調整: 入力欄の自動ズーム防止（16px）、タップ時の青いハイライト抑止、横スクロールの慣性など */}
@@ -6087,6 +6088,25 @@ export default function Home() {
         main button.bg-indigo-600:not(:disabled):hover, main button.bg-emerald-600:not(:disabled):hover, main button.bg-teal-600:not(:disabled):hover, main button.bg-amber-500:not(:disabled):hover, main button.bg-amber-600:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); }
         /* モーダル */
         main .fixed.inset-0 > .bg-white.rounded-2xl, main .fixed.inset-0 > .bg-white.rounded-t-3xl { border: 1px solid rgba(255,255,255,.7); box-shadow: 0 30px 70px -20px rgba(30,27,75,.55); }
+        /* ===== デザイン v2（ライトテーマ・軽量）===== */
+        main { color: #1b1936; }
+        /* カード: 細い罫線とやわらかい1つの影。角は少し大きく */
+        main .bg-white.rounded-2xl { border-radius: 20px; }
+        main .bg-white.rounded-xl.border { border-color: rgba(99,102,241,.17); border-radius: 16px; box-shadow: 0 12px 26px -20px rgba(67,56,202,.5); }
+        /* 白いカードの見出し: 左に縦のアクセントバー */
+        main .bg-white.rounded-2xl > h2:first-child::before { content: ''; display: inline-block; flex-shrink: 0; width: 4px; height: 1.15em; margin-right: .6rem; border-radius: 3px; background: linear-gradient(180deg, #6366f1, #d946ef); vertical-align: -.2em; }
+        main h2, main h3 { letter-spacing: .02em; }
+        /* バナー: 上端のハイライト線と見出しのグラデーション文字 */
+        main .relative.overflow-hidden.rounded-2xl.text-white::after { content: ''; position: absolute; left: 8%; right: 8%; top: 0; height: 1px; z-index: 1; pointer-events: none; background: linear-gradient(90deg, transparent, rgba(255,255,255,.8), transparent); }
+        main .relative.overflow-hidden.rounded-2xl.text-white h2 { background-image: linear-gradient(90deg, #fff 35%, rgba(255,255,255,.7)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        /* 入力欄とボタン */
+        main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), main select, main textarea { border-radius: 12px; border: 1px solid rgba(99,102,241,.3); background-color: #fff; transition: border-color .14s ease, box-shadow .14s ease; }
+        main button.bg-slate-800:not(:disabled), main button.bg-slate-900:not(:disabled) { background-image: linear-gradient(135deg, #1e1b4b, #4338ca 62%, #7c3aed); box-shadow: 0 10px 20px -10px rgba(67,56,202,.75); }
+        main button.bg-slate-800:not(:disabled):hover, main button.bg-slate-900:not(:disabled):hover { filter: brightness(1.1); transform: translateY(-1px); }
+        /* 1〜3位のメダル */
+        main .rounded-full.bg-gradient-to-br.from-yellow-300 { box-shadow: 0 0 0 3px rgba(251,191,36,.28); }
+        main .rounded-full.bg-gradient-to-br.from-slate-300 { box-shadow: 0 0 0 3px rgba(148,163,184,.25); }
+        main .rounded-full.bg-gradient-to-br.from-orange-300 { box-shadow: 0 0 0 3px rgba(251,146,60,.25); }
         /* スクロールバー */
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -6371,7 +6391,7 @@ export default function Home() {
           <div className="space-y-8 animate-in fade-in duration-300">
             <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">新規選手の登録</h2>
-              <form onSubmit={handleRegisterPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+              <form onSubmit={handleRegisterPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-5 items-start">
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-600 mb-1">選手名</label>
                   <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
@@ -6609,7 +6629,7 @@ export default function Home() {
                   </div>
                 </AdminSection>
 
-                <AdminSection id="adm-rank" icon="📉" title="各種ランキング（{dataScopeLabel}）" desc="スコア・素点・順位点・順位別率・大会内の位置ごとの合計">
+                <AdminSection id="adm-rank" icon="📉" title={`各種ランキング（${dataScopeLabel}）`} desc="スコア・素点・順位点・順位別率・大会内の位置ごとの合計">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
                   <AdminRankList title="💎 素点ランキング" desc={`素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の${dataScopeLabel}合計。順位点は含みません`} rows={adminRaw} />
@@ -6660,7 +6680,7 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-synergy" icon="💞" title="相性（{dataScopeLabel}）" desc="同卓したときのポイントの合計から見た相性">
+                <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} desc="同卓したときのポイントの合計から見た相性">
                 {/* 相性 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <h4 className="text-sm font-black text-slate-700">{dataScopeLabel}の相性</h4>
@@ -6681,7 +6701,7 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-coseat" icon="🎲" title="同卓数の分布（{dataScopeLabel}）" desc="ともに参加した大会での同卓回数が、期待値をどれだけ上回っているか／下回っているか">
+                <AdminSection id="adm-coseat" icon="🎲" title={`同卓数の分布（${dataScopeLabel}）`} desc="ともに参加した大会での同卓回数が、期待値をどれだけ上回っているか／下回っているか">
                   <CoSeatPanel games={schoolGames} scope={dataScope} players={playerOptions} />
                 </AdminSection>
 
