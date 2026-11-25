@@ -612,7 +612,7 @@ const SchoolDetailModal = ({
   const groups = (() => {
     const m = new Map<string, { key: string; label: string; rows: SGame[] }>();
     s.tables.forEach(g => {
-      const cur = m.get(g.tKey) || { key: g.tKey, label: g.tName, rows: [] };
+      const cur: { key: string; label: string; rows: SGame[] } = m.get(g.tKey) || { key: g.tKey, label: g.tName, rows: [] };
       cur.rows.push(g);
       m.set(g.tKey, cur);
     });
@@ -1469,7 +1469,7 @@ const PlayerH2HPanel = ({
 };
 
 // 管理用データのセクション見出し（アンカー付き）
-const AdminSection = ({ id, icon, title, desc, children }: { id: string; icon: string; title: string; desc?: string; children: React.ReactNode }) => (
+const AdminSection = ({ id, icon, title, desc, right, children }: { id: string; icon: string; title: string; desc?: string; right?: React.ReactNode; children: React.ReactNode }) => (
   <section id={id} className="scroll-mt-4 space-y-3">
     <div className="flex items-center gap-3">
       <span className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-[#1c1814] via-[#5e190e] to-[#274066] text-xl flex items-center justify-center shadow-md shadow-[#5e190e]/30 ring-1 ring-white/20">{icon}</span>
@@ -1478,6 +1478,7 @@ const AdminSection = ({ id, icon, title, desc, children }: { id: string; icon: s
         {desc && <p className="text-[11px] text-[#82786b] leading-snug">{desc}</p>}
       </div>
       <span className="flex-1 h-px bg-gradient-to-r from-[#ef937c]/70 to-transparent" />
+      {right}
     </div>
     {children}
   </section>
@@ -2823,7 +2824,7 @@ export default function Home() {
   const nextEntryRef = useRef<NextEntry | null>(null);
   const nextSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [adminRateRank, setAdminRateRank] = useState(0); // 管理用データ: 順位別率（0=1位率 … 3=4位率）
-  const [dataScope, setDataScope] = useState<'all' | 'season'>('all'); // データ・管理用データ: 集計範囲（通算=全大会 / 今季=今季の大会のみ）
+  const [dataScope, setDataScope] = useState<'all' | 'season'>('season'); // データ・管理用データ: 集計範囲（今季=今季の大会のみ[初期値] / 通算=全大会）
   const [adminStreakAcross, setAdminStreakAcross] = useState(false); // 管理用データ: 連続記録を大会をまたいで数えるか（既定: 同じ大会のみ）
   const [adminSynergyMin, setAdminSynergyMin] = useState(5); // 管理用データ: 相性ランキングの対象にする、同卓した半荘数の下限
   const [breakInput, setBreakInput] = useState(String(DEFAULT_BREAK_MINUTES));
@@ -5718,8 +5719,7 @@ export default function Home() {
   // ==========================================
   // データタブ用の集計（過去大会＋今大会（送信済みの卓）の全結果が対象。黒子・順位対象外の記録は除く）
   // ==========================================
-  const DATA_TOP_N = 7;
-  const RANK_LIMIT = 10; // 管理用データでは10位まで表示するため、集計は10位まで持つ（データタブは先頭7件だけ表示）
+  const RANK_LIMIT = 20; // データタブの最高スコアは20位まで（2列に分けて表示）
   const MIN_GAMES_FOR_RATE = 8; // 連対率・ラス回避率の対象となる最低半荘数
 
   // 同じ値は同順位にする（1,2,2,4…）
@@ -5769,57 +5769,6 @@ export default function Home() {
 
   // 最高スコア（1半荘ごと）
   const topScoreRanking = assignRanks([...gameRecs].sort((x, y) => y.score - x.score).slice(0, RANK_LIMIT), x => x.score);
-
-  // 連勝記録: 同じ大会の中で、連続してトップ（1着）を取った回数。大会をまたいでは数えない。
-  // 抜け番などで出場しなかった回戦は飛ばし、その選手が実際に打った対局の連続で数える。
-  // 1人につき最長の記録を1件だけ採用し、2連勝以上を表示する。
-  const MIN_STREAK = 2;
-  const streakBest = new Map<string, { playerId: string; name: string; source: string; length: number }>();
-  const gamesByPlayerTournament = new Map<string, GameRec[]>();
-  gameRecs.forEach(g => {
-    const key = `${g.playerId}__${g.source}`;
-    const arr = gamesByPlayerTournament.get(key);
-    if (arr) arr.push(g); else gamesByPlayerTournament.set(key, [g]);
-  });
-  gamesByPlayerTournament.forEach(games => {
-    games.sort((x, y) => x.seq - y.seq);
-    let run = 0;
-    games.forEach(g => {
-      run = g.rank === 1 ? run + 1 : 0;
-      const cur = streakBest.get(g.playerId);
-      if (run >= MIN_STREAK && (!cur || run > cur.length)) {
-        streakBest.set(g.playerId, { playerId: g.playerId, name: g.name, source: g.source, length: run });
-      }
-    });
-  });
-  const winStreakRanking = assignRanks(
-    Array.from(streakBest.values()).sort((x, y) => y.length - x.length).slice(0, RANK_LIMIT),
-    x => x.length,
-  );
-
-  // 選手ごとの集計
-  type PlayerAgg = { playerId: string; name: string; games: number; top: number; second: number; last: number };
-  const aggMap = new Map<string, PlayerAgg>();
-  gameRecs.forEach(g => {
-    const cur = aggMap.get(g.playerId) || { playerId: g.playerId, name: g.name, games: 0, top: 0, second: 0, last: 0 };
-    cur.games += 1;
-    if (g.rank === 1) cur.top += 1;
-    if (g.rank === 2) cur.second += 1;
-    if (g.rank === 4) cur.last += 1;
-    aggMap.set(g.playerId, cur);
-  });
-  const aggList = Array.from(aggMap.values());
-  const rateEligible = aggList.filter(x => x.games >= MIN_GAMES_FOR_RATE);
-
-  // 連対率（1着または2着の割合）／ラス回避率（4着でなかった割合）。8半荘以上が対象
-  const rentaiRanking = assignRanks(
-    rateEligible.map(x => ({ ...x, rate: (x.top + x.second) / x.games })).sort((x, y) => y.rate - x.rate || y.games - x.games).slice(0, RANK_LIMIT),
-    x => x.rate,
-  );
-  const avoidLastRanking = assignRanks(
-    rateEligible.map(x => ({ ...x, rate: (x.games - x.last) / x.games })).sort((x, y) => y.rate - x.rate || y.games - x.games).slice(0, RANK_LIMIT),
-    x => x.rate,
-  );
 
   // ===== 管理用データ（管理者のみ・上位10名まで） =====
   const ADMIN_TOP_N = 10;
@@ -6016,74 +5965,74 @@ export default function Home() {
     : n === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'
     : 'bg-[#f3eee4] text-[#82786b]';
 
-  const renderDataCard = (opts: { icon: string; title: string; desc: string; theme: keyof typeof DATA_THEMES; rows: DataRow[]; emptyText?: string; limit?: number; compact?: boolean }) => {
+  const renderDataCard = (opts: { icon: string; title: string; desc: string; theme: keyof typeof DATA_THEMES; rows: DataRow[]; emptyText?: string; limit: number; twoColumns?: boolean }) => {
     const th = DATA_THEMES[opts.theme];
-    const limit = opts.limit ?? DATA_TOP_N;
-    const rowH = opts.compact ? 'min-h-[64px]' : 'min-h-[84px]';
+    const limit = opts.limit;
+    const rowH = 'min-h-[64px]';
     const fillers = Math.max(0, limit - opts.rows.length);
+    const rowEls = opts.rows.map(x => (
+      <li key={x.key} className={`px-4 flex-1 ${rowH} flex flex-col justify-center ${x.rankNo === 1 ? th.hi : ''}`}>
+        <div className="flex items-center gap-3">
+          <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${medalClass(x.rankNo)}`}>{x.rankNo}</span>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-[#2d2721] truncate"><PlayerLabel name={x.name} /></div>
+            <div className="text-[11px] text-[#a99d8c] truncate">{x.sub}</div>
+          </div>
+          <div className="text-right flex-shrink-0">
+            <span className={`text-xl font-black tabular-nums ${x.valueClass || th.val}`}>{x.value}</span>
+            {x.unit && <span className="text-xs font-bold text-[#a99d8c] ml-0.5">{x.unit}</span>}
+          </div>
+        </div>
+        {x.bar !== undefined && (
+          <div className="mt-2 ml-12 h-1.5 rounded-full bg-[#f3eee4] overflow-hidden">
+            <div className={`h-full rounded-full bg-gradient-to-r ${th.bar}`} style={{ width: `${Math.max(0, Math.min(1, x.bar)) * 100}%` }} />
+          </div>
+        )}
+      </li>
+    ));
+    const fillEls = Array.from({ length: fillers }).map((_, i) => (
+      <li key={`ph-${i}`} className={`flex items-center justify-center flex-1 ${rowH} text-sm text-[#d4c9b7]`}>{i === 0 && opts.rows.length === 0 && opts.emptyText ? opts.emptyText : '—'}</li>
+    ));
+    const all = [...rowEls, ...fillEls];
+    const per = Math.ceil(limit / 2);
     return (
       <section className="bg-white rounded-2xl shadow-sm border border-[#e7dfd1] overflow-hidden flex flex-col h-full">
-        <div className={`px-5 py-4 bg-gradient-to-r ${th.head} border-b min-h-[84px]`}>
+        <div className={`px-5 py-3.5 bg-gradient-to-r ${th.head} border-b min-h-[64px]`}>
           <h3 className={`text-lg font-black ${th.title} flex items-center gap-2`}>{opts.icon} {opts.title} <span className={`text-xs font-bold ${th.chip} bg-white/70 px-2 py-0.5 rounded-full`}>TOP{limit}</span></h3>
           <p className={`text-[11px] ${th.sub} mt-0.5`}>{opts.desc}</p>
         </div>
-        <ol className="divide-y divide-[#f3eee4] flex-1 flex flex-col">
-          {opts.rows.map(x => (
-            <li key={x.key} className={`px-4 flex-1 ${rowH} flex flex-col justify-center ${x.rankNo === 1 ? th.hi : ''}`}>
-              <div className="flex items-center gap-3">
-                <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${medalClass(x.rankNo)}`}>{x.rankNo}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-[#2d2721] truncate"><PlayerLabel name={x.name} /></div>
-                  <div className="text-[11px] text-[#a99d8c]">{x.sub}</div>
-                </div>
-                <div className="text-right flex-shrink-0">
-                  <span className={`text-xl font-black tabular-nums ${x.valueClass || th.val}`}>{x.value}</span>
-                  {x.unit && <span className="text-xs font-bold text-[#a99d8c] ml-0.5">{x.unit}</span>}
-                </div>
-              </div>
-              {x.bar !== undefined && (
-                <div className="mt-2 ml-12 h-1.5 rounded-full bg-[#f3eee4] overflow-hidden">
-                  <div className={`h-full rounded-full bg-gradient-to-r ${th.bar}`} style={{ width: `${Math.max(0, Math.min(1, x.bar)) * 100}%` }} />
-                </div>
-              )}
-            </li>
-          ))}
-          {Array.from({ length: fillers }).map((_, i) => (
-            <li key={`ph-${i}`} className={`flex items-center justify-center flex-1 ${rowH} text-sm text-[#d4c9b7]`}>{i === 0 && opts.rows.length === 0 && opts.emptyText ? opts.emptyText : '—'}</li>
-          ))}
-        </ol>
+        {opts.twoColumns ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 md:divide-x divide-[#f3eee4] flex-1">
+            <ol className="divide-y divide-[#f3eee4] flex flex-col">{all.slice(0, per)}</ol>
+            <ol className="divide-y divide-[#f3eee4] flex flex-col border-t border-[#f3eee4] md:border-t-0">{all.slice(per)}</ol>
+          </div>
+        ) : (
+          <ol className="divide-y divide-[#f3eee4] flex-1 flex flex-col">{all}</ol>
+        )}
       </section>
     );
   };
 
-  // データ・管理用データ共通の4つのランキングカード（最高スコア・連勝記録・連対率・ラス回避率）
-  const renderTopCards = (limit: number, compact: boolean) => (
-    <>
-      {renderDataCard({ limit, compact,
-        icon: '🎯', title: '最高スコア', theme: 'amber',
-        desc: '1半荘あたりの最高スコア',
-        rows: topScoreRanking.slice(0, limit).map((x, i) => ({ key: `top-${x.playerId}-${x.source}-${i}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: x.score.toLocaleString(), unit: '点' })),
-      })}
-      {renderDataCard({ limit, compact,
-        icon: '🔥', title: '連勝記録', theme: 'rose',
-        desc: '同じ大会の中で連続してトップを取った回数（同大会のみ）',
-        emptyText: `${MIN_STREAK}連勝以上の記録がまだありません`,
-        rows: winStreakRanking.slice(0, limit).map(x => ({ key: `ws-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: `${x.length}`, unit: '連勝' })),
-      })}
-      {renderDataCard({ limit, compact,
-        icon: '🥈', title: '連対率', theme: 'emerald',
-        desc: `全半荘のうち1着か2着になった割合（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象 ／ 対象 ${rateEligible.length}名）`,
-        emptyText: `${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`,
-        rows: rentaiRanking.slice(0, limit).map(x => ({ key: `rt-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘中 1着${x.top}回・2着${x.second}回`, value: x.rate.toFixed(3), bar: x.rate })),
-      })}
-      {renderDataCard({ limit, compact,
-        icon: '🛡️', title: 'ラス回避率', theme: 'sky',
-        desc: `全半荘のうちラス（4着）でなかった割合（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象 ／ 対象 ${rateEligible.length}名）`,
-        emptyText: `${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`,
-        rows: avoidLastRanking.slice(0, limit).map(x => ({ key: `al-${x.playerId}`, rankNo: x.rankNo, name: x.name, sub: `${x.games}半荘中 ラス${x.last}回`, value: x.rate.toFixed(3), bar: x.rate })),
-      })}
-    </>
+  // 管理用データの各セクションの見出しに置く「今季／通算」の切り替え（上のバナーのボタンと同じ設定を切り替える）
+  const scopeToggle = (
+    <div className="flex gap-1 flex-shrink-0">
+      {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
+        <button
+          key={v}
+          onClick={() => setDataScope(v)}
+          className={`px-3 py-1 rounded-md text-xs font-bold transition ${dataScope === v ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}
+        >{label}</button>
+      ))}
+    </div>
   );
+
+  // データタブの最高スコアランキング（20位まで。10位ずつ2列に分けて表示）
+  const renderTopCards = () => renderDataCard({
+    limit: RANK_LIMIT, twoColumns: true,
+    icon: '🎯', title: '最高スコア', theme: 'amber',
+    desc: '1半荘あたりの最高スコア（左が1〜10位、右が11〜20位）',
+    rows: topScoreRanking.slice(0, RANK_LIMIT).map((x, i) => ({ key: `top-${x.playerId}-${x.source}-${i}`, rankNo: x.rankNo, name: x.name, sub: x.source, value: x.score.toLocaleString(), unit: '点' })),
+  });
 
   // タブボタン（ヘッダー用）。選択中は白いカード調＋タブごとの色のドット、それ以外は控えめな文字
   const TAB_DOTS: Record<string, string> = {
@@ -6703,8 +6652,8 @@ export default function Home() {
             {gameRecs.length === 0 ? (
               <div className="bg-white p-8 rounded-2xl border border-[#e7dfd1] text-center text-[#82786b]">集計できるデータがまだありません。</div>
             ) : (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {renderTopCards(DATA_TOP_N, false)}
+              <div>
+                {renderTopCards()}
               </div>
             )}
 
@@ -6728,7 +6677,7 @@ export default function Home() {
                 ))}
               </div>
               <div className="flex gap-1.5 mt-4 overflow-x-auto no-scrollbar pb-0.5">
-                {([['adm-top','TOP10','📊'],['adm-final','最終スコア','🏆'],['adm-rank','各種ランキング','📉'],['adm-streak','連続記録','🔥'],['adm-synergy','相性','💞'],['adm-coseat','同卓数','🎲'],['adm-school','学校','🏫'],['adm-player','個人対決','🥊'],['adm-ties','同点','🤝']] as const).map(([id, label, icon]) => (
+                {([['adm-final','最終スコア','🏆'],['adm-rank','各種ランキング','📉'],['adm-streak','連続記録','🔥'],['adm-synergy','相性','💞'],['adm-coseat','同卓数','🎲'],['adm-school','学校','🏫'],['adm-player','個人対決','🥊'],['adm-ties','同点','🤝']] as const).map(([id, label, icon]) => (
                   <button
                     key={id}
                     onClick={() => document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
@@ -6742,12 +6691,6 @@ export default function Home() {
               <div className="bg-white p-8 rounded-2xl border border-[#e7dfd1] text-center text-[#82786b]">集計できるデータがまだありません。</div>
             ) : (
               <>
-                <AdminSection id="adm-top" icon="📊" title="TOP10（データタブの拡大版）" desc="データタブの4つのランキングを、10位まで表示します">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {renderTopCards(RANK_LIMIT, true)}
-                  </div>
-                </AdminSection>
-
                 <AdminSection id="adm-final" icon="🏆" title="一大会の最終スコアランキング" desc="1つの大会が終わった時点での最終ポイント（ペナルティ反映後）の高い順。年間チャンピオン戦は除きます。今季と通算を並べて表示">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                     <AdminRankList title="🌸 今季の最終スコア TOP10" desc="今季の大会での、1大会あたりの最終ポイント" rows={finalScoreSeason} />
@@ -6755,7 +6698,7 @@ export default function Home() {
                   </div>
                 </AdminSection>
 
-                <AdminSection id="adm-rank" icon="📉" title={`各種ランキング（${dataScopeLabel}）`} desc="スコア・素点・順位点・順位別率・大会内の位置ごとの合計">
+                <AdminSection id="adm-rank" icon="📉" title={`各種ランキング（${dataScopeLabel}）`} desc="スコア・素点・順位点・順位別率・大会内の位置ごとの合計" right={scopeToggle}>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
                   <AdminRankList title="💎 素点ランキング" desc={`素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の${dataScopeLabel}合計。順位点は含みません`} rows={adminRaw} />
@@ -6785,7 +6728,7 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-streak" icon="🔥" title="連続記録" desc="連勝・連敗・連続連対・連続ラス回避">
+                <AdminSection id="adm-streak" icon="🔥" title="連続記録" desc="連勝・連敗・連続連対・連続ラス回避" right={scopeToggle}>
                 {/* 連続記録 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <h4 className="text-sm font-black text-[#473f36]">連続記録</h4>
@@ -6806,7 +6749,7 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} desc="同卓したときのポイントの合計から見た相性">
+                <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} desc="同卓したときのポイントの合計から見た相性" right={scopeToggle}>
                 {/* 相性 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <h4 className="text-sm font-black text-[#473f36]">{dataScopeLabel}の相性</h4>
@@ -6827,11 +6770,11 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-coseat" icon="🎲" title={`同卓数の分布（${dataScopeLabel}）`} desc="ともに参加した大会での同卓回数が、期待値をどれだけ上回っているか／下回っているか">
+                <AdminSection id="adm-coseat" icon="🎲" title={`同卓数の分布（${dataScopeLabel}）`} desc="ともに参加した大会での同卓回数が、期待値をどれだけ上回っているか／下回っているか" right={scopeToggle}>
                   <CoSeatPanel games={schoolGames} scope={dataScope} players={playerOptions} />
                 </AdminSection>
 
-                <AdminSection id="adm-school" icon="🏫" title="学校別成績・学校対決" desc="学校は管理者でログインしているときだけ読み込まれます">
+                <AdminSection id="adm-school" icon="🏫" title="学校別成績・学校対決" desc="学校は管理者でログインしているときだけ読み込まれます" right={scopeToggle}>
                 {/* 学校別成績（管理者のみ・非公開） */}
                 <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
                   <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
@@ -6899,7 +6842,7 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-player" icon="🥊" title="個人対決" desc="2人の選手の直接対決と成績比較">
+                <AdminSection id="adm-player" icon="🥊" title="個人対決" desc="2人の選手の直接対決と成績比較" right={scopeToggle}>
                   <PlayerH2HPanel players={playerOptions} games={schoolGames} standings={tourneyStandings} scope={dataScope} a={phA} b={phB} setA={setPhA} setB={setPhB} />
                 </AdminSection>
 
