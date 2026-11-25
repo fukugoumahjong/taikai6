@@ -37,9 +37,9 @@ const TABLE_NAMES_BY_TOURNAMENT: Record<number, string[]> = {
 // 卓の色（アイコン）。badge=卓ヘッダーの色、dot=小さな丸いアイコン、emoji=文字だけの場所用
 const TABLE_COLORS_BY_TOURNAMENT: Record<number, { badge: string; dot: string; emoji: string }[]> = {
   7: [
-    { badge: 'bg-white text-slate-800 border-2 border-slate-300', dot: 'bg-white border-slate-400', emoji: '⚪' },
+    { badge: 'bg-white text-[#2d2721] border-2 border-[#d4c9b7]', dot: 'bg-white border-[#a99d8c]', emoji: '⚪' },
     { badge: 'bg-orange-500 text-white border-2 border-orange-500', dot: 'bg-orange-500 border-orange-600', emoji: '🟠' },
-    { badge: 'bg-slate-900 text-white border-2 border-slate-900', dot: 'bg-slate-900 border-slate-900', emoji: '⚫' },
+    { badge: 'bg-[#1c1814] text-white border-2 border-[#1c1814]', dot: 'bg-[#1c1814] border-[#1c1814]', emoji: '⚫' },
   ],
 };
 const tableColorFor = (tournamentNo: string, tableNo?: number) =>
@@ -196,7 +196,7 @@ function NextRoundTimerBar({ round, startAt, seatText, isAdmin, onOpenSettings }
     ? 'from-emerald-600 to-teal-600'
     : urgent
       ? 'from-amber-500 to-orange-600'
-      : 'from-indigo-700 to-violet-700';
+      : 'from-[#a62b17] to-[#274066]';
   return (
     <div className={`sticky top-0 md:top-24 z-30 w-full bg-gradient-to-r ${tone} text-white text-center px-3 py-1.5 sm:py-2.5 shadow-lg`}>
       <div className="text-[11px] sm:text-xs font-bold tracking-widest opacity-90">
@@ -364,7 +364,7 @@ const PodiumBadges = ({ podium }: { podium?: PodiumCount }) => {
         </span>
       )}
       {podium.second.length > 0 && (
-        <span className={base + 'bg-gradient-to-r from-slate-300 via-slate-50 to-slate-300 text-slate-700 ring-slate-300 shadow-[0_1px_6px_rgba(100,116,139,0.35)]'}>
+        <span className={base + 'bg-gradient-to-r from-[#d4c9b7] via-[#faf7f1] to-[#d4c9b7] text-[#473f36] ring-[#d4c9b7] shadow-[0_1px_6px_rgba(100,116,139,0.35)]'}>
           <span aria-hidden>🥈</span>{podiumLabel(podium.second, '2位')}
         </span>
       )}
@@ -401,7 +401,7 @@ const RankPill = ({ rank, playerCount }: { rank: number; playerCount?: number })
   }
   if (rank === 2) {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-black bg-gradient-to-r from-slate-300 to-slate-400 shadow-sm whitespace-nowrap">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-white text-xs font-black bg-gradient-to-r from-[#d4c9b7] to-[#a99d8c] shadow-sm whitespace-nowrap">
         🥈 2位
       </span>
     );
@@ -414,7 +414,7 @@ const RankPill = ({ rank, playerCount }: { rank: number; playerCount?: number })
     );
   }
   return (
-    <span className="text-slate-400 text-xs whitespace-nowrap">{rank}{playerCount ? `/${playerCount}` : ''}位</span>
+    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{rank}{playerCount ? `/${playerCount}` : ''}位</span>
   );
 };
 
@@ -429,24 +429,24 @@ const ArchiveHistoryMini = ({
   return (
     <div className="px-4 md:px-6 py-4">
       <div className="flex items-center justify-between mb-2">
-        <h4 className="text-xs font-black text-slate-500">大会別成績</h4>
+        <h4 className="text-xs font-black text-[#82786b]">大会別成績</h4>
         <button
           onClick={onOpenDetail}
-          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 transition inline-flex items-center gap-1"
+          className="text-xs font-bold text-[#c8361e] hover:text-[#822213] transition inline-flex items-center gap-1"
         >
           個人成績 →
         </button>
       </div>
       {history.length === 0 ? (
-        <p className="text-xs text-slate-400">記録がありません。</p>
+        <p className="text-xs text-[#a99d8c]">記録がありません。</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {history.map(h => (
-            <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-white border border-slate-200 rounded-lg px-3 py-2 text-xs">
-              <span className="text-slate-600 font-bold truncate">{h.name}</span>
+            <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-white border border-[#e7dfd1] rounded-lg px-3 py-2 text-xs">
+              <span className="text-[#625a4f] font-bold truncate">{h.name}</span>
               <RankPill rank={h.rank} playerCount={h.playerCount} />
-              <span className="text-slate-400 whitespace-nowrap">{h.gameCount}戦</span>
-              <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+              <span className="text-[#a99d8c] whitespace-nowrap">{h.gameCount}戦</span>
+              <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(h.point)}</span>
             </div>
           ))}
         </div>
@@ -571,18 +571,18 @@ const buildSchoolH2H = (games: SGame[], scope: SchoolScope, a: string, b: string
   return { rows, aWins, bWins, draws, diffSum: schoolR1(diffSum) };
 };
 
-const ptClass = (v: number) => (v > 0 ? 'text-blue-600' : v < 0 ? 'text-red-600' : 'text-slate-400');
+const ptClass = (v: number) => (v > 0 ? 'text-blue-600' : v < 0 ? 'text-red-600' : 'text-[#a99d8c]');
 const SCHOOL_RANK_LABELS = ['1着', '2着', '3着', '4着'];
-const SCHOOL_RANK_COLORS = ['bg-yellow-400', 'bg-slate-400', 'bg-amber-700', 'bg-slate-300'];
+const SCHOOL_RANK_COLORS = ['bg-yellow-400', 'bg-[#a99d8c]', 'bg-amber-700', 'bg-[#d4c9b7]'];
 
 // 卓の中身（同卓者）を表示する小さな部品。指定した学校の選手を強調する
 const SchoolTablePlayers = ({ players, highlight }: { players: SGPlayer[]; highlight: string[] }) => (
-  <div className="px-3 py-2 bg-slate-50 space-y-1">
+  <div className="px-3 py-2 bg-[#faf7f1] space-y-1">
     {[...players].sort((x, y) => x.rank - y.rank).map((p, i) => (
-      <div key={`${p.key}-${i}`} className={`flex items-center gap-2 text-xs ${highlight.includes(p.school) ? 'font-black text-slate-800' : 'text-slate-500'}`}>
+      <div key={`${p.key}-${i}`} className={`flex items-center gap-2 text-xs ${highlight.includes(p.school) ? 'font-black text-[#2d2721]' : 'text-[#82786b]'}`}>
         <span className="w-8">{p.rank}着</span>
         <PlayerLabel name={p.name} className="flex-1 truncate" />
-        <span className={`text-[10px] px-1.5 rounded-full border ${highlight.includes(p.school) ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-400'}`}>{p.school || '学校なし'}</span>
+        <span className={`text-[10px] px-1.5 rounded-full border ${highlight.includes(p.school) ? 'bg-[#fdf1ed] border-[#f7bcab] text-[#a62b17]' : 'bg-white border-[#e7dfd1] text-[#a99d8c]'}`}>{p.school || '学校なし'}</span>
         <span className="tabular-nums w-16 text-right">{p.score.toLocaleString()}</span>
         <span className={`tabular-nums w-14 text-right font-black ${ptClass(p.point)}`}>{fmtPt(p.point)}</span>
       </div>
@@ -623,77 +623,77 @@ const SchoolDetailModal = ({
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-3 md:p-6" onClick={onClose}>
       <div className="bg-white w-full max-w-3xl max-h-[94vh] sm:max-h-[90vh] rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150" onClick={e => e.stopPropagation()}>
-        <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
+        <div className="bg-gradient-to-r from-[#a62b17] to-[#5e190e] text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
           <div>
-            <p className="text-indigo-200 text-xs font-bold mb-1">学校別成績 <span className="ml-1 text-[10px] border border-white/30 rounded px-1.5 py-0.5">非公開</span></p>
+            <p className="text-[#f7bcab] text-xs font-bold mb-1">学校別成績 <span className="ml-1 text-[10px] border border-white/30 rounded px-1.5 py-0.5">非公開</span></p>
             <h2 className="text-2xl md:text-3xl font-black">🏫 {school}</h2>
-            <p className={`mt-2 text-2xl font-black tabular-nums ${total > 0 ? 'text-emerald-300' : total < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
-              {fmtPt(total)} <span className="text-sm font-bold text-indigo-200">（{tab === 'season' ? '今季' : '通算'} {s.games}半荘・{s.members.size}名）</span>
+            <p className={`mt-2 text-2xl font-black tabular-nums ${total > 0 ? 'text-emerald-300' : total < 0 ? 'text-rose-300' : 'text-[#f7bcab]'}`}>
+              {fmtPt(total)} <span className="text-sm font-bold text-[#f7bcab]">（{tab === 'season' ? '今季' : '通算'} {s.games}半荘・{s.members.size}名）</span>
               {rk ? (
                 <span className="ml-2 inline-flex items-baseline gap-0.5 align-middle bg-white/15 ring-1 ring-white/25 rounded-full px-2.5 py-0.5 text-white">
                   <span className="text-lg font-black tabular-nums">{rk.rank}</span>
                   <span className="text-xs font-bold">位</span>
-                  <span className="text-[10px] font-bold text-indigo-200 ml-1">/ {rk.total}校</span>
+                  <span className="text-[10px] font-bold text-[#f7bcab] ml-1">/ {rk.total}校</span>
                 </span>
               ) : null}
             </p>
             {s.maxScore && (
-              <p className="mt-2 text-xs font-bold text-indigo-200">
+              <p className="mt-2 text-xs font-bold text-[#f7bcab]">
                 🎯 最高スコア <span className="text-white text-sm">{s.maxScore.score.toLocaleString()}点</span>（{s.maxScore.label}）
               </p>
             )}
           </div>
-          <button onClick={onClose} className="text-indigo-200 hover:text-white text-2xl leading-none font-bold px-2">✕</button>
+          <button onClick={onClose} className="text-[#f7bcab] hover:text-white text-2xl leading-none font-bold px-2">✕</button>
         </div>
 
-        <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
+        <div className="flex border-b border-[#e7dfd1] bg-white flex-shrink-0">
           {([['season', '今季成績'], ['all', '通算成績']] as const).map(([k, label]) => (
             <button
               key={k}
               onClick={() => setTab(k)}
-              className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+              className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-[#c8361e] text-[#a62b17] bg-[#fdf1ed]/50' : 'border-transparent text-[#a99d8c] hover:text-[#625a4f]'}`}
             >{label}</button>
           ))}
         </div>
 
         <div className="overflow-y-auto p-5 md:p-8 space-y-8">
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">大会別成績</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">大会別成績</h3>
             {s.tournaments.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2">
                 {s.tournaments.map(t => (
-                  <div key={t.tKey} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                    <span className="text-slate-700 font-bold">{t.tName}</span>
+                  <div key={t.tKey} className="flex items-center justify-between gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2.5 text-sm">
+                    <span className="text-[#473f36] font-bold">{t.tName}</span>
                     <RankPill rank={t.rank} playerCount={t.total} />
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{t.members}名・{t.games}戦</span>
+                    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{t.members}名・{t.games}戦</span>
                     <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(t.point)}`}>{fmtPt(schoolR1(t.point))}</span>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">順位は、その大会に出場した学校どうしの合計ポイントの順位です。</p>
+            <p className="text-[11px] text-[#a99d8c] mt-2">順位は、その大会に出場した学校どうしの合計ポイントの順位です。</p>
           </section>
 
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🎯 着順分布（{tab === 'season' ? '今季' : '通算'}合計 {sum}戦）</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🎯 着順分布（{tab === 'season' ? '今季' : '通算'}合計 {sum}戦）</h3>
             {sum === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="space-y-2">
                 {s.dist.map((count, idx) => {
                   const pct = Math.round((count / sum) * 100);
                   return (
                     <div key={idx} className="flex items-center gap-3 text-sm">
-                      <span className="w-10 font-bold text-slate-500">{SCHOOL_RANK_LABELS[idx]}</span>
-                      <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                      <span className="w-10 font-bold text-[#82786b]">{SCHOOL_RANK_LABELS[idx]}</span>
+                      <div className="flex-1 h-4 bg-[#f3eee4] rounded-full overflow-hidden">
                         <div className={`h-full ${SCHOOL_RANK_COLORS[idx]}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-[#82786b]">
                         <span className="inline-block w-7 text-right">{count}</span>
-                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
-                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                        <span className="text-[11px] text-[#a99d8c] ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-[#a99d8c]">({pct}%)</span>
                       </span>
                     </div>
                   );
@@ -703,15 +703,15 @@ const SchoolDetailModal = ({
           </section>
 
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">👥 所属選手別の成績</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">👥 所属選手別の成績</h3>
             {s.members.size === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="space-y-1.5">
                 {Array.from(s.members.values()).sort((a, b) => b.point - a.point).map(m => (
-                  <div key={m.name} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                    <PlayerLabel name={m.name} className="text-slate-700 font-bold truncate flex-1" />
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{m.games}戦</span>
+                  <div key={m.name} className="flex items-center justify-between gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2 text-sm">
+                    <PlayerLabel name={m.name} className="text-[#473f36] font-bold truncate flex-1" />
+                    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{m.games}戦</span>
                     <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(m.point)}`}>{fmtPt(schoolR1(m.point))}</span>
                   </div>
                 ))}
@@ -720,33 +720,33 @@ const SchoolDetailModal = ({
           </section>
 
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🀄 半荘ごとの成績</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🀄 半荘ごとの成績</h3>
             {groups.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="space-y-2">
                 {groups.map(g => {
                   const open = !!openGroups[g.key];
                   return (
-                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div key={g.key} className="border border-[#e7dfd1] rounded-lg overflow-hidden">
                       <button
                         onClick={() => setOpenGroups(prev => ({ ...prev, [g.key]: !prev[g.key] }))}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-[#faf7f1] hover:bg-[#f3eee4] transition text-left"
                       >
-                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
-                        <span className="text-xs text-slate-400 flex items-center gap-2">{g.rows.length}卓<span className="font-bold">{open ? '▲' : '▼'}</span></span>
+                        <span className="text-sm font-bold text-[#473f36]">{g.label}</span>
+                        <span className="text-xs text-[#a99d8c] flex items-center gap-2">{g.rows.length}卓<span className="font-bold">{open ? '▲' : '▼'}</span></span>
                       </button>
                       {open && (
-                        <div className="divide-y divide-slate-100">
+                        <div className="divide-y divide-[#f3eee4]">
                           {g.rows.map(game => {
                             const mine = game.players.filter(p => p.school === school);
                             const pt = schoolR1(mine.reduce((a, p) => a + p.point, 0));
                             const isOpen = openGame === game.id;
                             return (
                               <div key={game.id}>
-                                <button onClick={() => setOpenGame(isOpen ? null : game.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50 text-xs">
-                                  <span className="font-bold text-slate-600 truncate">{game.label}</span>
-                                  <span className="text-slate-400 truncate flex-1 text-right">{mine.map(p => `${p.name} ${p.rank}着`).join('・')}</span>
+                                <button onClick={() => setOpenGame(isOpen ? null : game.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[#faf7f1] text-xs">
+                                  <span className="font-bold text-[#625a4f] truncate">{game.label}</span>
+                                  <span className="text-[#a99d8c] truncate flex-1 text-right">{mine.map(p => `${p.name} ${p.rank}着`).join('・')}</span>
                                   <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(pt)}`}>{fmtPt(pt)}</span>
                                 </button>
                                 {isOpen && <SchoolTablePlayers players={game.players} highlight={[school]} />}
@@ -763,22 +763,22 @@ const SchoolDetailModal = ({
           </section>
 
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🤝 対戦相性（他校との直接対決）</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🤝 対戦相性（他校との直接対決）</h3>
             {vsList.length === 0 ? (
-              <p className="text-xs text-slate-400">他校と同卓した記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">他校と同卓した記録がありません。</p>
             ) : (
               <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
                 {vsList.map(o => (
-                  <div key={o.school} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-slate-700 font-bold truncate flex-1">{o.school}</span>
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{o.games}卓 {o.wins}勝{o.losses}敗{o.draws > 0 ? `${o.draws}分` : ''}</span>
+                  <div key={o.school} className="flex items-center justify-between gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2 text-sm">
+                    <span className="text-[#473f36] font-bold truncate flex-1">{o.school}</span>
+                    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{o.games}卓 {o.wins}勝{o.losses}敗{o.draws > 0 ? `${o.draws}分` : ''}</span>
                     <span className={`font-black tabular-nums whitespace-nowrap ${ptClass(o.diffSum)}`}>{fmtPt(o.diffSum)}</span>
-                    <button onClick={() => onCompare(o.school)} className="text-[11px] font-bold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-2 py-1 rounded-md whitespace-nowrap">比較</button>
+                    <button onClick={() => onCompare(o.school)} className="text-[11px] font-bold bg-[#fdf1ed] hover:bg-[#fbddd3] text-[#a62b17] px-2 py-1 rounded-md whitespace-nowrap">比較</button>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">同じ卓になった半荘ごとに、各校の選手のポイント平均を比べています。プラスは「この学校が相手より合計で勝っている」ことを表します。</p>
+            <p className="text-[11px] text-[#a99d8c] mt-2">同じ卓になった半荘ごとに、各校の選手のポイント平均を比べています。プラスは「この学校が相手より合計で勝っている」ことを表します。</p>
           </section>
         </div>
       </div>
@@ -837,10 +837,10 @@ const SchoolH2HPanel = ({
   const total = h2h ? h2h.aWins + h2h.bWins + h2h.draws : 0;
 
   return (
-    <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
-        <h4 className="text-sm font-black text-slate-800">⚔️ 学校対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
-        <p className="text-[11px] text-slate-400 leading-snug">2つの学校を選ぶと、{label}の直接対決と成績の比較が見られます（上の「今季／通算」に連動します）。</p>
+    <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
+        <h4 className="text-sm font-black text-[#2d2721]">⚔️ 学校対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+        <p className="text-[11px] text-[#a99d8c] leading-snug">2つの学校を選ぶと、{label}の直接対決と成績の比較が見られます（上の「今季／通算」に連動します）。</p>
       </div>
       <div className="p-3 md:p-4 space-y-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -848,50 +848,50 @@ const SchoolH2HPanel = ({
             <option value="">学校Aを選ぶ</option>
             {schools.map(sc => <option key={sc} value={sc} disabled={sc === b}>{sc}</option>)}
           </select>
-          <span className="text-sm font-black text-slate-400">VS</span>
+          <span className="text-sm font-black text-[#a99d8c]">VS</span>
           <select value={b} onChange={e => setB(e.target.value)} className="flex-1 min-w-[8rem] p-2 border rounded-lg bg-white text-sm font-bold">
             <option value="">学校Bを選ぶ</option>
             {schools.map(sc => <option key={sc} value={sc} disabled={sc === a}>{sc}</option>)}
           </select>
-          <button onClick={() => { setA(b); setB(a); }} disabled={!a && !b} className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 disabled:opacity-40">⇄ 入れ替え</button>
+          <button onClick={() => { setA(b); setB(a); }} disabled={!a && !b} className="text-xs font-bold px-3 py-2 rounded-lg border border-[#d4c9b7] text-[#82786b] hover:bg-[#f3eee4] disabled:opacity-40">⇄ 入れ替え</button>
         </div>
 
         {!ready ? (
-          <p className="text-xs text-slate-400 py-4 text-center">{schools.length < 2 ? '学校が2つ以上設定されると比較できます。' : '異なる2つの学校を選んでください。'}</p>
+          <p className="text-xs text-[#a99d8c] py-4 text-center">{schools.length < 2 ? '学校が2つ以上設定されると比較できます。' : '異なる2つの学校を選んでください。'}</p>
         ) : (
           <>
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🥊 直接対決（同じ卓になった半荘）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🥊 直接対決（同じ卓になった半荘）</h5>
               {total === 0 ? (
-                <p className="text-xs text-slate-400">{label}に、この2校が同卓した記録はありません。</p>
+                <p className="text-xs text-[#a99d8c]">{label}に、この2校が同卓した記録はありません。</p>
               ) : (
                 <>
                   <div className="flex items-center justify-between text-sm font-black mb-1">
-                    <span className="text-indigo-700">{a} <span className="tabular-nums">{h2h!.aWins}勝</span></span>
-                    <span className="text-slate-400 text-xs">{total}卓{h2h!.draws > 0 ? `（引分${h2h!.draws}）` : ''}</span>
+                    <span className="text-[#a62b17]">{a} <span className="tabular-nums">{h2h!.aWins}勝</span></span>
+                    <span className="text-[#a99d8c] text-xs">{total}卓{h2h!.draws > 0 ? `（引分${h2h!.draws}）` : ''}</span>
                     <span className="text-rose-600"><span className="tabular-nums">{h2h!.bWins}勝</span> {b}</span>
                   </div>
-                  <div className="flex h-4 rounded-full overflow-hidden bg-slate-100">
-                    <div className="bg-indigo-500" style={{ width: `${(h2h!.aWins / total) * 100}%` }} />
-                    <div className="bg-slate-300" style={{ width: `${(h2h!.draws / total) * 100}%` }} />
+                  <div className="flex h-4 rounded-full overflow-hidden bg-[#f3eee4]">
+                    <div className="bg-[#d9452b]" style={{ width: `${(h2h!.aWins / total) * 100}%` }} />
+                    <div className="bg-[#d4c9b7]" style={{ width: `${(h2h!.draws / total) * 100}%` }} />
                     <div className="bg-rose-500" style={{ width: `${(h2h!.bWins / total) * 100}%` }} />
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-[#82786b] mt-2">
                     ポイント差の合計（{a}−{b}）：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(h2h!.diffSum)}</span>
                     　1卓あたり：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(schoolR1(h2h!.diffSum / total))}</span>
                   </p>
                 </>
               )}
-              <p className="text-[11px] text-slate-400 mt-1">同卓した半荘ごとに、各校の選手のポイント平均を比べて勝敗を決めています（人数が違っても公平になるよう平均です）。</p>
+              <p className="text-[11px] text-[#a99d8c] mt-1">同卓した半荘ごとに、各校の選手のポイント平均を比べて勝敗を決めています（人数が違っても公平になるよう平均です）。</p>
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">📊 成績比較（{label}）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">📊 成績比較（{label}）</h5>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-600 text-xs">
-                      <th className="p-2 text-right font-bold w-1/3 text-indigo-700">{a}</th>
+                    <tr className="bg-[#f3eee4] text-[#625a4f] text-xs">
+                      <th className="p-2 text-right font-bold w-1/3 text-[#a62b17]">{a}</th>
                       <th className="p-2 text-center font-bold">項目</th>
                       <th className="p-2 text-left font-bold w-1/3 text-rose-600">{b}</th>
                     </tr>
@@ -900,23 +900,23 @@ const SchoolH2HPanel = ({
                     {metrics.map(m => {
                       const w = winner(m);
                       return (
-                        <tr key={m.label} className="border-b border-slate-100">
-                          <td className={`p-2 text-right tabular-nums ${w === 'a' ? 'font-black text-indigo-700 bg-indigo-50' : 'text-slate-600'}`}>{m.skip ? '-' : m.fmt(m.av)}{w === 'a' ? ' ◀' : ''}</td>
-                          <td className="p-2 text-center text-xs text-slate-500 whitespace-nowrap">{m.label}</td>
-                          <td className={`p-2 text-left tabular-nums ${w === 'b' ? 'font-black text-rose-600 bg-rose-50' : 'text-slate-600'}`}>{w === 'b' ? '▶ ' : ''}{m.skip ? '-' : m.fmt(m.bv)}</td>
+                        <tr key={m.label} className="border-b border-[#f3eee4]">
+                          <td className={`p-2 text-right tabular-nums ${w === 'a' ? 'font-black text-[#a62b17] bg-[#fdf1ed]' : 'text-[#625a4f]'}`}>{m.skip ? '-' : m.fmt(m.av)}{w === 'a' ? ' ◀' : ''}</td>
+                          <td className="p-2 text-center text-xs text-[#82786b] whitespace-nowrap">{m.label}</td>
+                          <td className={`p-2 text-left tabular-nums ${w === 'b' ? 'font-black text-rose-600 bg-rose-50' : 'text-[#625a4f]'}`}>{w === 'b' ? '▶ ' : ''}{m.skip ? '-' : m.fmt(m.bv)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">優勢な項目数（人数・半荘数を除く）：{a} {aWinCount} ／ {b} {bWinCount}</p>
+              <p className="text-[11px] text-[#a99d8c] mt-1">優勢な項目数（人数・半荘数を除く）：{a} {aWinCount} ／ {b} {bWinCount}</p>
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🎯 着順分布の比較</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🎯 着順分布の比較</h5>
               {sa.games === 0 && sb.games === 0 ? (
-                <p className="text-xs text-slate-400">記録がありません。</p>
+                <p className="text-xs text-[#a99d8c]">記録がありません。</p>
               ) : (
                 <div className="space-y-1.5">
                   {[0, 1, 2, 3].map(i => {
@@ -925,13 +925,13 @@ const SchoolH2HPanel = ({
                     return (
                       <div key={i} className="grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-xs">
                         <div className="flex items-center justify-end gap-1.5">
-                          <span className="tabular-nums text-slate-500">{pa.toFixed(0)}%</span>
-                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden flex justify-end"><div className="h-full bg-indigo-500" style={{ width: `${(pa / distMax) * 100}%` }} /></div>
+                          <span className="tabular-nums text-[#82786b]">{pa.toFixed(0)}%</span>
+                          <div className="w-full max-w-[10rem] h-3 bg-[#f3eee4] rounded-full overflow-hidden flex justify-end"><div className="h-full bg-[#d9452b]" style={{ width: `${(pa / distMax) * 100}%` }} /></div>
                         </div>
-                        <span className="text-center font-bold text-slate-500">{SCHOOL_RANK_LABELS[i]}</span>
+                        <span className="text-center font-bold text-[#82786b]">{SCHOOL_RANK_LABELS[i]}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(pb / distMax) * 100}%` }} /></div>
-                          <span className="tabular-nums text-slate-500">{pb.toFixed(0)}%</span>
+                          <div className="w-full max-w-[10rem] h-3 bg-[#f3eee4] rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(pb / distMax) * 100}%` }} /></div>
+                          <span className="tabular-nums text-[#82786b]">{pb.toFixed(0)}%</span>
                         </div>
                       </div>
                     );
@@ -941,9 +941,9 @@ const SchoolH2HPanel = ({
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🏆 大会別の比較（合計ポイントと、学校どうしの順位）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🏆 大会別の比較（合計ポイントと、学校どうしの順位）</h5>
               {tourneys.length === 0 ? (
-                <p className="text-xs text-slate-400">記録がありません。</p>
+                <p className="text-xs text-[#a99d8c]">記録がありません。</p>
               ) : (
                 <div className="space-y-1.5">
                   {tourneys.map(t => {
@@ -952,13 +952,13 @@ const SchoolH2HPanel = ({
                     const aw = ap !== null && bp !== null && ap > bp;
                     const bw = ap !== null && bp !== null && bp > ap;
                     return (
-                      <div key={t.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
-                        <div className={`text-right tabular-nums ${aw ? 'font-black text-indigo-700' : 'text-slate-500'}`}>
-                          {t.a ? <>{fmtPt(ap!)} <span className="text-[10px] text-slate-400">（{t.a.rank}/{t.a.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                      <div key={t.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2 text-xs">
+                        <div className={`text-right tabular-nums ${aw ? 'font-black text-[#a62b17]' : 'text-[#82786b]'}`}>
+                          {t.a ? <>{fmtPt(ap!)} <span className="text-[10px] text-[#a99d8c]">（{t.a.rank}/{t.a.total}位）</span></> : <span className="text-[#d4c9b7]">不参加</span>}
                         </div>
-                        <span className="font-bold text-slate-600 whitespace-nowrap">{t.tName}</span>
-                        <div className={`text-left tabular-nums ${bw ? 'font-black text-rose-600' : 'text-slate-500'}`}>
-                          {t.b ? <>{fmtPt(bp!)} <span className="text-[10px] text-slate-400">（{t.b.rank}/{t.b.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                        <span className="font-bold text-[#625a4f] whitespace-nowrap">{t.tName}</span>
+                        <div className={`text-left tabular-nums ${bw ? 'font-black text-rose-600' : 'text-[#82786b]'}`}>
+                          {t.b ? <>{fmtPt(bp!)} <span className="text-[10px] text-[#a99d8c]">（{t.b.rank}/{t.b.total}位）</span></> : <span className="text-[#d4c9b7]">不参加</span>}
                         </div>
                       </div>
                     );
@@ -969,20 +969,20 @@ const SchoolH2HPanel = ({
 
             {h2h && h2h.rows.length > 0 && (
               <div>
-                <button onClick={() => setShowTables(!showTables)} className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  🀄 同卓した半荘の一覧（{h2h.rows.length}卓） <span className="text-slate-400">{showTables ? '▲' : '▼'}</span>
+                <button onClick={() => setShowTables(!showTables)} className="text-xs font-black text-[#473f36] flex items-center gap-1">
+                  🀄 同卓した半荘の一覧（{h2h.rows.length}卓） <span className="text-[#a99d8c]">{showTables ? '▲' : '▼'}</span>
                 </button>
                 {showTables && (
-                  <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                  <div className="mt-2 border border-[#e7dfd1] rounded-lg divide-y divide-[#f3eee4] max-h-96 overflow-y-auto">
                     {h2h.rows.map(r => {
                       const isOpen = openGame === r.g.id;
                       return (
                         <div key={r.g.id}>
-                          <button onClick={() => setOpenGame(isOpen ? null : r.g.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50 text-xs">
-                            <span className="font-bold text-slate-600 truncate flex-1">{r.g.label}</span>
-                            <span className={`tabular-nums font-black ${r.a > r.b ? 'text-indigo-700' : 'text-slate-400'}`}>{fmtPt(schoolR1(r.a))}</span>
-                            <span className="text-slate-300">-</span>
-                            <span className={`tabular-nums font-black ${r.b > r.a ? 'text-rose-600' : 'text-slate-400'}`}>{fmtPt(schoolR1(r.b))}</span>
+                          <button onClick={() => setOpenGame(isOpen ? null : r.g.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[#faf7f1] text-xs">
+                            <span className="font-bold text-[#625a4f] truncate flex-1">{r.g.label}</span>
+                            <span className={`tabular-nums font-black ${r.a > r.b ? 'text-[#a62b17]' : 'text-[#a99d8c]'}`}>{fmtPt(schoolR1(r.a))}</span>
+                            <span className="text-[#d4c9b7]">-</span>
+                            <span className={`tabular-nums font-black ${r.b > r.a ? 'text-rose-600' : 'text-[#a99d8c]'}`}>{fmtPt(schoolR1(r.b))}</span>
                           </button>
                           {isOpen && <SchoolTablePlayers players={r.g.players} highlight={[a, b]} />}
                         </div>
@@ -1072,7 +1072,7 @@ const coSeatVerdict = (z: number) =>
   : z >= 1 ? { label: 'やや多め', cls: 'bg-orange-100 text-orange-700 border-orange-200' }
   : z <= -2 ? { label: 'ほとんど同卓せず', cls: 'bg-sky-100 text-sky-700 border-sky-200' }
   : z <= -1 ? { label: 'やや少なめ', cls: 'bg-cyan-100 text-cyan-700 border-cyan-200' }
-  : { label: '想定どおり', cls: 'bg-slate-100 text-slate-500 border-slate-200' };
+  : { label: '想定どおり', cls: 'bg-[#f3eee4] text-[#82786b] border-[#e7dfd1]' };
 const fmtSigned = (v: number, d = 1) => `${v > 0 ? '+' : ''}${v.toFixed(d)}`;
 
 const poissonPmf = (k: number, lambda: number) => {
@@ -1089,18 +1089,18 @@ const CoSeatRow = ({ p, focus, i }: { p: CoSeatPair; focus: string; i: number })
   return (
     <li className="px-3 py-2 text-sm">
       <div className="flex items-center gap-2">
-        <span className="w-5 text-right text-xs font-black text-slate-400 tabular-nums">{i + 1}</span>
-        <span className="flex-1 min-w-0 truncate font-bold text-slate-700">
-          {focus ? <PlayerLabel name={right} /> : <><PlayerLabel name={left} /><span className="mx-1 text-slate-300">×</span><PlayerLabel name={right} /></>}
+        <span className="w-5 text-right text-xs font-black text-[#a99d8c] tabular-nums">{i + 1}</span>
+        <span className="flex-1 min-w-0 truncate font-bold text-[#473f36]">
+          {focus ? <PlayerLabel name={right} /> : <><PlayerLabel name={left} /><span className="mx-1 text-[#d4c9b7]">×</span><PlayerLabel name={right} /></>}
         </span>
         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full border whitespace-nowrap ${v.cls}`}>{v.label}</span>
-        <span className={`w-14 text-right font-black tabular-nums ${p.z > 0 ? 'text-rose-600' : p.z < 0 ? 'text-sky-600' : 'text-slate-400'}`}>{fmtSigned(p.z)}σ</span>
+        <span className={`w-14 text-right font-black tabular-nums ${p.z > 0 ? 'text-rose-600' : p.z < 0 ? 'text-sky-600' : 'text-[#a99d8c]'}`}>{fmtSigned(p.z)}σ</span>
       </div>
       <div className="mt-1 ml-7 flex items-center gap-2">
-        <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+        <div className="flex-1 h-1.5 rounded-full bg-[#f3eee4] overflow-hidden">
           <div className={`h-full rounded-full ${p.z >= 0 ? 'bg-gradient-to-r from-orange-400 to-rose-500' : 'bg-gradient-to-r from-cyan-400 to-sky-500'}`} style={{ width: `${width}%` }} />
         </div>
-        <span className="text-[11px] text-slate-400 tabular-nums whitespace-nowrap">実際 {p.o}回 / 期待 {p.e.toFixed(1)}回（{fmtSigned(p.o - p.e)}）・共通{p.tours}大会</span>
+        <span className="text-[11px] text-[#a99d8c] tabular-nums whitespace-nowrap">実際 {p.o}回 / 期待 {p.e.toFixed(1)}回（{fmtSigned(p.o - p.e)}）・共通{p.tours}大会</span>
       </div>
     </li>
   );
@@ -1132,72 +1132,72 @@ const CoSeatPanel = ({ games, scope, players }: { games: SGame[]; scope: SchoolS
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-xl border border-slate-200 p-3 md:p-4 space-y-3">
+      <div className="bg-white rounded-xl border border-[#e7dfd1] p-3 md:p-4 space-y-3">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#82786b]">
             期待同卓回数が
             <select value={minE} onChange={e => setMinE(Number(e.target.value))} className="p-1 border rounded-md bg-white text-xs font-bold">
               {[1, 2, 3, 4].map(n => <option key={n} value={n}>{n}回以上</option>)}
             </select>
             の組が対象
           </label>
-          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+          <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#82786b]">
             選手で絞る
             <select value={focus} onChange={e => setFocus(e.target.value)} className="p-1 border rounded-md bg-white text-xs font-bold max-w-[10rem]">
               <option value="">全員</option>
               {players.map(p => <option key={p.key} value={p.key}>{p.name}</option>)}
             </select>
           </label>
-          <span className="text-[11px] text-slate-400">{label}・対象 {eligible.length}組 ／ 全{stats.length}組</span>
+          <span className="text-[11px] text-[#a99d8c]">{label}・対象 {eligible.length}組 ／ 全{stats.length}組</span>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-slate-50 border border-slate-200 py-2"><p className="text-[10px] font-bold text-slate-400">偏りの大きさ（標準偏差）</p><p className="text-xl font-black tabular-nums text-slate-800">{sd.toFixed(2)}<span className="text-xs text-slate-400">σ</span></p><p className="text-[10px] text-slate-400">1.0に近いほど均等</p></div>
+          <div className="rounded-lg bg-[#faf7f1] border border-[#e7dfd1] py-2"><p className="text-[10px] font-bold text-[#a99d8c]">偏りの大きさ（標準偏差）</p><p className="text-xl font-black tabular-nums text-[#2d2721]">{sd.toFixed(2)}<span className="text-xs text-[#a99d8c]">σ</span></p><p className="text-[10px] text-[#a99d8c]">1.0に近いほど均等</p></div>
           <div className="rounded-lg bg-rose-50 border border-rose-100 py-2"><p className="text-[10px] font-bold text-rose-400">かなり多く同卓（+2σ以上）</p><p className="text-xl font-black tabular-nums text-rose-600">{strong}<span className="text-xs">組</span></p></div>
           <div className="rounded-lg bg-sky-50 border border-sky-100 py-2"><p className="text-[10px] font-bold text-sky-400">ほとんど同卓せず（−2σ以下）</p><p className="text-xl font-black tabular-nums text-sky-600">{weak}<span className="text-xs">組</span></p></div>
         </div>
         <div>
-          <h5 className="text-xs font-black text-slate-700 mb-2">📊 同卓回数の分布（実際 vs ランダムな卓組での期待）</h5>
+          <h5 className="text-xs font-black text-[#473f36] mb-2">📊 同卓回数の分布（実際 vs ランダムな卓組での期待）</h5>
           {eligible.length === 0 ? (
-            <p className="text-xs text-slate-400">対象の組がありません。</p>
+            <p className="text-xs text-[#a99d8c]">対象の組がありません。</p>
           ) : (
             <div className="flex items-end gap-2 h-36">
               {actual.map((a, k) => (
                 <div key={k} className="flex-1 flex flex-col items-center justify-end h-full min-w-0">
                   <div className="flex items-end gap-0.5 w-full flex-1">
-                    <div className="flex-1 rounded-t bg-gradient-to-t from-indigo-600 to-fuchsia-500" style={{ height: `${(a / hMax) * 100}%` }} title={`実際 ${a}組`} />
-                    <div className="flex-1 rounded-t bg-gradient-to-t from-slate-300 to-slate-200 border border-slate-300" style={{ height: `${(expected[k] / hMax) * 100}%` }} title={`期待 ${expected[k].toFixed(1)}組`} />
+                    <div className="flex-1 rounded-t bg-gradient-to-t from-[#c8361e] to-[#b8892b]" style={{ height: `${(a / hMax) * 100}%` }} title={`実際 ${a}組`} />
+                    <div className="flex-1 rounded-t bg-gradient-to-t from-[#d4c9b7] to-[#e7dfd1] border border-[#d4c9b7]" style={{ height: `${(expected[k] / hMax) * 100}%` }} title={`期待 ${expected[k].toFixed(1)}組`} />
                   </div>
-                  <span className="mt-1 text-[10px] font-bold text-slate-500">{k === BINS - 1 ? `${k}+` : k}回</span>
-                  <span className="text-[9px] text-slate-400 tabular-nums">{a} / {expected[k].toFixed(0)}</span>
+                  <span className="mt-1 text-[10px] font-bold text-[#82786b]">{k === BINS - 1 ? `${k}+` : k}回</span>
+                  <span className="text-[9px] text-[#a99d8c] tabular-nums">{a} / {expected[k].toFixed(0)}</span>
                 </div>
               ))}
             </div>
           )}
-          <p className="text-[11px] text-slate-400 mt-1 flex flex-wrap gap-x-3">
-            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gradient-to-t from-indigo-600 to-fuchsia-500 align-middle mr-1" />実際の組数</span>
-            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-200 border border-slate-300 align-middle mr-1" />期待される組数</span>
+          <p className="text-[11px] text-[#a99d8c] mt-1 flex flex-wrap gap-x-3">
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gradient-to-t from-[#c8361e] to-[#b8892b] align-middle mr-1" />実際の組数</span>
+            <span><span className="inline-block w-2.5 h-2.5 rounded-sm bg-[#e7dfd1] border border-[#d4c9b7] align-middle mr-1" />期待される組数</span>
             <span>下の数字は「実際 / 期待」</span>
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-slate-100 bg-gradient-to-r from-rose-50 to-white">
-            <h4 className="text-sm font-black text-slate-800">🔥 通常より同卓している組</h4>
-            <p className="text-[11px] text-slate-400 leading-snug">期待値を上回っている順（標準化スコア σ）</p>
+        <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-rose-50 to-white">
+            <h4 className="text-sm font-black text-[#2d2721]">🔥 通常より同卓している組</h4>
+            <p className="text-[11px] text-[#a99d8c] leading-snug">期待値を上回っている順（標準化スコア σ）</p>
           </div>
-          {more.length === 0 ? <p className="px-3 py-4 text-center text-xs text-slate-400">該当する組がありません。</p> : <ol className="divide-y divide-slate-100">{more.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
+          {more.length === 0 ? <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">該当する組がありません。</p> : <ol className="divide-y divide-[#f3eee4]">{more.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
         </section>
-        <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-          <div className="px-3 py-2.5 border-b border-slate-100 bg-gradient-to-r from-sky-50 to-white">
-            <h4 className="text-sm font-black text-slate-800">🧊 通常より同卓していない組</h4>
-            <p className="text-[11px] text-slate-400 leading-snug">期待値を下回っている順（標準化スコア σ）</p>
+        <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-sky-50 to-white">
+            <h4 className="text-sm font-black text-[#2d2721]">🧊 通常より同卓していない組</h4>
+            <p className="text-[11px] text-[#a99d8c] leading-snug">期待値を下回っている順（標準化スコア σ）</p>
           </div>
-          {less.length === 0 ? <p className="px-3 py-4 text-center text-xs text-slate-400">該当する組がありません。</p> : <ol className="divide-y divide-slate-100">{less.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
+          {less.length === 0 ? <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">該当する組がありません。</p> : <ol className="divide-y divide-[#f3eee4]">{less.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
         </section>
       </div>
-      <p className="text-[11px] text-slate-400 leading-relaxed">
+      <p className="text-[11px] text-[#a99d8c] leading-relaxed">
         ともに参加した大会ごとに「ランダムに卓を組んだときの同卓回数の期待値」を計算し、実際の同卓回数との差を標準化したものです（+は期待より多く、−は少なく同卓）。
         抜け番・出場回戦数の違いも考慮しています。大会の序盤は回転式、終盤は順位順の卓組のため完全なランダムではなく、あくまで偏りの目安です（±2σを超えると、かなり珍しい偏りです）。
       </p>
@@ -1291,10 +1291,10 @@ const PlayerH2HPanel = ({
   const distMax = sa && sb ? Math.max(1, ...sa.dist.map(c => rate(c, sa.games)), ...sb.dist.map(c => rate(c, sb.games))) : 1;
 
   return (
-    <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-      <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
-        <h4 className="text-sm font-black text-slate-800">🥊 個人対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">管理者のみ</span></h4>
-        <p className="text-[11px] text-slate-400 leading-snug">2人の選手を選ぶと、{label}の直接対決（同卓した半荘の着順の勝敗）と成績の比較が見られます。</p>
+    <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+      <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
+        <h4 className="text-sm font-black text-[#2d2721]">🥊 個人対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">管理者のみ</span></h4>
+        <p className="text-[11px] text-[#a99d8c] leading-snug">2人の選手を選ぶと、{label}の直接対決（同卓した半荘の着順の勝敗）と成績の比較が見られます。</p>
       </div>
       <div className="p-3 md:p-4 space-y-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -1302,65 +1302,65 @@ const PlayerH2HPanel = ({
             <option value="">選手Aを選ぶ</option>
             {players.map(p => <option key={p.key} value={p.key} disabled={p.key === b}>{p.name}</option>)}
           </select>
-          <span className="text-sm font-black text-slate-400">VS</span>
+          <span className="text-sm font-black text-[#a99d8c]">VS</span>
           <select value={b} onChange={e => setB(e.target.value)} className="flex-1 min-w-[8rem] p-2 border rounded-lg bg-white text-sm font-bold">
             <option value="">選手Bを選ぶ</option>
             {players.map(p => <option key={p.key} value={p.key} disabled={p.key === a}>{p.name}</option>)}
           </select>
-          <button onClick={() => { setA(b); setB(a); }} disabled={!a && !b} className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100 disabled:opacity-40">⇄ 入れ替え</button>
+          <button onClick={() => { setA(b); setB(a); }} disabled={!a && !b} className="text-xs font-bold px-3 py-2 rounded-lg border border-[#d4c9b7] text-[#82786b] hover:bg-[#f3eee4] disabled:opacity-40">⇄ 入れ替え</button>
         </div>
 
         {!ready || !sa || !sb ? (
-          <p className="text-xs text-slate-400 py-4 text-center">異なる2人の選手を選んでください。</p>
+          <p className="text-xs text-[#a99d8c] py-4 text-center">異なる2人の選手を選んでください。</p>
         ) : (
           <>
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">⚔️ 直接対決（同じ卓になった半荘）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">⚔️ 直接対決（同じ卓になった半荘）</h5>
               {total === 0 ? (
-                <p className="text-xs text-slate-400">{label}に、この2人が同卓した記録はありません。</p>
+                <p className="text-xs text-[#a99d8c]">{label}に、この2人が同卓した記録はありません。</p>
               ) : (
                 <>
                   <div className="flex items-center justify-between text-sm font-black mb-1">
-                    <span className="text-indigo-700">{na} <span className="tabular-nums">{h2h!.aWins}勝</span></span>
-                    <span className="text-slate-400 text-xs">{total}戦{h2h!.draws > 0 ? `（引分${h2h!.draws}）` : ''}</span>
+                    <span className="text-[#a62b17]">{na} <span className="tabular-nums">{h2h!.aWins}勝</span></span>
+                    <span className="text-[#a99d8c] text-xs">{total}戦{h2h!.draws > 0 ? `（引分${h2h!.draws}）` : ''}</span>
                     <span className="text-rose-600"><span className="tabular-nums">{h2h!.bWins}勝</span> {nb}</span>
                   </div>
-                  <div className="flex h-4 rounded-full overflow-hidden bg-slate-100">
-                    <div className="bg-indigo-500" style={{ width: `${(h2h!.aWins / total) * 100}%` }} />
-                    <div className="bg-slate-300" style={{ width: `${(h2h!.draws / total) * 100}%` }} />
+                  <div className="flex h-4 rounded-full overflow-hidden bg-[#f3eee4]">
+                    <div className="bg-[#d9452b]" style={{ width: `${(h2h!.aWins / total) * 100}%` }} />
+                    <div className="bg-[#d4c9b7]" style={{ width: `${(h2h!.draws / total) * 100}%` }} />
                     <div className="bg-rose-500" style={{ width: `${(h2h!.bWins / total) * 100}%` }} />
                   </div>
-                  <p className="text-xs text-slate-500 mt-2">
+                  <p className="text-xs text-[#82786b] mt-2">
                     ポイント差の合計（{na}−{nb}）：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(h2h!.diffSum)}</span>
                     　1戦あたり：<span className={`font-black tabular-nums ${ptClass(h2h!.diffSum)}`}>{fmtPt(schoolR1(h2h!.diffSum / total))}</span>
                   </p>
                 </>
               )}
-              <p className="text-[11px] text-slate-400 mt-1">同じ卓の半荘ごとに、着順が上だった方の勝ちとしています。</p>
+              <p className="text-[11px] text-[#a99d8c] mt-1">同じ卓の半荘ごとに、着順が上だった方の勝ちとしています。</p>
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🎲 同卓の回数（期待値との比較）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🎲 同卓の回数（期待値との比較）</h5>
               {!co ? (
-                <p className="text-xs text-slate-400">ともに参加した大会がないため、期待値を計算できません。</p>
+                <p className="text-xs text-[#a99d8c]">ともに参加した大会がないため、期待値を計算できません。</p>
               ) : (
-                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1">
-                  <span className="text-sm text-slate-600">実際 <span className="text-xl font-black tabular-nums text-slate-800">{co.o}</span>回</span>
-                  <span className="text-sm text-slate-600">期待 <span className="text-xl font-black tabular-nums text-slate-500">{co.e.toFixed(1)}</span>回</span>
-                  <span className={`text-sm font-black tabular-nums ${co.z > 0 ? 'text-rose-600' : co.z < 0 ? 'text-sky-600' : 'text-slate-400'}`}>{fmtSigned(co.o - co.e)}回（{fmtSigned(co.z)}σ）</span>
+                <div className="rounded-lg border border-[#e7dfd1] bg-[#faf7f1] px-3 py-2.5 flex flex-wrap items-center gap-x-5 gap-y-1">
+                  <span className="text-sm text-[#625a4f]">実際 <span className="text-xl font-black tabular-nums text-[#2d2721]">{co.o}</span>回</span>
+                  <span className="text-sm text-[#625a4f]">期待 <span className="text-xl font-black tabular-nums text-[#82786b]">{co.e.toFixed(1)}</span>回</span>
+                  <span className={`text-sm font-black tabular-nums ${co.z > 0 ? 'text-rose-600' : co.z < 0 ? 'text-sky-600' : 'text-[#a99d8c]'}`}>{fmtSigned(co.o - co.e)}回（{fmtSigned(co.z)}σ）</span>
                   <span className={`text-[11px] font-black px-2 py-0.5 rounded-full border ${coSeatVerdict(co.z).cls}`}>{coSeatVerdict(co.z).label}</span>
-                  <span className="text-[11px] text-slate-400">共通の大会 {co.tours}</span>
+                  <span className="text-[11px] text-[#a99d8c]">共通の大会 {co.tours}</span>
                 </div>
               )}
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">📊 成績比較（{label}）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">📊 成績比較（{label}）</h5>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="bg-slate-100 text-slate-600 text-xs">
-                      <th className="p-2 text-right font-bold w-1/3 text-indigo-700">{na}</th>
+                    <tr className="bg-[#f3eee4] text-[#625a4f] text-xs">
+                      <th className="p-2 text-right font-bold w-1/3 text-[#a62b17]">{na}</th>
                       <th className="p-2 text-center font-bold">項目</th>
                       <th className="p-2 text-left font-bold w-1/3 text-rose-600">{nb}</th>
                     </tr>
@@ -1369,23 +1369,23 @@ const PlayerH2HPanel = ({
                     {metrics.map(m => {
                       const w = winner(m);
                       return (
-                        <tr key={m.label} className="border-b border-slate-100">
-                          <td className={`p-2 text-right tabular-nums ${w === 'a' ? 'font-black text-indigo-700 bg-indigo-50' : 'text-slate-600'}`}>{m.skip ? '-' : m.fmt(m.av)}{w === 'a' ? ' ◀' : ''}</td>
-                          <td className="p-2 text-center text-xs text-slate-500 whitespace-nowrap">{m.label}</td>
-                          <td className={`p-2 text-left tabular-nums ${w === 'b' ? 'font-black text-rose-600 bg-rose-50' : 'text-slate-600'}`}>{w === 'b' ? '▶ ' : ''}{m.skip ? '-' : m.fmt(m.bv)}</td>
+                        <tr key={m.label} className="border-b border-[#f3eee4]">
+                          <td className={`p-2 text-right tabular-nums ${w === 'a' ? 'font-black text-[#a62b17] bg-[#fdf1ed]' : 'text-[#625a4f]'}`}>{m.skip ? '-' : m.fmt(m.av)}{w === 'a' ? ' ◀' : ''}</td>
+                          <td className="p-2 text-center text-xs text-[#82786b] whitespace-nowrap">{m.label}</td>
+                          <td className={`p-2 text-left tabular-nums ${w === 'b' ? 'font-black text-rose-600 bg-rose-50' : 'text-[#625a4f]'}`}>{w === 'b' ? '▶ ' : ''}{m.skip ? '-' : m.fmt(m.bv)}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
               </div>
-              <p className="text-[11px] text-slate-400 mt-1">優勢な項目数（半荘数を除く）：{na} {aWinCount} ／ {nb} {bWinCount}</p>
+              <p className="text-[11px] text-[#a99d8c] mt-1">優勢な項目数（半荘数を除く）：{na} {aWinCount} ／ {nb} {bWinCount}</p>
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🎯 着順分布の比較</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🎯 着順分布の比較</h5>
               {sa.games === 0 && sb.games === 0 ? (
-                <p className="text-xs text-slate-400">記録がありません。</p>
+                <p className="text-xs text-[#a99d8c]">記録がありません。</p>
               ) : (
                 <div className="space-y-1.5">
                   {[0, 1, 2, 3].map(i => {
@@ -1394,13 +1394,13 @@ const PlayerH2HPanel = ({
                     return (
                       <div key={i} className="grid grid-cols-[1fr_2.5rem_1fr] items-center gap-2 text-xs">
                         <div className="flex items-center justify-end gap-1.5">
-                          <span className="tabular-nums text-slate-500">{pa.toFixed(0)}%</span>
-                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden flex justify-end"><div className="h-full bg-indigo-500" style={{ width: `${(pa / distMax) * 100}%` }} /></div>
+                          <span className="tabular-nums text-[#82786b]">{pa.toFixed(0)}%</span>
+                          <div className="w-full max-w-[10rem] h-3 bg-[#f3eee4] rounded-full overflow-hidden flex justify-end"><div className="h-full bg-[#d9452b]" style={{ width: `${(pa / distMax) * 100}%` }} /></div>
                         </div>
-                        <span className="text-center font-bold text-slate-500">{SCHOOL_RANK_LABELS[i]}</span>
+                        <span className="text-center font-bold text-[#82786b]">{SCHOOL_RANK_LABELS[i]}</span>
                         <div className="flex items-center gap-1.5">
-                          <div className="w-full max-w-[10rem] h-3 bg-slate-100 rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(pb / distMax) * 100}%` }} /></div>
-                          <span className="tabular-nums text-slate-500">{pb.toFixed(0)}%</span>
+                          <div className="w-full max-w-[10rem] h-3 bg-[#f3eee4] rounded-full overflow-hidden"><div className="h-full bg-rose-500" style={{ width: `${(pb / distMax) * 100}%` }} /></div>
+                          <span className="tabular-nums text-[#82786b]">{pb.toFixed(0)}%</span>
                         </div>
                       </div>
                     );
@@ -1410,9 +1410,9 @@ const PlayerH2HPanel = ({
             </div>
 
             <div>
-              <h5 className="text-xs font-black text-slate-700 mb-2">🏆 大会別の比較（最終スコアと順位）</h5>
+              <h5 className="text-xs font-black text-[#473f36] mb-2">🏆 大会別の比較（最終スコアと順位）</h5>
               {tourneys.length === 0 ? (
-                <p className="text-xs text-slate-400">記録がありません。</p>
+                <p className="text-xs text-[#a99d8c]">記録がありません。</p>
               ) : (
                 <div className="space-y-1.5">
                   {tourneys.map(t => {
@@ -1421,13 +1421,13 @@ const PlayerH2HPanel = ({
                     const aw = ap !== null && bp !== null && ap > bp;
                     const bw = ap !== null && bp !== null && bp > ap;
                     return (
-                      <div key={t.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs">
-                        <div className={`text-right tabular-nums ${aw ? 'font-black text-indigo-700' : 'text-slate-500'}`}>
-                          {t.a ? <>{fmtPt(ap!)} <span className="text-[10px] text-slate-400">（{t.a.rank}/{t.a.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                      <div key={t.key} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2 text-xs">
+                        <div className={`text-right tabular-nums ${aw ? 'font-black text-[#a62b17]' : 'text-[#82786b]'}`}>
+                          {t.a ? <>{fmtPt(ap!)} <span className="text-[10px] text-[#a99d8c]">（{t.a.rank}/{t.a.total}位）</span></> : <span className="text-[#d4c9b7]">不参加</span>}
                         </div>
-                        <span className="font-bold text-slate-600 whitespace-nowrap">{t.tName}</span>
-                        <div className={`text-left tabular-nums ${bw ? 'font-black text-rose-600' : 'text-slate-500'}`}>
-                          {t.b ? <>{fmtPt(bp!)} <span className="text-[10px] text-slate-400">（{t.b.rank}/{t.b.total}位）</span></> : <span className="text-slate-300">不参加</span>}
+                        <span className="font-bold text-[#625a4f] whitespace-nowrap">{t.tName}</span>
+                        <div className={`text-left tabular-nums ${bw ? 'font-black text-rose-600' : 'text-[#82786b]'}`}>
+                          {t.b ? <>{fmtPt(bp!)} <span className="text-[10px] text-[#a99d8c]">（{t.b.rank}/{t.b.total}位）</span></> : <span className="text-[#d4c9b7]">不参加</span>}
                         </div>
                       </div>
                     );
@@ -1438,20 +1438,20 @@ const PlayerH2HPanel = ({
 
             {h2h && h2h.rows.length > 0 && (
               <div>
-                <button onClick={() => setShowTables(!showTables)} className="text-xs font-black text-slate-700 flex items-center gap-1">
-                  🀄 同卓した半荘の一覧（{h2h.rows.length}戦） <span className="text-slate-400">{showTables ? '▲' : '▼'}</span>
+                <button onClick={() => setShowTables(!showTables)} className="text-xs font-black text-[#473f36] flex items-center gap-1">
+                  🀄 同卓した半荘の一覧（{h2h.rows.length}戦） <span className="text-[#a99d8c]">{showTables ? '▲' : '▼'}</span>
                 </button>
                 {showTables && (
-                  <div className="mt-2 border border-slate-200 rounded-lg divide-y divide-slate-100 max-h-96 overflow-y-auto">
+                  <div className="mt-2 border border-[#e7dfd1] rounded-lg divide-y divide-[#f3eee4] max-h-96 overflow-y-auto">
                     {h2h.rows.map(r => {
                       const isOpen = openGame === r.g.id;
                       return (
                         <div key={r.g.id}>
-                          <button onClick={() => setOpenGame(isOpen ? null : r.g.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-slate-50 text-xs">
-                            <span className="font-bold text-slate-600 truncate flex-1">{r.g.label}</span>
-                            <span className={`tabular-nums font-black ${r.a.rank < r.b.rank ? 'text-indigo-700' : 'text-slate-400'}`}>{r.a.rank}着 {fmtPt(r.a.point)}</span>
-                            <span className="text-slate-300">-</span>
-                            <span className={`tabular-nums font-black ${r.b.rank < r.a.rank ? 'text-rose-600' : 'text-slate-400'}`}>{r.b.rank}着 {fmtPt(r.b.point)}</span>
+                          <button onClick={() => setOpenGame(isOpen ? null : r.g.id)} className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-[#faf7f1] text-xs">
+                            <span className="font-bold text-[#625a4f] truncate flex-1">{r.g.label}</span>
+                            <span className={`tabular-nums font-black ${r.a.rank < r.b.rank ? 'text-[#a62b17]' : 'text-[#a99d8c]'}`}>{r.a.rank}着 {fmtPt(r.a.point)}</span>
+                            <span className="text-[#d4c9b7]">-</span>
+                            <span className={`tabular-nums font-black ${r.b.rank < r.a.rank ? 'text-rose-600' : 'text-[#a99d8c]'}`}>{r.b.rank}着 {fmtPt(r.b.point)}</span>
                           </button>
                           {isOpen && <SchoolTablePlayers players={r.g.players} highlight={[]} />}
                         </div>
@@ -1472,12 +1472,12 @@ const PlayerH2HPanel = ({
 const AdminSection = ({ id, icon, title, desc, children }: { id: string; icon: string; title: string; desc?: string; children: React.ReactNode }) => (
   <section id={id} className="scroll-mt-4 space-y-3">
     <div className="flex items-center gap-3">
-      <span className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-700 text-xl flex items-center justify-center shadow-md shadow-indigo-900/30 ring-1 ring-white/20">{icon}</span>
+      <span className="flex-shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-[#1c1814] via-[#5e190e] to-[#274066] text-xl flex items-center justify-center shadow-md shadow-[#5e190e]/30 ring-1 ring-white/20">{icon}</span>
       <div className="min-w-0">
-        <h3 className="text-lg font-black text-slate-900 tracking-wide leading-tight">{title}</h3>
-        {desc && <p className="text-[11px] text-slate-500 leading-snug">{desc}</p>}
+        <h3 className="text-lg font-black text-[#1c1814] tracking-wide leading-tight">{title}</h3>
+        {desc && <p className="text-[11px] text-[#82786b] leading-snug">{desc}</p>}
       </div>
-      <span className="flex-1 h-px bg-gradient-to-r from-indigo-300/70 to-transparent" />
+      <span className="flex-1 h-px bg-gradient-to-r from-[#ef937c]/70 to-transparent" />
     </div>
     {children}
   </section>
@@ -1765,9 +1765,9 @@ const StandingsSheetTable = ({ rows, roundNos, title }: { rows: SheetRow[]; roun
   const bc = { borderColor: SHEET.border };
   return (
     <div>
-      <p className="text-sm font-black text-slate-700 mb-1.5">{title}</p>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="border-collapse text-[13px] text-slate-900" style={{ color: SHEET.text }}>
+      <p className="text-sm font-black text-[#473f36] mb-1.5">{title}</p>
+      <div className="overflow-x-auto rounded-lg border border-[#e7dfd1] bg-white">
+        <table className="border-collapse text-[13px] text-[#1c1814]" style={{ color: SHEET.text }}>
           <thead>
             <tr>
               <th rowSpan={3} className={th} style={bc}>順位</th>
@@ -1830,7 +1830,7 @@ const SchoolChips = ({ options, value, onPick, compact }: { options: string[]; v
             key={sc}
             type="button"
             onClick={() => onPick(on ? '' : sc)}
-            className={`rounded-full border font-bold transition ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-300 hover:border-indigo-400 hover:text-indigo-700'}`}
+            className={`rounded-full border font-bold transition ${compact ? 'px-2 py-0.5 text-[10px]' : 'px-3 py-1 text-xs'} ${on ? 'bg-[#c8361e] text-white border-[#c8361e]' : 'bg-white text-[#625a4f] border-[#d4c9b7] hover:border-[#e5664c] hover:text-[#a62b17]'}`}
           >{sc}</button>
         );
       })}
@@ -1840,22 +1840,22 @@ const SchoolChips = ({ options, value, onPick, compact }: { options: string[]; v
 
 type AdminRow = { rank: number; name: string; value: string; sub?: string };
 const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string; desc: string; rows: AdminRow[]; extra?: React.ReactNode; emptyText?: string }) => (
-  <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-    <div className="px-3 py-2.5 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white">
-      <h4 className="text-sm font-black text-slate-800">{title}</h4>
-      <p className="text-[11px] text-slate-400 leading-snug">{desc}</p>
+  <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+    <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-[#faf7f1] to-white">
+      <h4 className="text-sm font-black text-[#2d2721]">{title}</h4>
+      <p className="text-[11px] text-[#a99d8c] leading-snug">{desc}</p>
       {extra && <div className="mt-2">{extra}</div>}
     </div>
     {rows.length === 0 ? (
-      <p className="px-3 py-4 text-center text-xs text-slate-400">{emptyText || 'データがありません。'}</p>
+      <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">{emptyText || 'データがありません。'}</p>
     ) : (
-      <ol className="divide-y divide-slate-100">
+      <ol className="divide-y divide-[#f3eee4]">
         {rows.map((r, i) => (
           <li key={`${r.name}-${i}`} className={`flex items-center gap-2 px-3 py-1.5 text-sm ${r.rank === 1 ? 'bg-gradient-to-r from-amber-50/80 to-transparent' : ''}`}>
-            <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black tabular-nums ${r.rank === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-sm' : r.rank === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white' : r.rank === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'text-slate-400'}`}>{r.rank}</span>
-            <span className="flex-1 min-w-0 truncate font-bold text-slate-700"><PlayerLabel name={r.name} /></span>
-            {r.sub && <span className="text-[11px] text-slate-400 whitespace-nowrap">{r.sub}</span>}
-            <span className={`w-20 text-right font-black tabular-nums ${r.value.startsWith('-') ? 'text-red-600' : 'text-slate-800'}`}>{r.value}</span>
+            <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black tabular-nums ${r.rank === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-sm' : r.rank === 2 ? 'bg-gradient-to-br from-[#d4c9b7] to-[#a99d8c] text-white' : r.rank === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'text-[#a99d8c]'}`}>{r.rank}</span>
+            <span className="flex-1 min-w-0 truncate font-bold text-[#473f36]"><PlayerLabel name={r.name} /></span>
+            {r.sub && <span className="text-[11px] text-[#a99d8c] whitespace-nowrap">{r.sub}</span>}
+            <span className={`w-20 text-right font-black tabular-nums ${r.value.startsWith('-') ? 'text-red-600' : 'text-[#2d2721]'}`}>{r.value}</span>
           </li>
         ))}
       </ol>
@@ -1921,7 +1921,7 @@ const PlayerDetailModal = ({
   onClose: () => void;
 }) => {
   const rankLabels = ['1着', '2着', '3着', '4着'];
-  const rankColors = ['bg-yellow-400', 'bg-slate-400', 'bg-amber-700', 'bg-slate-300'];
+  const rankColors = ['bg-yellow-400', 'bg-[#a99d8c]', 'bg-amber-700', 'bg-[#d4c9b7]'];
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   const toggleGroup = (key: string) => setOpenGroups(prev => ({ ...prev, [key]: !prev[key] }));
   const [openHanchan, setOpenHanchan] = useState<string | null>(null);
@@ -1941,26 +1941,26 @@ const PlayerDetailModal = ({
   const renderHanchanGroups = (groups: PlayerDetailHanchanGroup[], prefix: string) => (
     <>
             {groups.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="space-y-2">
                 {groups.map(g0 => {
                   const g = { ...g0, key: `${prefix}${g0.key}` };
                   const isGroupOpen = !!openGroups[g.key];
                   return (
-                    <div key={g.key} className="border border-slate-200 rounded-lg overflow-hidden">
+                    <div key={g.key} className="border border-[#e7dfd1] rounded-lg overflow-hidden">
                       <button
                         onClick={() => toggleGroup(g.key)}
-                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition text-left"
+                        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-[#faf7f1] hover:bg-[#f3eee4] transition text-left"
                       >
-                        <span className="text-sm font-bold text-slate-700">{g.label}</span>
-                        <span className="text-xs text-slate-400 flex items-center gap-2">
+                        <span className="text-sm font-bold text-[#473f36]">{g.label}</span>
+                        <span className="text-xs text-[#a99d8c] flex items-center gap-2">
                           {g.rows.length}半荘
                           <span className="font-bold">{isGroupOpen ? '▲' : '▼'}</span>
                         </span>
                       </button>
                       {isGroupOpen && (
-                        <div className="divide-y divide-slate-100">
+                        <div className="divide-y divide-[#f3eee4]">
                           {g.rows.map((r, i) => {
                             const hKey = `${g.key}-${i}`;
                             const isHOpen = openHanchan === hKey;
@@ -1968,24 +1968,24 @@ const PlayerDetailModal = ({
                               <div key={hKey}>
                                 <button
                                   onClick={() => toggleHanchan(hKey)}
-                                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left transition ${isHOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                  className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left transition ${isHOpen ? 'bg-[#fdf1ed]/60' : 'hover:bg-[#faf7f1]'}`}
                                 >
-                                  <span className="text-slate-400 w-10">#{i + 1}</span>
-                                  <span className="text-slate-600 font-bold w-10">{r.rank}位</span>
-                                  <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
-                                  <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                                  <span className="text-[#a99d8c] w-10">#{i + 1}</span>
+                                  <span className="text-[#625a4f] font-bold w-10">{r.rank}位</span>
+                                  <span className="text-[#82786b] tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
+                                  <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r.point)}</span>
                                 </button>
                                 {isHOpen && (
                                   <div className="px-3 pb-3 pt-1 bg-white">
-                                    <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                    <div className="border border-[#e7dfd1] rounded-lg overflow-hidden">
                                       {r.table.map(tp => (
-                                        <div key={tp.playerId} className={`flex items-center justify-between px-3 py-1.5 text-xs ${(tp.isMe ?? tp.playerId === player.id) ? 'bg-indigo-50' : 'bg-white'}`}>
-                                          <span className="text-slate-600 font-bold truncate flex-1">
-                                            <span className="text-slate-400 font-mono mr-1.5">{tp.rank}位</span>
+                                        <div key={tp.playerId} className={`flex items-center justify-between px-3 py-1.5 text-xs ${(tp.isMe ?? tp.playerId === player.id) ? 'bg-[#fdf1ed]' : 'bg-white'}`}>
+                                          <span className="text-[#625a4f] font-bold truncate flex-1">
+                                            <span className="text-[#a99d8c] font-mono mr-1.5">{tp.rank}位</span>
                                             <PlayerLabel name={tp.name} />
                                           </span>
-                                          <span className="text-slate-400 mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
-                                          <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(tp.point)}</span>
+                                          <span className="text-[#a99d8c] mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
+                                          <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(tp.point)}</span>
                                         </div>
                                       ))}
                                     </div>
@@ -2011,39 +2011,39 @@ const PlayerDetailModal = ({
         onClick={(e) => e.stopPropagation()}
       >
         {/* ヘッダー */}
-        <div className="bg-gradient-to-r from-indigo-700 to-indigo-900 text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
+        <div className="bg-gradient-to-r from-[#a62b17] to-[#5e190e] text-white px-4 md:px-8 py-4 md:py-6 flex items-start justify-between flex-shrink-0">
           <div>
-            <p className="text-indigo-200 text-xs font-bold mb-1">個人成績</p>
+            <p className="text-[#f7bcab] text-xs font-bold mb-1">個人成績</p>
             <h2 className="text-2xl md:text-3xl font-black flex items-center">
-              <PlayerLabel name={player.name} badgeClass="text-indigo-900" />
+              <PlayerLabel name={player.name} badgeClass="text-[#5e190e]" />
             </h2>
-            <p className={`mt-2 text-2xl font-black tabular-nums ${headPoint > 0 ? 'text-emerald-300' : headPoint < 0 ? 'text-rose-300' : 'text-indigo-200'}`}>
-              {fmtPt(headPoint)} <span className="text-sm font-bold text-indigo-200">{showLifetime ? (lifeScope === 'all' ? `（生涯 ${lifetime?.games ?? 0}半荘・※換算の参考値）` : `（最高位戦ルール ${lifetime?.games ?? 0}半荘）`) : `（今季 ${totalGames}半荘）`}</span>
+            <p className={`mt-2 text-2xl font-black tabular-nums ${headPoint > 0 ? 'text-emerald-300' : headPoint < 0 ? 'text-rose-300' : 'text-[#f7bcab]'}`}>
+              {fmtPt(headPoint)} <span className="text-sm font-bold text-[#f7bcab]">{showLifetime ? (lifeScope === 'all' ? `（生涯 ${lifetime?.games ?? 0}半荘・※換算の参考値）` : `（最高位戦ルール ${lifetime?.games ?? 0}半荘）`) : `（今季 ${totalGames}半荘）`}</span>
               {!showLifetime && seasonRank ? (
                 <span className="ml-2 inline-flex items-baseline gap-0.5 align-middle bg-white/15 ring-1 ring-white/25 rounded-full px-2.5 py-0.5 text-white">
                   <span className="text-lg font-black tabular-nums">{seasonRank}</span>
                   <span className="text-xs font-bold">位</span>
-                  {seasonRankTotal ? <span className="text-[10px] font-bold text-indigo-200 ml-1">/ {seasonRankTotal}名</span> : null}
+                  {seasonRankTotal ? <span className="text-[10px] font-bold text-[#f7bcab] ml-1">/ {seasonRankTotal}名</span> : null}
                 </span>
               ) : null}
             </p>
             {maxScore && !showLifetime && (
-              <p className="mt-2 text-xs font-bold text-indigo-200">
+              <p className="mt-2 text-xs font-bold text-[#f7bcab]">
                 🎯 最高スコア <span className="text-white text-sm">{(maxScore.score * 100).toLocaleString()}点</span>（{maxScore.label}）
               </p>
             )}
           </div>
-          <button onClick={onClose} className="text-indigo-200 hover:text-white text-2xl leading-none font-bold px-2">✕</button>
+          <button onClick={onClose} className="text-[#f7bcab] hover:text-white text-2xl leading-none font-bold px-2">✕</button>
         </div>
 
         {/* タブ: 今季成績 / 生涯成績 */}
         {lifetimeAny && !lifetimeOnly && (
-          <div className="flex border-b border-slate-200 bg-white flex-shrink-0">
+          <div className="flex border-b border-[#e7dfd1] bg-white flex-shrink-0">
             {([['season', '今季成績'], ['lifetime', '生涯成績']] as const).map(([k, label]) => (
               <button
                 key={k}
                 onClick={() => setTab(k)}
-                className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-indigo-600 text-indigo-700 bg-indigo-50/50' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+                className={`flex-1 py-3 text-sm font-black transition border-b-4 ${tab === k ? 'border-[#c8361e] text-[#a62b17] bg-[#fdf1ed]/50' : 'border-transparent text-[#a99d8c] hover:text-[#625a4f]'}`}
               >{label}</button>
             ))}
           </div>
@@ -2055,38 +2055,38 @@ const PlayerDetailModal = ({
           {/* この後の対局（ログイン中の本人のみ） */}
           {upcoming && (
             <section>
-              <h3 className="text-sm font-black text-slate-700 mb-3">📌 この後の対局</h3>
+              <h3 className="text-sm font-black text-[#473f36] mb-3">📌 この後の対局</h3>
               {upcoming.length === 0 ? (
-                <p className="text-xs text-slate-400">この後の対局はありません。</p>
+                <p className="text-xs text-[#a99d8c]">この後の対局はありません。</p>
               ) : (
                 <div className="space-y-2">
                   {upcoming.map(u => (
                     <div
                       key={u.key}
-                      className={`rounded-lg border px-3 py-2.5 text-sm ${u.isFinal ? 'border-amber-300 bg-amber-50' : u.status === 'ready' ? 'border-indigo-200 bg-indigo-50/50' : 'border-slate-200 bg-slate-50'}`}
+                      className={`rounded-lg border px-3 py-2.5 text-sm ${u.isFinal ? 'border-amber-300 bg-amber-50' : u.status === 'ready' ? 'border-[#f7bcab] bg-[#fdf1ed]/50' : 'border-[#e7dfd1] bg-[#faf7f1]'}`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="font-black text-slate-800">
+                        <span className="font-black text-[#2d2721]">
                           {u.roundNo}回戦
-                          {u.time && <span className="ml-2 text-[11px] font-bold text-slate-400">{u.time}〜</span>}
+                          {u.time && <span className="ml-2 text-[11px] font-bold text-[#a99d8c]">{u.time}〜</span>}
                         </span>
                         {u.status === 'ready' && (
-                          <span className="text-xs font-black text-indigo-700">
+                          <span className="text-xs font-black text-[#a62b17]">
                             {u.isFinal && '👑 決勝卓 '}{u.tableLabel || `${u.tableNo}卓`}・{u.wind}家
                           </span>
                         )}
-                        {u.status === 'pending' && <span className="text-xs font-bold text-slate-400">卓組未定</span>}
-                        {u.status === 'sitout' && <span className="text-xs font-bold text-slate-400">抜け番</span>}
+                        {u.status === 'pending' && <span className="text-xs font-bold text-[#a99d8c]">卓組未定</span>}
+                        {u.status === 'sitout' && <span className="text-xs font-bold text-[#a99d8c]">抜け番</span>}
                       </div>
                       {u.status === 'ready' && u.opponents && (
-                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-slate-600">
+                        <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-[#625a4f]">
                           {u.opponents.map((o, i) => (
-                            <span key={i}><span className="text-slate-400 mr-1">{o.wind}</span><PlayerLabel name={o.name} className="font-bold" /></span>
+                            <span key={i}><span className="text-[#a99d8c] mr-1">{o.wind}</span><PlayerLabel name={o.name} className="font-bold" /></span>
                           ))}
                         </div>
                       )}
                       {u.status === 'pending' && (
-                        <p className="mt-1 text-[11px] text-slate-400">前の回戦が全て終了した時点で、順位順に卓組が決まります。</p>
+                        <p className="mt-1 text-[11px] text-[#a99d8c]">前の回戦が全て終了した時点で、順位順に卓組が決まります。</p>
                       )}
                     </div>
                   ))}
@@ -2097,17 +2097,17 @@ const PlayerDetailModal = ({
 
           {/* 大会別成績 */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">大会別成績</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">大会別成績</h3>
             {history.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2">
                 {history.map(h => (
-                  <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2.5 text-sm">
-                    <span className="text-slate-700 font-bold">{h.name}</span>
+                  <div key={h.archiveId} className="flex items-center justify-between gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2.5 text-sm">
+                    <span className="text-[#473f36] font-bold">{h.name}</span>
                     <RankPill rank={h.rank} playerCount={h.playerCount} />
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{h.gameCount}戦</span>
-                    <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+                    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{h.gameCount}戦</span>
+                    <span className={`font-black tabular-nums whitespace-nowrap ${h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(h.point)}</span>
                   </div>
                 ))}
               </div>
@@ -2117,23 +2117,23 @@ const PlayerDetailModal = ({
 
           {/* 着順分布 */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🎯 着順分布（今季合計 {rankDist.total}戦）</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🎯 着順分布（今季合計 {rankDist.total}戦）</h3>
             {rankDist.total === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="space-y-2">
                 {rankDist.dist.map((count, idx) => {
                   const pct = rankDist.total > 0 ? Math.round((count / rankDist.total) * 100) : 0;
                   return (
                     <div key={idx} className="flex items-center gap-3 text-sm">
-                      <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
-                      <div className="flex-1 h-4 bg-slate-100 rounded-full overflow-hidden">
+                      <span className="w-10 font-bold text-[#82786b]">{rankLabels[idx]}</span>
+                      <div className="flex-1 h-4 bg-[#f3eee4] rounded-full overflow-hidden">
                         <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-[#82786b]">
                         <span className="inline-block w-7 text-right">{count}</span>
-                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
-                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                        <span className="text-[11px] text-[#a99d8c] ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-[#a99d8c]">({pct}%)</span>
                       </span>
                     </div>
                   );
@@ -2144,34 +2144,34 @@ const PlayerDetailModal = ({
 
           {/* 半荘ごとの成績（大会ごとにプルダウン。対局をクリックすると同卓者が見られる） */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🀄 半荘ごとの成績</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🀄 半荘ごとの成績</h3>
             {renderHanchanGroups(hanchanGroups, '')}
           </section>
 
           {/* 対戦相性 */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🤝 対戦相性（合計ポイント差）</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🤝 対戦相性（合計ポイント差）</h3>
             {headToHead.length === 0 ? (
-              <p className="text-xs text-slate-400">記録がありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録がありません。</p>
             ) : (
               <div className="max-h-72 overflow-y-auto space-y-1.5 pr-1">
                 {headToHead.map(o => (
-                  <div key={o.id} className="flex items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm">
-                    <PlayerLabel name={o.name} className="text-slate-700 font-bold truncate flex-1" />
-                    <span className="text-slate-400 text-xs whitespace-nowrap">{o.games}戦</span>
-                    <span className={`font-black tabular-nums whitespace-nowrap ${o.diffSum > 0 ? 'text-blue-600' : o.diffSum < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(o.diffSum)}</span>
+                  <div key={o.id} className="flex items-center justify-between gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg px-3 py-2 text-sm">
+                    <PlayerLabel name={o.name} className="text-[#473f36] font-bold truncate flex-1" />
+                    <span className="text-[#a99d8c] text-xs whitespace-nowrap">{o.games}戦</span>
+                    <span className={`font-black tabular-nums whitespace-nowrap ${o.diffSum > 0 ? 'text-blue-600' : o.diffSum < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(o.diffSum)}</span>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">プラスは「この選手が相手より合計で勝っている」ことを表します。</p>
+            <p className="text-[11px] text-[#a99d8c] mt-2">プラスは「この選手が相手より合計で勝っている」ことを表します。</p>
           </section>
 
           {/* ペナルティ履歴 */}
           <section>
-            <h3 className="text-sm font-black text-slate-700 mb-3">🚫 ペナルティ履歴</h3>
+            <h3 className="text-sm font-black text-[#473f36] mb-3">🚫 ペナルティ履歴</h3>
             {penalties.length === 0 ? (
-              <p className="text-xs text-slate-400">記録はありません。</p>
+              <p className="text-xs text-[#a99d8c]">記録はありません。</p>
             ) : (
               <div className="space-y-1.5">
                 {penalties.map((p, i) => (
@@ -2196,7 +2196,7 @@ const PlayerDetailModal = ({
                   <button
                     key={k}
                     onClick={() => setLifeScope(k)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-black transition ${lifeScope === k ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow' : 'text-slate-500 hover:bg-amber-50'}`}
+                    className={`flex-1 py-2 rounded-lg text-xs font-black transition ${lifeScope === k ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow' : 'text-[#82786b] hover:bg-amber-50'}`}
                   >{label}</button>
                 ))}
               </div>
@@ -2204,22 +2204,22 @@ const PlayerDetailModal = ({
               <>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                 <div className="bg-white rounded-lg border border-amber-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">生涯順位</div>
-                  <div className="text-lg font-black tabular-nums text-slate-800">{lifetime.rank}<span className="text-xs font-bold text-slate-400">位</span></div>
-                  <div className="text-[9px] text-slate-400 leading-tight">{lifetime.rankTotal}人中</div>
+                  <div className="text-[10px] font-bold text-[#a99d8c]">生涯順位</div>
+                  <div className="text-lg font-black tabular-nums text-[#2d2721]">{lifetime.rank}<span className="text-xs font-bold text-[#a99d8c]">位</span></div>
+                  <div className="text-[9px] text-[#a99d8c] leading-tight">{lifetime.rankTotal}人中</div>
                 </div>
                 <div className="bg-white rounded-lg border border-amber-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">{lifeScope === 'all' ? <>生涯ポイント<span className="text-amber-500">※換算・参考</span></> : '最高位戦ルールのpt'}</div>
-                  <div className={`text-lg font-black tabular-nums ${lifetime.point > 0 ? 'text-blue-600' : lifetime.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>{fmtPt(lifetime.point)}</div>
-                  {lifetime.convertedPart !== 0 && <div className="text-[9px] text-slate-400 leading-tight">うち他ルール換算分 {fmtPt(lifetime.convertedPart)}</div>}
+                  <div className="text-[10px] font-bold text-[#a99d8c]">{lifeScope === 'all' ? <>生涯ポイント<span className="text-amber-500">※換算・参考</span></> : '最高位戦ルールのpt'}</div>
+                  <div className={`text-lg font-black tabular-nums ${lifetime.point > 0 ? 'text-blue-600' : lifetime.point < 0 ? 'text-red-600' : 'text-[#82786b]'}`}>{fmtPt(lifetime.point)}</div>
+                  {lifetime.convertedPart !== 0 && <div className="text-[9px] text-[#a99d8c] leading-tight">うち他ルール換算分 {fmtPt(lifetime.convertedPart)}</div>}
                 </div>
                 <div className="bg-white rounded-lg border border-amber-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">半荘数</div>
-                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games}</div>
+                  <div className="text-[10px] font-bold text-[#a99d8c]">半荘数</div>
+                  <div className="text-lg font-black tabular-nums text-[#473f36]">{lifetime.games}</div>
                 </div>
                 <div className="bg-white rounded-lg border border-amber-100 p-2.5 text-center">
-                  <div className="text-[10px] font-bold text-slate-400">平均着順</div>
-                  <div className="text-lg font-black tabular-nums text-slate-700">{lifetime.games > 0 ? (lifetime.rankSum / lifetime.games).toFixed(2) : '-'}</div>
+                  <div className="text-[10px] font-bold text-[#a99d8c]">平均着順</div>
+                  <div className="text-lg font-black tabular-nums text-[#473f36]">{lifetime.games > 0 ? (lifetime.rankSum / lifetime.games).toFixed(2) : '-'}</div>
                 </div>
               </div>
               {lifeScope === 'all' ? (
@@ -2227,21 +2227,21 @@ const PlayerDetailModal = ({
                   ※ 生涯ポイントは、最高位戦ルール以外の大会（第1回・第2回など）を最高位戦ルールに換算して合算した「あくまで参考の値」です。実際のポイントではありません。
                 </p>
               ) : (
-                <p className="text-[11px] font-bold text-slate-600 bg-white/70 border border-slate-200 rounded-lg px-3 py-2 mb-4 leading-relaxed">最高位戦ルールの大会だけを集計しています（換算なし・実際のポイント）。年間チャンピオン戦のポイントは含みません（半荘数・着順分布には含みます）。</p>
+                <p className="text-[11px] font-bold text-[#625a4f] bg-white/70 border border-[#e7dfd1] rounded-lg px-3 py-2 mb-4 leading-relaxed">最高位戦ルールの大会だけを集計しています（換算なし・実際のポイント）。年間チャンピオン戦のポイントは含みません（半荘数・着順分布には含みます）。</p>
               )}
               <div className="space-y-2 mb-4">
                 {lifetime.dist.map((count, idx) => {
                   const pct = lifetime.games > 0 ? Math.round((count / lifetime.games) * 100) : 0;
                   return (
                     <div key={idx} className="flex items-center gap-3 text-sm">
-                      <span className="w-10 font-bold text-slate-500">{rankLabels[idx]}</span>
-                      <div className="flex-1 h-4 bg-white rounded-full overflow-hidden border border-slate-100">
+                      <span className="w-10 font-bold text-[#82786b]">{rankLabels[idx]}</span>
+                      <div className="flex-1 h-4 bg-white rounded-full overflow-hidden border border-[#f3eee4]">
                         <div className={`h-full ${rankColors[idx]}`} style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-slate-500">
+                      <span className="w-28 flex-shrink-0 flex items-baseline justify-end tabular-nums text-[#82786b]">
                         <span className="inline-block w-7 text-right">{count}</span>
-                        <span className="text-[11px] text-slate-400 ml-0.5 mr-1.5">回</span>
-                        <span className="inline-block w-11 text-right text-xs text-slate-400">({pct}%)</span>
+                        <span className="text-[11px] text-[#a99d8c] ml-0.5 mr-1.5">回</span>
+                        <span className="inline-block w-11 text-right text-xs text-[#a99d8c]">({pct}%)</span>
                       </span>
                     </div>
                   );
@@ -2249,34 +2249,34 @@ const PlayerDetailModal = ({
               </div>
               {lifetimeHistory.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[11px] font-bold text-slate-500">大会別（{lifetimeHistory.length}大会）<span className="font-normal text-slate-400">　ポイントはその大会のルールでの実際の値です（換算していません）</span></p>
+                  <p className="text-[11px] font-bold text-[#82786b]">大会別（{lifetimeHistory.length}大会）<span className="font-normal text-[#a99d8c]">　ポイントはその大会のルールでの実際の値です（換算していません）</span></p>
                   {lifetimeHistory.map(h => (
-                    <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-slate-100 px-3 py-2">
-                      <span className="font-bold text-slate-700 w-12 flex-shrink-0">{h.name}</span>
-                      <span className="flex-1 min-w-0 truncate text-[11px] text-slate-400">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
-                      <span className="text-slate-500 whitespace-nowrap">{h.rank}位 / {h.playerCount}人中 <span className="text-slate-400">・{h.gameCount}戦</span></span>
-                      <span className={`font-black tabular-nums whitespace-nowrap ${h.kind === 'excluded' ? 'text-slate-400' : h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(h.point)}</span>
+                    <div key={h.archiveId} className="flex items-center gap-2 text-xs bg-white rounded-lg border border-[#f3eee4] px-3 py-2">
+                      <span className="font-bold text-[#473f36] w-12 flex-shrink-0">{h.name}</span>
+                      <span className="flex-1 min-w-0 truncate text-[11px] text-[#a99d8c]">{h.ruleName}{h.previousSeason ? '（前季）' : ''}</span>
+                      <span className="text-[#82786b] whitespace-nowrap">{h.rank}位 / {h.playerCount}人中 <span className="text-[#a99d8c]">・{h.gameCount}戦</span></span>
+                      <span className={`font-black tabular-nums whitespace-nowrap ${h.kind === 'excluded' ? 'text-[#a99d8c]' : h.point > 0 ? 'text-blue-600' : h.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(h.point)}</span>
                       {h.kind === 'converted' && (
                         <span className="text-[10px] font-bold text-amber-500 whitespace-nowrap border border-amber-200 rounded px-1">生涯へは換算 {fmtPt(h.convertedPoint ?? 0)}（参考）</span>
                       )}
-                      {h.kind === 'excluded' && <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap border border-slate-200 rounded px-1">別大会・生涯pt加算なし</span>}
+                      {h.kind === 'excluded' && <span className="text-[10px] font-bold text-[#a99d8c] whitespace-nowrap border border-[#e7dfd1] rounded px-1">別大会・生涯pt加算なし</span>}
                     </div>
                   ))}
                 </div>
               )}
               <div className="mt-5">
-                <h4 className="text-sm font-black text-slate-700 mb-1">🀄 半荘ごとの成績（全大会）</h4>
-                <p className="text-[10px] text-slate-400 mb-2">各半荘のポイントは、その大会のルールでの実際の値です（最高位戦ルールへの換算はしていません）。</p>
+                <h4 className="text-sm font-black text-[#473f36] mb-1">🀄 半荘ごとの成績（全大会）</h4>
+                <p className="text-[10px] text-[#a99d8c] mb-2">各半荘のポイントは、その大会のルールでの実際の値です（最高位戦ルールへの換算はしていません）。</p>
                 {renderHanchanGroups(lifetimeHanchanGroups, 'lt-')}
               </div>
               {lifeScope === 'all' ? (
-                <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">※ 生涯ポイントのうち、最高位戦ルール以外の大会の分は、最高位戦ルール（持ち点に対する素点差＋順位点 30／10／−10／−30、オカ・供託なし）に換算した「あくまで参考の値」です。年間チャンピオン戦などの別大会は生涯ポイントに含めません。各大会・各半荘に表示しているポイントは、すべてその大会のルールでの実際の値です。着順分布・平均着順・半荘数は、全ての大会の記録を含みます。</p>
+                <p className="text-[10px] text-[#82786b] mt-3 leading-relaxed">※ 生涯ポイントのうち、最高位戦ルール以外の大会の分は、最高位戦ルール（持ち点に対する素点差＋順位点 30／10／−10／−30、オカ・供託なし）に換算した「あくまで参考の値」です。年間チャンピオン戦などの別大会は生涯ポイントに含めません。各大会・各半荘に表示しているポイントは、すべてその大会のルールでの実際の値です。着順分布・平均着順・半荘数は、全ての大会の記録を含みます。</p>
               ) : (
-                <p className="text-[10px] text-slate-500 mt-3 leading-relaxed">※ 最高位戦ルールの大会のみの表示です。各大会・各半荘のポイントは実際の値です。</p>
+                <p className="text-[10px] text-[#82786b] mt-3 leading-relaxed">※ 最高位戦ルールの大会のみの表示です。各大会・各半荘のポイントは実際の値です。</p>
               )}
               </>
               ) : (
-                <p className="text-sm text-slate-400 text-center py-6">最高位戦ルールの大会の記録がありません。</p>
+                <p className="text-sm text-[#a99d8c] text-center py-6">最高位戦ルールの大会の記録がありません。</p>
               )}
             </section>
           )}
@@ -2292,32 +2292,32 @@ const RulesDocCard = () => (
     href={RULES_DOC_URL}
     target="_blank"
     rel="noopener noreferrer"
-    className="group flex items-center gap-4 bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/30 rounded-2xl p-4 md:p-5 shadow-sm transition"
+    className="group flex items-center gap-4 bg-white border border-[#e7dfd1] hover:border-[#ef937c] hover:bg-[#fdf1ed]/30 rounded-2xl p-4 md:p-5 shadow-sm transition"
     title="大会規定（Google ドキュメント）を別タブで開きます"
   >
-    <span className="w-11 h-11 flex-shrink-0 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center text-xl">📖</span>
+    <span className="w-11 h-11 flex-shrink-0 rounded-xl bg-[#fdf1ed] text-[#c8361e] flex items-center justify-center text-xl">📖</span>
     <span className="flex-1 min-w-0">
-      <span className="block font-black text-slate-800">大会規定</span>
-      <span className="block text-xs text-slate-500 mt-0.5">
+      <span className="block font-black text-[#2d2721]">大会規定</span>
+      <span className="block text-xs text-[#82786b] mt-0.5">
         競技ルール・順位点・チョンボ・出場権などの取り決めはこちらにまとめています。
       </span>
     </span>
-    <span className="flex-shrink-0 text-[11px] font-bold text-indigo-600 whitespace-nowrap">別タブで開く ↗</span>
+    <span className="flex-shrink-0 text-[11px] font-bold text-[#c8361e] whitespace-nowrap">別タブで開く ↗</span>
   </a>
 );
 
 // 謝辞つきフッター（全タブ共通）
 const SiteFooter = () => (
-  <footer className="mt-12 border-t border-slate-200 bg-white">
+  <footer className="mt-12 border-t border-[#e7dfd1] bg-white">
     <div className="max-w-5xl mx-auto px-4 md:px-6 py-8">
-      <h2 className="text-sm font-black text-slate-700">謝辞</h2>
-      <p className="text-xs text-slate-500 leading-relaxed mt-2">
+      <h2 className="text-sm font-black text-[#473f36]">謝辞</h2>
+      <p className="text-xs text-[#82786b] leading-relaxed mt-2">
         本サイトは、{CREDIT_AUTHOR}が制作・公開されている麻雀大会運営ツール{' '}
         <a
           href={CREDIT_TOOL_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="font-bold text-indigo-600 hover:text-indigo-700 underline underline-offset-2"
+          className="font-bold text-[#c8361e] hover:text-[#a62b17] underline underline-offset-2"
         >
           {CREDIT_TOOL_NAME}
         </a>
@@ -2325,16 +2325,16 @@ const SiteFooter = () => (
         卓組の管理からポイント集計まで、大会運営の流れを分かりやすい形にまとめてくださったおかげで、
         この大会の運営システムを形にすることができました。素晴らしいツールを公開してくださっていることに、心より感謝申し上げます。
       </p>
-      <p className="text-xs text-slate-500 leading-relaxed mt-3">
+      <p className="text-xs text-[#82786b] leading-relaxed mt-3">
         また、大会の運営・進行にご協力いただいている全ての皆さま、そしてご参加いただく選手の皆さまに厚く御礼申し上げます。
       </p>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-4 border-t border-slate-100">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 pt-4 border-t border-[#f3eee4]">
         <a
           href={RULES_DOC_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700"
+          className="text-[11px] font-bold text-[#c8361e] hover:text-[#a62b17]"
         >
           📖 大会規定
         </a>
@@ -2342,12 +2342,12 @@ const SiteFooter = () => (
           href={CREDIT_TOOL_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[11px] font-bold text-slate-500 hover:text-slate-700"
+          className="text-[11px] font-bold text-[#82786b] hover:text-[#473f36]"
         >
           🀄 {CREDIT_TOOL_NAME}
         </a>
         <span className="flex-1" />
-        <span className="text-[11px] text-slate-400">{APP_TITLE} ／ {RULE_NAME}</span>
+        <span className="text-[11px] text-[#a99d8c]">{APP_TITLE} ／ {RULE_NAME}</span>
       </div>
     </div>
   </footer>
@@ -5713,7 +5713,7 @@ export default function Home() {
     reader.readAsText(file);
   };
 
-  if (!isLoaded || status === 'loading') return <div className="min-h-screen bg-slate-100 flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
+  if (!isLoaded || status === 'loading') return <div className="min-h-screen bg-[#f3eee4] flex items-center justify-center font-bold text-lg animate-pulse">データを読み込んでいます...</div>;
 
   // ==========================================
   // データタブ用の集計（過去大会＋今大会（送信済みの卓）の全結果が対象。黒子・順位対象外の記録は除く）
@@ -6007,14 +6007,14 @@ export default function Home() {
     rose:    { head: 'from-rose-50 to-pink-50 border-rose-100', title: 'text-rose-900', chip: 'text-rose-600', sub: 'text-rose-700/80', hi: 'bg-rose-50/50', val: 'text-rose-600', bar: 'from-rose-400 to-pink-500' },
     emerald: { head: 'from-emerald-50 to-teal-50 border-emerald-100', title: 'text-emerald-900', chip: 'text-emerald-600', sub: 'text-emerald-700/80', hi: 'bg-emerald-50/50', val: 'text-emerald-600', bar: 'from-emerald-400 to-teal-500' },
     sky:     { head: 'from-sky-50 to-cyan-50 border-sky-100', title: 'text-sky-900', chip: 'text-sky-600', sub: 'text-sky-700/80', hi: 'bg-sky-50/50', val: 'text-sky-600', bar: 'from-sky-400 to-cyan-500' },
-    indigo:  { head: 'from-indigo-50 to-violet-50 border-indigo-100', title: 'text-indigo-900', chip: 'text-indigo-600', sub: 'text-indigo-700/80', hi: 'bg-indigo-50/50', val: 'text-indigo-600', bar: 'from-indigo-400 to-violet-500' },
-    slate:   { head: 'from-slate-100 to-zinc-50 border-slate-200', title: 'text-slate-800', chip: 'text-slate-600', sub: 'text-slate-500', hi: 'bg-slate-50', val: 'text-slate-700', bar: 'from-slate-400 to-zinc-500' },
+    indigo:  { head: 'from-[#fdf1ed] to-[#eff3f9] border-[#fbddd3]', title: 'text-[#5e190e]', chip: 'text-[#c8361e]', sub: 'text-[#a62b17]/80', hi: 'bg-[#fdf1ed]/50', val: 'text-[#c8361e]', bar: 'from-[#e5664c] to-[#42649a]' },
+    slate:   { head: 'from-[#f3eee4] to-zinc-50 border-[#e7dfd1]', title: 'text-[#2d2721]', chip: 'text-[#625a4f]', sub: 'text-[#82786b]', hi: 'bg-[#faf7f1]', val: 'text-[#473f36]', bar: 'from-[#a99d8c] to-zinc-500' },
   } as const;
   const medalClass = (n: number) =>
     n === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white'
-    : n === 2 ? 'bg-gradient-to-br from-slate-300 to-slate-400 text-white'
+    : n === 2 ? 'bg-gradient-to-br from-[#d4c9b7] to-[#a99d8c] text-white'
     : n === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white'
-    : 'bg-slate-100 text-slate-500';
+    : 'bg-[#f3eee4] text-[#82786b]';
 
   const renderDataCard = (opts: { icon: string; title: string; desc: string; theme: keyof typeof DATA_THEMES; rows: DataRow[]; emptyText?: string; limit?: number; compact?: boolean }) => {
     const th = DATA_THEMES[opts.theme];
@@ -6022,34 +6022,34 @@ export default function Home() {
     const rowH = opts.compact ? 'min-h-[64px]' : 'min-h-[84px]';
     const fillers = Math.max(0, limit - opts.rows.length);
     return (
-      <section className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-full">
+      <section className="bg-white rounded-2xl shadow-sm border border-[#e7dfd1] overflow-hidden flex flex-col h-full">
         <div className={`px-5 py-4 bg-gradient-to-r ${th.head} border-b min-h-[84px]`}>
           <h3 className={`text-lg font-black ${th.title} flex items-center gap-2`}>{opts.icon} {opts.title} <span className={`text-xs font-bold ${th.chip} bg-white/70 px-2 py-0.5 rounded-full`}>TOP{limit}</span></h3>
           <p className={`text-[11px] ${th.sub} mt-0.5`}>{opts.desc}</p>
         </div>
-        <ol className="divide-y divide-slate-100 flex-1 flex flex-col">
+        <ol className="divide-y divide-[#f3eee4] flex-1 flex flex-col">
           {opts.rows.map(x => (
             <li key={x.key} className={`px-4 flex-1 ${rowH} flex flex-col justify-center ${x.rankNo === 1 ? th.hi : ''}`}>
               <div className="flex items-center gap-3">
                 <span className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-black text-sm shadow-sm ${medalClass(x.rankNo)}`}>{x.rankNo}</span>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-slate-800 truncate"><PlayerLabel name={x.name} /></div>
-                  <div className="text-[11px] text-slate-400">{x.sub}</div>
+                  <div className="font-bold text-[#2d2721] truncate"><PlayerLabel name={x.name} /></div>
+                  <div className="text-[11px] text-[#a99d8c]">{x.sub}</div>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-xl font-black tabular-nums ${x.valueClass || th.val}`}>{x.value}</span>
-                  {x.unit && <span className="text-xs font-bold text-slate-400 ml-0.5">{x.unit}</span>}
+                  {x.unit && <span className="text-xs font-bold text-[#a99d8c] ml-0.5">{x.unit}</span>}
                 </div>
               </div>
               {x.bar !== undefined && (
-                <div className="mt-2 ml-12 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                <div className="mt-2 ml-12 h-1.5 rounded-full bg-[#f3eee4] overflow-hidden">
                   <div className={`h-full rounded-full bg-gradient-to-r ${th.bar}`} style={{ width: `${Math.max(0, Math.min(1, x.bar)) * 100}%` }} />
                 </div>
               )}
             </li>
           ))}
           {Array.from({ length: fillers }).map((_, i) => (
-            <li key={`ph-${i}`} className={`flex items-center justify-center flex-1 ${rowH} text-sm text-slate-300`}>{i === 0 && opts.rows.length === 0 && opts.emptyText ? opts.emptyText : '—'}</li>
+            <li key={`ph-${i}`} className={`flex items-center justify-center flex-1 ${rowH} text-sm text-[#d4c9b7]`}>{i === 0 && opts.rows.length === 0 && opts.emptyText ? opts.emptyText : '—'}</li>
           ))}
         </ol>
       </section>
@@ -6087,10 +6087,10 @@ export default function Home() {
 
   // タブボタン（ヘッダー用）。選択中は白いカード調＋タブごとの色のドット、それ以外は控えめな文字
   const TAB_DOTS: Record<string, string> = {
-    'bg-indigo-600': 'bg-gradient-to-br from-indigo-400 to-indigo-600',
+    'bg-[#c8361e]': 'bg-gradient-to-br from-[#e5664c] to-[#c8361e]',
     'bg-teal-600': 'bg-gradient-to-br from-teal-400 to-emerald-500',
     'bg-amber-600': 'bg-gradient-to-br from-amber-300 to-orange-500',
-    'bg-fuchsia-600': 'bg-gradient-to-br from-fuchsia-400 to-purple-600',
+    'bg-[#9a7022]': 'bg-gradient-to-br from-[#d3a23f] to-[#31507f]',
     'bg-rose-600': 'bg-gradient-to-br from-rose-400 to-red-500',
     'bg-yellow-600': 'bg-gradient-to-br from-amber-300 to-yellow-500',
   };
@@ -6099,7 +6099,7 @@ export default function Home() {
     return (
       <button
         onClick={() => setActiveTab(key)}
-        className={`flex items-center gap-1.5 px-3 lg:px-4 h-11 font-bold text-[13px] whitespace-nowrap transition border-b-[3px] ${on ? 'text-white border-amber-400 bg-white/[0.08]' : 'text-slate-400 hover:text-white border-transparent hover:bg-white/[0.05]'}`}
+        className={`flex items-center gap-1.5 px-3 lg:px-4 h-11 font-bold text-[13px] whitespace-nowrap transition border-b-[3px] ${on ? 'text-white border-amber-400 bg-white/[0.08]' : 'text-[#a99d8c] hover:text-white border-transparent hover:bg-white/[0.05]'}`}
       >
         {label}
       </button>
@@ -6108,12 +6108,12 @@ export default function Home() {
 
   // スマホ用の下部ナビの項目
   const mobileNavItems: { key: typeof activeTab; icon: string; label: string; color: string }[] = [
-    { key: 'tournament', icon: '🀄', label: '大会進行', color: 'bg-indigo-400' },
+    { key: 'tournament', icon: '🀄', label: '大会進行', color: 'bg-[#e5664c]' },
     { key: 'currentRanking', icon: '🏆', label: '今大会', color: 'bg-teal-400' },
-    { key: 'totalRanking', icon: '📈', label: '今季', color: 'bg-indigo-400' },
+    { key: 'totalRanking', icon: '📈', label: '今季', color: 'bg-[#e5664c]' },
     { key: 'archives', icon: '🗂️', label: '過去大会', color: 'bg-amber-400' },
-    ...(isAdmin ? [{ key: 'players' as const, icon: '👥', label: '登録', color: 'bg-indigo-400' }] : []),
-    { key: 'data', icon: '📊', label: 'データ', color: 'bg-fuchsia-400' },
+    ...(isAdmin ? [{ key: 'players' as const, icon: '👥', label: '登録', color: 'bg-[#e5664c]' }] : []),
+    { key: 'data', icon: '📊', label: 'データ', color: 'bg-[#d3a23f]' },
     ...(isAdmin ? [{ key: 'admin' as const, icon: '🛠️', label: '管理', color: 'bg-rose-400' }] : []),
     { key: 'lifetime', icon: '🏅', label: '生涯', color: 'bg-amber-300' },
   ];
@@ -6143,89 +6143,85 @@ export default function Home() {
 
   return (
     <main
-      className="min-h-screen text-slate-800 font-sans relative pb-28 md:pb-20"
+      className="min-h-screen text-[#2d2721] font-sans relative pb-28 md:pb-20"
       style={{
-        backgroundColor: '#f3f5f9',
-        backgroundImage: 'linear-gradient(rgba(15,23,42,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(15,23,42,.04) 1px, transparent 1px), linear-gradient(180deg, #e7ebff 0px, #f3f5f9 360px)',
-        backgroundSize: '36px 36px, 36px 36px, auto',
-        backgroundRepeat: 'repeat, repeat, no-repeat',
+        backgroundColor: '#f6f1e8',
+        backgroundImage: 'linear-gradient(180deg, #fbf8f2 0px, #f6f1e8 480px)',
+        backgroundRepeat: 'no-repeat',
       }}
     >
       {/* スマホ向けの共通調整: 入力欄の自動ズーム防止（16px）、タップ時の青いハイライト抑止、横スクロールの慣性など */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@600;800&family=Barlow+Condensed:wght@600;700;800&family=Inter:wght@400;600;800&family=Noto+Sans+JP:wght@400;500;700;900&display=swap');
         html { -webkit-text-size-adjust: 100%; }
         body { -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
         @media (max-width: 767px) {
           input:not([type="checkbox"]):not([type="radio"]):not([type="file"]), select, textarea { font-size: 16px !important; }
           .overflow-x-auto { -webkit-overflow-scrolling: touch; }
         }
-        /* ===== ARENA デザイン（ライトテーマ・軽量）=====
-           スコアシート風の格子の紙面に、墨色のヘッダーと金のアクセント。数字は細身のコンデンスフォント。
+        /* ===== 和モダン「墨 × 朱」デザイン（ライトテーマ・軽量）=====
+           生成りの紙に、墨色・朱・藍・金。見出しは明朝、数字は細身のコンデンス体。
            ぼかし(backdrop-filter)・多重の影・属性セレクタ・文字の発光は、重くなるので使わない */
-        main { font-family: 'Inter', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', system-ui, sans-serif; color: #121733; -webkit-font-smoothing: antialiased; }
+        main { font-family: 'Inter', 'Noto Sans JP', 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Yu Gothic UI', system-ui, sans-serif; color: #1c1814; -webkit-font-smoothing: antialiased; }
+        main h1, main h2, main h3 { font-family: 'Shippori Mincho B1', 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', serif; font-weight: 800; letter-spacing: .03em; }
         main .tabular-nums { font-family: 'Barlow Condensed', 'Inter', 'Noto Sans JP', sans-serif; font-variant-numeric: tabular-nums lining-nums; font-weight: 700; font-size: 1.1em; letter-spacing: .01em; }
-        main h2, main h3 { letter-spacing: .02em; }
 
-        /* ヘッダー: 墨色＋下端に金のストライプ */
-        main > header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; pointer-events: none; background: linear-gradient(90deg, #f5b301, #f43f5e 38%, #6366f1 70%, #22d3ee); }
+        /* ヘッダー: 墨色＋下端に朱の太線 */
+        main > header { background-image: none !important; background-color: #17120e !important; box-shadow: none !important; }
+        main > header h1 { background-image: none !important; color: #fff; -webkit-text-fill-color: #fff; letter-spacing: .12em; font-size: 1.15rem; }
+        main > header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; pointer-events: none; background: linear-gradient(90deg, #c8361e 0 72%, #b8892b 72% 100%); }
 
-        /* カード: 白＋細い罫線＋1つの影。パネルは上端に墨色の太い線 */
-        main .shadow-sm { box-shadow: 0 10px 22px -18px rgba(15,23,42,.45); }
-        main .border-slate-200 { border-color: #e2e6ef; }
-        main .bg-white.rounded-2xl, main .bg-white.rounded-3xl { background-color: #fff; border-radius: 16px; border-color: #e2e6ef; box-shadow: 0 14px 28px -22px rgba(15,23,42,.5); }
-        main .bg-white.rounded-2xl.border:not(.overflow-hidden) { border-top: 3px solid #111936; }
-        main .bg-white.rounded-xl.border { border-color: #e2e6ef; border-radius: 14px; box-shadow: 0 12px 24px -20px rgba(15,23,42,.45); }
-        main .fixed.inset-0 .bg-white { background-color: #fff; }
-        /* カード見出しの菱形マーカー（金→赤） */
-        main .bg-white.rounded-2xl > h2:first-child::before { content: ''; display: inline-block; flex-shrink: 0; width: .5em; height: .5em; margin: 0 .7rem 0 .2rem; border-radius: 2px; transform: rotate(45deg); background: linear-gradient(135deg, #f5b301, #f43f5e); vertical-align: .08em; }
+        /* カード: 生成りの白に細い罫線。影は付けず、角は小さく */
+        main .bg-white { background-color: #fffdf9; }
+        main .shadow-sm { box-shadow: none; }
+        main .bg-white.rounded-2xl, main .bg-white.rounded-3xl, main .bg-white.rounded-xl { border-radius: 10px; box-shadow: none; }
+        main .bg-white.rounded-2xl.border:not(.overflow-hidden) { border-top: 3px solid #1c1814; }
+        /* カード見出しの朱印 */
+        main .bg-white.rounded-2xl > h2:first-child::before { content: ''; display: inline-block; flex-shrink: 0; width: .55em; height: .55em; margin: 0 .65rem 0 .1rem; border-radius: 1px; background: #c8361e; vertical-align: .05em; }
 
-        /* ページ上部のバナー: 斜めのストライプ＋下端のレーシングストライプ */
-        main .relative.overflow-hidden.rounded-2xl.text-white { isolation: isolate; border-radius: 18px; border: 0; box-shadow: 0 22px 40px -26px rgba(17,25,54,.9); }
+        /* ページ上部のバナー: 青海波（せいがいは）の模様＋下端に朱の線 */
+        main .relative.overflow-hidden.rounded-2xl.text-white { isolation: isolate; border-radius: 10px; border: 0; box-shadow: none; border-bottom: 4px solid #c8361e; }
         main .relative.overflow-hidden.rounded-2xl.text-white::before {
           content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none;
-          background-image: radial-gradient(circle at 100% 0%, rgba(255,255,255,.22), transparent 45%), repeating-linear-gradient(135deg, rgba(255,255,255,.06) 0 2px, transparent 2px 16px);
+          background-image:
+            radial-gradient(circle at 50% 100%, transparent 0 34%, rgba(255,255,255,.14) 35% 37%, transparent 38% 52%, rgba(255,255,255,.14) 53% 55%, transparent 56% 70%, rgba(255,255,255,.14) 71% 73%, transparent 74%),
+            radial-gradient(circle at 50% 100%, transparent 0 34%, rgba(255,255,255,.14) 35% 37%, transparent 38% 52%, rgba(255,255,255,.14) 53% 55%, transparent 56% 70%, rgba(255,255,255,.14) 71% 73%, transparent 74%);
+          background-size: 46px 23px, 46px 23px; background-position: 0 0, 23px 11.5px;
+          -webkit-mask-image: linear-gradient(100deg, transparent 25%, #000 100%); mask-image: linear-gradient(100deg, transparent 25%, #000 100%);
         }
-        main .relative.overflow-hidden.rounded-2xl.text-white::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; z-index: 1; pointer-events: none; background: linear-gradient(90deg, #f5b301, #f43f5e 40%, #6366f1 72%, #22d3ee); }
         main .relative.overflow-hidden.rounded-2xl.text-white > *:not(.absolute) { position: relative; z-index: 1; }
-        main .relative.overflow-hidden.rounded-2xl.text-white h2 { font-size: clamp(1.5rem, 1.1rem + 1.4vw, 2.2rem); letter-spacing: .06em; font-weight: 900; }
+        main .relative.overflow-hidden.rounded-2xl.text-white h2 { font-size: clamp(1.6rem, 1.2rem + 1.4vw, 2.3rem); letter-spacing: .12em; }
 
-        /* 表: 墨色の見出し＋金の下線、行のホバー */
-        main .bg-slate-900.rounded-t-2xl, main thead.bg-slate-900 { background-image: none; background-color: #0b1020; }
-        main thead.bg-slate-900 th { box-shadow: inset 0 -2px 0 #f5b301; letter-spacing: .05em; }
+        /* 表: 墨色の見出し＋朱の下線、行のホバー */
+        main thead.bg-\\[\\#1c1814\\] th { box-shadow: inset 0 -2px 0 #c8361e; letter-spacing: .06em; }
         main thead th { letter-spacing: .04em; }
         main tbody tr { transition: background-color .12s ease; }
-        main tbody tr:hover { background-color: rgba(79,70,229,.055); }
+        main tbody tr:hover { background-color: rgba(200,54,30,.05); }
 
         /* 入力欄 */
-        main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), main select, main textarea { border-radius: 10px; border: 1px solid #cdd4e6; background-color: #fff; transition: border-color .14s ease, box-shadow .14s ease; }
-        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,.2); }
+        main input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="range"]), main select, main textarea { border-radius: 8px; border: 1px solid #d4c9b7; background-color: #fffdf9; transition: border-color .14s ease, box-shadow .14s ease; }
+        main input:not([type="checkbox"]):not([type="radio"]):focus, main select:focus, main textarea:focus { outline: none; border-color: #c8361e; box-shadow: 0 0 0 3px rgba(200,54,30,.18); }
 
-        /* ボタン: 色ごとに落ち着いたグラデーション（影は1つだけ） */
-        main button { transition: transform .14s ease, filter .14s ease, background-color .14s ease, box-shadow .14s ease, border-color .14s ease; }
-        main button.bg-indigo-600:not(:disabled) { background-image: linear-gradient(135deg, #3730a3, #4f46e5 60%, #6366f1); box-shadow: 0 8px 16px -8px rgba(55,48,163,.8); }
-        main button.bg-green-500:not(:disabled), main button.bg-emerald-600:not(:disabled), main button.bg-teal-600:not(:disabled), main button.bg-teal-500:not(:disabled) { background-image: linear-gradient(135deg, #047857, #10b981); box-shadow: 0 8px 16px -8px rgba(4,120,87,.8); }
-        main button.bg-amber-500:not(:disabled), main button.bg-amber-600:not(:disabled) { background-image: linear-gradient(135deg, #f59e0b, #ea580c); box-shadow: 0 8px 16px -8px rgba(234,88,12,.8); }
-        main button.bg-red-500:not(:disabled), main button.bg-red-600:not(:disabled) { background-image: linear-gradient(135deg, #e11d48, #f43f5e); box-shadow: 0 8px 16px -8px rgba(225,29,72,.8); }
-        main button.bg-slate-800:not(:disabled), main button.bg-slate-900:not(:disabled) { background-image: linear-gradient(135deg, #0b1020, #1e2a5a); box-shadow: 0 8px 16px -8px rgba(11,16,32,.9); }
-        main button.bg-indigo-600:not(:disabled):hover, main button.bg-emerald-600:not(:disabled):hover, main button.bg-teal-600:not(:disabled):hover, main button.bg-amber-500:not(:disabled):hover, main button.bg-amber-600:not(:disabled):hover, main button.bg-slate-800:not(:disabled):hover, main button.bg-slate-900:not(:disabled):hover { filter: brightness(1.08); transform: translateY(-1px); }
-        main button:not(:disabled):active { transform: scale(.975); }
+        /* ボタン */
+        main button { transition: transform .12s ease, filter .12s ease, background-color .12s ease, border-color .12s ease; }
+        main button:not(:disabled):hover { filter: brightness(1.07); }
+        main button:not(:disabled):active { transform: scale(.97); }
 
         /* 1〜3位のメダル */
-        main .rounded-full.bg-gradient-to-br.from-yellow-300 { box-shadow: 0 0 0 3px rgba(251,191,36,.28); }
-        main .rounded-full.bg-gradient-to-br.from-slate-300 { box-shadow: 0 0 0 3px rgba(148,163,184,.25); }
-        main .rounded-full.bg-gradient-to-br.from-orange-300 { box-shadow: 0 0 0 3px rgba(251,146,60,.25); }
+        main .rounded-full.bg-gradient-to-br.from-yellow-300 { box-shadow: 0 0 0 3px rgba(184,137,43,.28); }
+        main .rounded-full.bg-gradient-to-br.from-\\[\\#d4c9b7\\] { box-shadow: 0 0 0 3px rgba(130,120,107,.25); }
+        main .rounded-full.bg-gradient-to-br.from-orange-300 { box-shadow: 0 0 0 3px rgba(200,54,30,.22); }
 
         /* モーダル */
-        main .fixed.inset-0 > .bg-white.rounded-2xl, main .fixed.inset-0 > .bg-white.rounded-t-3xl { border: 0; border-radius: 18px; box-shadow: 0 30px 70px -20px rgba(11,16,32,.6); }
+        main .fixed.inset-0 > .bg-white.rounded-2xl, main .fixed.inset-0 > .bg-white.rounded-t-3xl { border: 0; border-radius: 12px; box-shadow: 0 30px 70px -22px rgba(28,24,20,.6); }
 
-        ::selection { background: #fde68a; color: #1c1917; }
-        html { scrollbar-width: thin; scrollbar-color: #b6bfd6 transparent; }
+        ::selection { background: #f7bcab; color: #1c1814; }
+        html { scrollbar-width: thin; scrollbar-color: #c9bda9 transparent; }
         .no-scrollbar { scrollbar-width: none; -ms-overflow-style: none; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         ::-webkit-scrollbar { width: 10px; height: 10px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #b6bfd6; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
+        ::-webkit-scrollbar-thumb { background: #c9bda9; border-radius: 999px; border: 2px solid transparent; background-clip: content-box; }
       `}</style>
       
       {isResetting && (
@@ -6242,8 +6238,8 @@ export default function Home() {
       {showPlayerLogin && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowPlayerLogin(false)}>
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-black text-slate-800 mb-1">🀄 選手ログイン</h2>
-            <p className="text-xs text-slate-500 mb-4">配布されたログインコードを入力してください。</p>
+            <h2 className="text-lg font-black text-[#2d2721] mb-1">🀄 選手ログイン</h2>
+            <p className="text-xs text-[#82786b] mb-4">配布されたログインコードを入力してください。</p>
             <input
               type="text"
               value={loginCodeInput}
@@ -6251,12 +6247,12 @@ export default function Home() {
               onKeyDown={(e) => { if (e.key === 'Enter') handlePlayerLogin(); }}
               placeholder="例: A3K7QZ"
               autoFocus
-              className="w-full p-3 border-2 border-slate-200 focus:border-teal-500 rounded-lg text-center text-2xl font-mono font-bold tracking-widest uppercase outline-none"
+              className="w-full p-3 border-2 border-[#e7dfd1] focus:border-teal-500 rounded-lg text-center text-2xl font-mono font-bold tracking-widest uppercase outline-none"
             />
             {loginError && <p className="text-xs font-bold text-red-600 mt-2">{loginError}</p>}
             <div className="flex gap-2 mt-4">
-              <button onClick={() => setShowPlayerLogin(false)} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-slate-100 hover:bg-slate-200 text-slate-600 transition">キャンセル</button>
-              <button onClick={handlePlayerLogin} disabled={!loginCodeInput.trim()} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-teal-600 hover:bg-teal-700 disabled:bg-slate-200 disabled:text-slate-400 text-white transition">ログイン</button>
+              <button onClick={() => setShowPlayerLogin(false)} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f] transition">キャンセル</button>
+              <button onClick={handlePlayerLogin} disabled={!loginCodeInput.trim()} className="flex-1 py-2.5 rounded-lg font-bold text-sm bg-teal-600 hover:bg-teal-700 disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] text-white transition">ログイン</button>
             </div>
           </div>
         </div>
@@ -6265,14 +6261,14 @@ export default function Home() {
       {/* ========== ヘッダー ==========
           スマホ: 1段目=タイトル+ログイン、2段目=横スクロールの操作ボタン。画面切替は下部ナビで行う
           PC    : 従来どおり1行（画面上部に固定） */}
-      <header className="bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-950 text-white shadow-lg shadow-indigo-950/25 relative md:sticky md:top-0 z-40">
+      <header className="bg-gradient-to-r from-[#100d0a] via-[#3b0f08] to-[#100d0a] text-white shadow-lg shadow-[#3b0f08]/25 relative md:sticky md:top-0 z-40">
         <div className="max-w-7xl mx-auto px-3 md:px-4 py-2 md:py-0 flex flex-wrap items-center gap-x-3 gap-y-2 md:gap-x-4 md:gap-y-0">
           {/* タイトル */}
           <div className="order-1 min-w-0 flex-1 mr-1 md:h-12 flex items-center gap-2.5">
             <span className="flex-shrink-0 w-9 h-10 rounded-md bg-gradient-to-b from-amber-50 to-amber-200 border-b-[5px] border-emerald-700 flex items-center justify-center text-lg shadow ring-1 ring-black/20" aria-hidden="true">🀄</span>
             <div className="min-w-0 leading-tight">
-            <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap bg-gradient-to-r from-white via-indigo-100 to-indigo-300 bg-clip-text text-transparent">{APP_TITLE}</h1>
-            <p className="text-[10px] text-indigo-300/70 whitespace-nowrap">{RULE_NAME}</p>
+            <h1 className="text-[15px] sm:text-lg lg:text-xl font-bold tracking-wide truncate md:whitespace-nowrap bg-gradient-to-r from-white via-[#fbddd3] to-[#ef937c] bg-clip-text text-transparent">{APP_TITLE}</h1>
+            <p className="text-[10px] text-[#ef937c]/70 whitespace-nowrap">{RULE_NAME}</p>
             </div>
           </div>
 
@@ -6282,12 +6278,12 @@ export default function Home() {
           {/* タブ（PCのみ。スマホは下部ナビ） */}
           <div className="hidden md:flex order-4 h-11 items-center flex-shrink-0">
           <nav className="flex flex-shrink-0 items-stretch h-11 gap-0.5">
-            {tabBtn('tournament', '大会進行', 'bg-indigo-600')}
+            {tabBtn('tournament', '大会進行', 'bg-[#c8361e]')}
             {tabBtn('currentRanking', '今大会成績', 'bg-teal-600')}
-            {tabBtn('totalRanking', '今季成績', 'bg-indigo-600')}
+            {tabBtn('totalRanking', '今季成績', 'bg-[#c8361e]')}
             {tabBtn('archives', '過去大会', 'bg-amber-600')}
-            {isAdmin && tabBtn('players', '新規登録', 'bg-indigo-600')}
-            {tabBtn('data', 'データ', 'bg-fuchsia-600')}
+            {isAdmin && tabBtn('players', '新規登録', 'bg-[#c8361e]')}
+            {tabBtn('data', 'データ', 'bg-[#9a7022]')}
             {isAdmin && tabBtn('admin', '管理用データ', 'bg-rose-600')}
             {tabBtn('lifetime', '生涯成績', 'bg-yellow-600')}
           </nav>
@@ -6300,7 +6296,7 @@ export default function Home() {
               href={RULES_DOC_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
+              className="md:order-5 flex-shrink-0 text-xs md:text-xs font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(214,54,31,0.45)] ring-1 ring-white/15 text-[#f3eee4] px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap"
               title="大会規定（Google ドキュメント）を別タブで開きます"
             >
               📖 大会規定
@@ -6311,9 +6307,9 @@ export default function Home() {
             {/* 管理ツール */}
             {isAdmin && (
               <div className="md:hidden flex-shrink-0 flex gap-2 items-center">
-                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
-                <button onClick={handleExportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
-                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
+                <button onClick={() => { setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(214,54,31,0.45)] ring-1 ring-white/15 text-[#f3eee4] px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="次の回戦までの休憩時間を設定します">⏱ 休憩設定</button>
+                <button onClick={handleExportBackup} className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(214,54,31,0.45)] ring-1 ring-white/15 text-[#f3eee4] px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap" title="データをファイルとして保存します">💾 バックアップ</button>
+                <label className="text-xs md:text-xs bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(214,54,31,0.45)] ring-1 ring-white/15 text-[#f3eee4] px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition cursor-pointer whitespace-nowrap" title="保存したファイルから復元します">
                   📂 復元
                   <input type="file" accept=".json" className="hidden" onChange={handleDataImport} />
                 </label>
@@ -6325,22 +6321,22 @@ export default function Home() {
               <div className="hidden md:block md:order-5 relative flex-shrink-0">
                 <button
                   onClick={() => setShowAdminMenu(v => !v)}
-                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(165,180,252,0.55)] ring-1 ring-white/15 text-slate-100 px-3 py-1.5 rounded-full transition whitespace-nowrap"
+                  className="text-[11px] font-bold bg-white/[0.08] hover:bg-white/[0.18] hover:shadow-[0_0_16px_rgba(214,54,31,0.45)] ring-1 ring-white/15 text-[#f3eee4] px-3 py-1.5 rounded-full transition whitespace-nowrap"
                   aria-expanded={showAdminMenu}
                 >⚙ 管理 {showAdminMenu ? '▴' : '▾'}</button>
                 {showAdminMenu && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowAdminMenu(false)} aria-hidden="true" />
-                    <div className="absolute right-0 top-full mt-2 w-52 z-50 rounded-xl bg-slate-900 ring-1 ring-white/15 shadow-2xl shadow-black/40 p-1.5 space-y-0.5">
+                    <div className="absolute right-0 top-full mt-2 w-52 z-50 rounded-xl bg-[#1c1814] ring-1 ring-white/15 shadow-2xl shadow-black/40 p-1.5 space-y-0.5">
                       <button
                         onClick={() => { setShowAdminMenu(false); setBreakInput(String(timerState.breakMinutes)); setShowTimerSettings(true); }}
-                        className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
+                        className="w-full text-left text-xs font-bold text-[#e7dfd1] hover:bg-white/10 px-3 py-2 rounded-lg transition"
                       >⏱ 休憩設定</button>
                       <button
                         onClick={() => { setShowAdminMenu(false); handleExportBackup(); }}
-                        className="w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition"
+                        className="w-full text-left text-xs font-bold text-[#e7dfd1] hover:bg-white/10 px-3 py-2 rounded-lg transition"
                       >💾 バックアップ</button>
-                      <label className="block w-full text-left text-xs font-bold text-slate-200 hover:bg-white/10 px-3 py-2 rounded-lg transition cursor-pointer">
+                      <label className="block w-full text-left text-xs font-bold text-[#e7dfd1] hover:bg-white/10 px-3 py-2 rounded-lg transition cursor-pointer">
                         📂 復元
                         <input type="file" accept=".json" className="hidden" onChange={(e) => { setShowAdminMenu(false); handleDataImport(e); }} />
                       </label>
@@ -6362,7 +6358,7 @@ export default function Home() {
                     >
                       👤 {loggedInPlayer.name}（個人成績）
                     </button>
-                    <button onClick={handlePlayerLogout} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
+                    <button onClick={handlePlayerLogout} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-[#f3eee4] hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
                   </>
                 ) : (
                   <button onClick={() => { setShowPlayerLogin(true); setLoginError(''); setLoginCodeInput(''); }} className="text-xs md:text-xs bg-gradient-to-r from-teal-400 to-emerald-500 hover:brightness-110 shadow-[0_0_20px_rgba(45,212,191,0.55)] ring-1 ring-white/25 text-white px-4 md:px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">
@@ -6377,24 +6373,24 @@ export default function Home() {
           <div className="order-2 flex-shrink-0 flex gap-2 items-center md:h-12">
             {session ? (
               <>
-                <span className="text-[11px] font-bold text-slate-300 whitespace-nowrap hidden sm:inline">
+                <span className="text-[11px] font-bold text-[#d4c9b7] whitespace-nowrap hidden sm:inline">
                   {session.user?.name}{isAdmin && ' (管理者)'}
                 </span>
-                {isAdmin && <span className="sm:hidden text-[10px] font-bold bg-indigo-600 px-1.5 py-0.5 rounded">管理者</span>}
-                <button onClick={() => signOut()} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-slate-100 hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
+                {isAdmin && <span className="sm:hidden text-[10px] font-bold bg-[#c8361e] px-1.5 py-0.5 rounded">管理者</span>}
+                <button onClick={() => signOut()} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-[#f3eee4] hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 hover:brightness-110 shadow-[0_0_20px_rgba(217,70,239,0.55)] ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-[#d9452b] via-[#42649a] to-[#b8892b] hover:brightness-110 shadow-[0_0_20px_rgba(217,70,239,0.55)] ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
             )}
           </div>
         </div>
         {/* アクセントライン */}
-        <div className="h-[3px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-amber-400 shadow-[0_0_18px_rgba(217,70,239,0.85)]" />
+        <div className="h-[3px] bg-gradient-to-r from-[#d9452b] via-[#b8892b] to-amber-400 shadow-[0_0_18px_rgba(217,70,239,0.85)]" />
       </header>
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
       <nav
-        className="md:hidden fixed inset-x-3 z-40 rounded-[1.4rem] bg-slate-950/95 ring-1 ring-white/[0.12] shadow-[0_14px_36px_rgba(2,6,23,0.5)]"
+        className="md:hidden fixed inset-x-3 z-40 rounded-[1.4rem] bg-[#100d0a]/95 ring-1 ring-white/[0.12] shadow-[0_14px_36px_rgba(2,6,23,0.5)]"
         style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.75rem)' }}
         aria-label="画面の切り替え"
       >
@@ -6405,7 +6401,7 @@ export default function Home() {
               <button
                 key={it.key}
                 onClick={() => { setActiveTab(it.key); if (typeof window !== 'undefined') window.scrollTo({ top: 0 }); }}
-                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] rounded-2xl transition ${on ? 'text-white bg-white/[0.12] ring-1 ring-white/15 shadow-[0_0_18px_rgba(129,140,248,0.5)]' : 'text-slate-400 active:text-white'}`}
+                className={`relative flex flex-col items-center justify-center gap-0.5 py-2 min-h-[54px] rounded-2xl transition ${on ? 'text-white bg-white/[0.12] ring-1 ring-white/15 shadow-[0_0_18px_rgba(129,140,248,0.5)]' : 'text-[#a99d8c] active:text-white'}`}
                 aria-current={on ? 'page' : undefined}
               >
                 <span className="text-xl leading-none">{it.icon}</span>
@@ -6432,16 +6428,16 @@ export default function Home() {
       {showTimerSettings && isAdmin && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowTimerSettings(false)}>
           <div className="bg-white w-full sm:max-w-sm rounded-t-3xl sm:rounded-2xl shadow-2xl p-5 sm:p-6 max-h-[92vh] overflow-y-auto" style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }} onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-black text-slate-800 mb-1">⏱ 休憩時間・タイマー設定</h2>
-            <p className="text-xs text-slate-500 mb-4 leading-relaxed">2回戦以降は「前の回戦の全卓が送信された瞬間」からこの時間後が開始時刻になります。</p>
+            <h2 className="text-lg font-black text-[#2d2721] mb-1">⏱ 休憩時間・タイマー設定</h2>
+            <p className="text-xs text-[#82786b] mb-4 leading-relaxed">2回戦以降は「前の回戦の全卓が送信された瞬間」からこの時間後が開始時刻になります。</p>
 
-            <label className="block text-xs font-bold text-slate-600 mb-1">休憩時間（分）</label>
+            <label className="block text-xs font-bold text-[#625a4f] mb-1">休憩時間（分）</label>
             <div className="flex gap-2 mb-1">
               <input
                 type="number" min="0" max="60" step="1"
                 value={breakInput}
                 onChange={(e) => setBreakInput(e.target.value)}
-                className="flex-1 p-2.5 border-2 border-slate-200 focus:border-indigo-500 rounded-lg text-center text-xl font-black outline-none"
+                className="flex-1 p-2.5 border-2 border-[#e7dfd1] focus:border-[#d9452b] rounded-lg text-center text-xl font-black outline-none"
               />
               <button
                 onClick={() => {
@@ -6458,21 +6454,21 @@ export default function Home() {
                       : prev.startAts,
                   }));
                 }}
-                className="px-4 rounded-lg font-bold text-sm bg-indigo-600 hover:bg-indigo-700 text-white transition"
+                className="px-4 rounded-lg font-bold text-sm bg-[#c8361e] hover:bg-[#a62b17] text-white transition"
               >設定</button>
             </div>
-            <p className="text-[11px] text-slate-400 mb-5">現在: {timerState.breakMinutes}分{activeTimer ? '（動いているタイマーにも反映されます）' : ''}</p>
+            <p className="text-[11px] text-[#a99d8c] mb-5">現在: {timerState.breakMinutes}分{activeTimer ? '（動いているタイマーにも反映されます）' : ''}</p>
 
             {activeTimer ? (
               <div className="border-t pt-4">
-                <p className="text-xs font-bold text-slate-600 mb-1">いまのタイマー（{activeTimer.round}回戦 ／ 開始 {formatClock(activeTimer.startAt)}）</p>
-                <p className="text-[11px] text-slate-400 mb-2">早く進んでいる・遅れているときの微調整</p>
+                <p className="text-xs font-bold text-[#625a4f] mb-1">いまのタイマー（{activeTimer.round}回戦 ／ 開始 {formatClock(activeTimer.startAt)}）</p>
+                <p className="text-[11px] text-[#a99d8c] mb-2">早く進んでいる・遅れているときの微調整</p>
                 <div className="grid grid-cols-4 gap-2 mb-2">
                   {[-5, -1, 1, 5].map(m => (
                     <button
                       key={m}
                       onClick={() => updateTimer(prev => ({ ...prev, startAts: { ...prev.startAts, [activeTimer.round]: activeTimer.startAt + m * 60 * 1000 } }))}
-                      className="py-2 rounded-lg font-black text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                      className="py-2 rounded-lg font-black text-sm bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#473f36] transition"
                     >{m > 0 ? `+${m}` : m}分</button>
                   ))}
                 </div>
@@ -6491,10 +6487,10 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <p className="border-t pt-4 text-[11px] text-slate-400">いま動いているタイマーはありません。</p>
+              <p className="border-t pt-4 text-[11px] text-[#a99d8c]">いま動いているタイマーはありません。</p>
             )}
 
-            <button onClick={() => setShowTimerSettings(false)} className="w-full mt-5 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white transition">閉じる</button>
+            <button onClick={() => setShowTimerSettings(false)} className="w-full mt-5 py-2.5 rounded-lg font-bold text-sm bg-[#2d2721] hover:bg-[#473f36] text-white transition">閉じる</button>
           </div>
         </div>
       )}
@@ -6504,26 +6500,26 @@ export default function Home() {
         {/* ========== 新規登録 ========== */}
         {activeTab === 'players' && isAdmin && (
           <div className="space-y-8 animate-in fade-in duration-300">
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#e7dfd1]">
               <h2 className="text-xl font-bold mb-6 flex items-center gap-2">新規選手の登録</h2>
               <form onSubmit={handleRegisterPlayer} className="grid grid-cols-1 md:grid-cols-4 gap-x-4 gap-y-5 items-start">
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-600 mb-1">選手名</label>
-                  <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
+                  <label className="block text-sm font-bold text-[#625a4f] mb-1">選手名</label>
+                  <input type="text" required value={newPlayerName} onChange={e => setNewPlayerName(e.target.value)} className="w-full p-2.5 border rounded-lg bg-[#faf7f1]"/>
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-600 mb-1">学校 <span className="text-[11px] font-normal text-slate-400">（任意・管理者のみ閲覧／一般には非公開）</span></label>
-                  <input type="text" value={newPlayerSchool} onChange={e => setNewPlayerSchool(e.target.value)} placeholder="新しい学校は直接入力" className="w-full p-2.5 border rounded-lg bg-slate-50"/>
+                  <label className="block text-sm font-bold text-[#625a4f] mb-1">学校 <span className="text-[11px] font-normal text-[#a99d8c]">（任意・管理者のみ閲覧／一般には非公開）</span></label>
+                  <input type="text" value={newPlayerSchool} onChange={e => setNewPlayerSchool(e.target.value)} placeholder="新しい学校は直接入力" className="w-full p-2.5 border rounded-lg bg-[#faf7f1]"/>
                   <SchoolChips options={schoolOptions} value={newPlayerSchool} onPick={setNewPlayerSchool} />
                 </div>
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-600 mb-1">今季の通算ポイント</label>
-                  <input type="number" step="0.1" value={newPlayerPoint} onChange={e => setNewPlayerPoint(Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-slate-50"/>
-                  <p className="text-[11px] text-slate-400 mt-1">通算対局数は過去大会・今大会の記録から自動計算されるため、入力欄はありません。</p>
+                  <label className="block text-sm font-bold text-[#625a4f] mb-1">今季の通算ポイント</label>
+                  <input type="number" step="0.1" value={newPlayerPoint} onChange={e => setNewPlayerPoint(Number(e.target.value))} className="w-full p-2.5 border rounded-lg bg-[#faf7f1]"/>
+                  <p className="text-[11px] text-[#a99d8c] mt-1">通算対局数は過去大会・今大会の記録から自動計算されるため、入力欄はありません。</p>
                 </div>
 
                 <div className="md:col-span-4">
-                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${isPro(newPlayerName) ? 'bg-slate-100 border-slate-200 cursor-not-allowed opacity-60' : newPlayerRight ? 'bg-amber-50 border-amber-300 cursor-pointer' : 'bg-slate-50 border-slate-200 hover:border-slate-300 cursor-pointer'}`}>
+                  <label className={`flex items-center gap-3 p-3 rounded-xl border-2 transition ${isPro(newPlayerName) ? 'bg-[#f3eee4] border-[#e7dfd1] cursor-not-allowed opacity-60' : newPlayerRight ? 'bg-amber-50 border-amber-300 cursor-pointer' : 'bg-[#faf7f1] border-[#e7dfd1] hover:border-[#d4c9b7] cursor-pointer'}`}>
                     <input
                       type="checkbox"
                       checked={isPro(newPlayerName) ? false : newPlayerRight}
@@ -6531,33 +6527,33 @@ export default function Home() {
                       onChange={e => setNewPlayerRight(e.target.checked)}
                       className="w-5 h-5 accent-amber-500"
                     />
-                    <span className="font-bold text-sm text-slate-700">🏆 年間チャンピオン大会 出場権あり</span>
+                    <span className="font-bold text-sm text-[#473f36]">🏆 年間チャンピオン大会 出場権あり</span>
                     {isPro(newPlayerName) && (
-                      <span className="text-[11px] font-bold text-slate-400 ml-auto">麻雀プロは出場権の対象外です</span>
+                      <span className="text-[11px] font-bold text-[#a99d8c] ml-auto">麻雀プロは出場権の対象外です</span>
                     )}
                   </label>
                 </div>
 
-                <button type="submit" className="md:col-span-4 mt-2 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition">登録して保存</button>
+                <button type="submit" className="md:col-span-4 mt-2 bg-[#2d2721] hover:bg-[#473f36] text-white font-bold py-3 rounded-lg transition">登録して保存</button>
               </form>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#e7dfd1]">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
                 <h2 className="text-xl font-bold">🏫 選手の名前・学校の管理 <span className="ml-1 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h2>
                 <button
                   onClick={() => setSchoolUnsetOnly(!schoolUnsetOnly)}
-                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition ${schoolUnsetOnly ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-500'}`}
+                  className={`text-xs font-bold px-3 py-1.5 rounded-lg border-2 transition ${schoolUnsetOnly ? 'bg-[#c8361e] text-white border-[#c8361e]' : 'bg-white text-[#82786b] border-[#d4c9b7] hover:border-[#82786b]'}`}
                 >{schoolUnsetOnly ? '未設定のみ表示中' : '未設定のみ表示'}</button>
               </div>
-              <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+              <p className="text-[11px] text-[#82786b] mb-3 leading-relaxed">
                 今季ランキングに載っていない選手も含めて、登録済みの全選手の名前と学校を変更できます（行の「✏️ 編集」または学校名を押します）。過去の大会にだけ参加した選手（「選手登録なし」）は学校のみ設定できます。学校は管理者のみ閲覧でき、一般には表示されません。
                 （設定済み {schoolRows.filter(p => playerSchools[p.id]).length}名 ／ 未設定 {schoolRows.filter(p => !playerSchools[p.id]).length}名）
               </p>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-sm">
                   <thead>
-                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-600">
+                    <tr className="bg-[#f3eee4] border-b border-[#e7dfd1] text-[#625a4f]">
                       <th className="p-2 font-bold whitespace-nowrap">選手名</th>
                       <th className="p-2 font-bold">学校</th>
                     </tr>
@@ -6568,7 +6564,7 @@ export default function Home() {
                       .map(p => {
                         const editing = schoolEditId === p.id;
                         return (
-                          <tr key={p.id} className="border-b border-slate-100 align-top">
+                          <tr key={p.id} className="border-b border-[#f3eee4] align-top">
                             <td className="p-2 font-bold align-top">
                               {editing && !p.legacy ? (
                                 <input
@@ -6583,8 +6579,8 @@ export default function Home() {
                                 <span className="whitespace-nowrap">
                                   <PlayerLabel name={p.name} />
                                   {p.legacy
-                                    ? <span className="ml-1.5 text-[10px] font-bold text-slate-400 border border-slate-200 rounded px-1 py-0.5 align-middle">選手登録なし</span>
-                                    : <button onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); setNameDraft(p.name); }} className="ml-1.5 text-[10px] font-bold text-slate-400 hover:text-indigo-600 border border-slate-200 hover:border-indigo-300 rounded px-1.5 py-0.5 align-middle">✏️ 編集</button>}
+                                    ? <span className="ml-1.5 text-[10px] font-bold text-[#a99d8c] border border-[#e7dfd1] rounded px-1 py-0.5 align-middle">選手登録なし</span>
+                                    : <button onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); setNameDraft(p.name); }} className="ml-1.5 text-[10px] font-bold text-[#a99d8c] hover:text-[#c8361e] border border-[#e7dfd1] hover:border-[#ef937c] rounded px-1.5 py-0.5 align-middle">✏️ 編集</button>}
                                 </span>
                               )}
                             </td>
@@ -6601,15 +6597,15 @@ export default function Home() {
                                       placeholder="新しい学校は直接入力"
                                       className="min-w-0 flex-1 border p-1.5 rounded text-sm"
                                     />
-                                    <button onClick={() => savePlayerProfile(p, nameDraft, schoolDraft)} className="bg-indigo-600 text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">保存</button>
-                                    <button onClick={() => setSchoolEditId(null)} className="text-slate-400 text-xs font-bold whitespace-nowrap">取消</button>
+                                    <button onClick={() => savePlayerProfile(p, nameDraft, schoolDraft)} className="bg-[#c8361e] text-white px-3 py-1 rounded text-xs font-bold whitespace-nowrap">保存</button>
+                                    <button onClick={() => setSchoolEditId(null)} className="text-[#a99d8c] text-xs font-bold whitespace-nowrap">取消</button>
                                   </div>
                                   <SchoolChips options={schoolOptions} value={schoolDraft} onPick={setSchoolDraft} />
                                 </div>
                               ) : (
                                 <button
                                   onClick={() => { setSchoolEditId(p.id); setSchoolDraft(playerSchools[p.id] || ''); setNameDraft(p.name); }}
-                                  className={`text-left rounded-md px-2 py-1 text-sm font-bold transition ${playerSchools[p.id] ? 'text-slate-700 hover:bg-slate-100' : 'text-slate-300 hover:bg-slate-100 hover:text-slate-500'}`}
+                                  className={`text-left rounded-md px-2 py-1 text-sm font-bold transition ${playerSchools[p.id] ? 'text-[#473f36] hover:bg-[#f3eee4]' : 'text-[#d4c9b7] hover:bg-[#f3eee4] hover:text-[#82786b]'}`}
                                 >{playerSchools[p.id] || '未設定（押して設定）'}</button>
                               )}
                             </td>
@@ -6621,32 +6617,32 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#e7dfd1]">
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <h2 className="text-xl font-bold">🔑 選手ログインコード一覧</h2>
                 <div className="flex flex-wrap gap-2">
-                  <button onClick={handleIssueMissingCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-slate-800 hover:bg-slate-700 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg transition">
+                  <button onClick={handleIssueMissingCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-[#2d2721] hover:bg-[#473f36] disabled:bg-[#d4c9b7] text-white px-3 py-2 rounded-lg transition">
                     {isIssuingCodes ? '処理中...' : '未発行分をまとめて発行'}
                   </button>
-                  <button onClick={handleRevokeAllCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-red-100 hover:bg-red-200 disabled:bg-slate-200 text-red-700 px-3 py-2 rounded-lg transition">
+                  <button onClick={handleRevokeAllCodes} disabled={isIssuingCodes} className="text-xs font-bold bg-red-100 hover:bg-red-200 disabled:bg-[#e7dfd1] text-red-700 px-3 py-2 rounded-lg transition">
                     全員分を取り消す
                   </button>
-                  <button onClick={handlePrintLoginCodes} disabled={printTargets.length === 0} className="text-xs font-bold bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-300 text-white px-3 py-2 rounded-lg transition">
+                  <button onClick={handlePrintLoginCodes} disabled={printTargets.length === 0} className="text-xs font-bold bg-[#c8361e] hover:bg-[#a62b17] disabled:bg-[#d4c9b7] text-white px-3 py-2 rounded-lg transition">
                     🖨️ 選択した{printTargets.length}名を印刷
                   </button>
                 </div>
               </div>
-              <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+              <p className="text-[11px] text-[#82786b] mb-3 leading-relaxed">
                 選手はこのコードだけでログインでき、自分が座っている卓の成績のみ入力できます（選手名の入力は不要です）。印刷する選手はチェックで選べます（コード発行済みの選手のみ対象）。
               </p>
               <div className="flex flex-wrap gap-2 mb-3">
-                <button onClick={() => setPrintExcludedIds([])} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md transition">全員を選択</button>
-                <button onClick={() => setPrintExcludedIds(dbPlayers.map(p => p.id))} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1 rounded-md transition">全て解除</button>
+                <button onClick={() => setPrintExcludedIds([])} className="text-[11px] font-bold bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f] px-2.5 py-1 rounded-md transition">全員を選択</button>
+                <button onClick={() => setPrintExcludedIds(dbPlayers.map(p => p.id))} className="text-[11px] font-bold bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f] px-2.5 py-1 rounded-md transition">全て解除</button>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse whitespace-nowrap text-sm">
                   <thead>
-                    <tr className="bg-slate-100 border-b border-slate-200 text-slate-600">
+                    <tr className="bg-[#f3eee4] border-b border-[#e7dfd1] text-[#625a4f]">
                       <th className="p-2 font-bold w-10">印刷</th>
                       <th className="p-2 font-bold">選手名</th>
                       <th className="p-2 font-bold">ログインコード</th>
@@ -6655,21 +6651,21 @@ export default function Home() {
                   </thead>
                   <tbody>
                     {[...dbPlayers].sort((a, b) => a.name.localeCompare(b.name, 'ja')).map(p => (
-                      <tr key={p.id} className="border-b border-slate-100">
+                      <tr key={p.id} className="border-b border-[#f3eee4]">
                         <td className="p-2">
                           <input
                             type="checkbox"
-                            className="w-4 h-4 accent-indigo-600"
+                            className="w-4 h-4 accent-[#c8361e]"
                             checked={!!p.loginCode && !printExcludedIds.includes(p.id)}
                             disabled={!p.loginCode}
                             onChange={() => togglePrintTarget(p.id)}
                           />
                         </td>
                         <td className="p-2 font-bold"><PlayerLabel name={p.name} /></td>
-                        <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || <span className="text-slate-300 font-sans font-normal">未発行</span>}</td>
+                        <td className="p-2 font-mono font-bold tracking-widest">{p.loginCode || <span className="text-[#d4c9b7] font-sans font-normal">未発行</span>}</td>
                         <td className="p-2 text-center">
                           <div className="inline-flex gap-1.5">
-                            <button onClick={() => handleReissueCode(p)} className="text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-1 rounded-md transition">
+                            <button onClick={() => handleReissueCode(p)} className="text-[11px] font-bold bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f] px-2 py-1 rounded-md transition">
                               {p.loginCode ? '再発行' : '発行'}
                             </button>
                             {p.loginCode && (
@@ -6689,23 +6685,23 @@ export default function Home() {
         {/* ========== データ ========== */}
         {activeTab === 'data' && (
           <div className="space-y-6 animate-in fade-in duration-300">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-fuchsia-700 via-purple-700 to-indigo-800 text-white p-5 md:p-7 shadow-lg">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#7a591b] via-[#274066] to-[#822213] text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">📊</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">データ</h2>
-              <p className="text-xs md:text-sm text-fuchsia-100 mt-1">{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
+              <p className="text-xs md:text-sm text-[#f6ead0] mt-1">{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
               <div className="flex gap-1 mt-3">
                 {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
                   <button
                     key={v}
                     onClick={() => setDataScope(v)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${dataScope === v ? 'bg-white text-fuchsia-700 shadow' : 'bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/20'}`}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${dataScope === v ? 'bg-white text-[#7a591b] shadow' : 'bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/20'}`}
                   >{label}</button>
                 ))}
               </div>
             </div>
 
             {gameRecs.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">集計できるデータがまだありません。</div>
+              <div className="bg-white p-8 rounded-2xl border border-[#e7dfd1] text-center text-[#82786b]">集計できるデータがまだありません。</div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {renderTopCards(DATA_TOP_N, false)}
@@ -6717,17 +6713,17 @@ export default function Home() {
         {/* ========== 管理用データ（管理者のみ） ========== */}
         {activeTab === 'admin' && isAdmin && (
           <div className="space-y-10 animate-in fade-in duration-300">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-800 text-white p-5 md:p-7 shadow-lg">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#100d0a] via-[#3b0f08] to-[#1f3253] text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">🛠️</div>
-              <p className="text-[11px] font-black tracking-[0.25em] text-indigo-300">ADMIN ONLY</p>
+              <p className="text-[11px] font-black tracking-[0.25em] text-[#ef937c]">ADMIN ONLY</p>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">管理用データ</h2>
-              <p className="text-xs md:text-sm text-indigo-200 mt-1">管理者のみに表示されます。{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
+              <p className="text-xs md:text-sm text-[#f7bcab] mt-1">管理者のみに表示されます。{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
               <div className="flex gap-1 mt-3">
                 {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
                   <button
                     key={v}
                     onClick={() => setDataScope(v)}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${dataScope === v ? 'bg-white text-indigo-800 shadow' : 'bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/20'}`}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition ${dataScope === v ? 'bg-white text-[#822213] shadow' : 'bg-white/15 text-white hover:bg-white/25 ring-1 ring-white/20'}`}
                   >{label}</button>
                 ))}
               </div>
@@ -6743,7 +6739,7 @@ export default function Home() {
             </div>
 
             {gameRecs.length === 0 ? (
-              <div className="bg-white p-8 rounded-2xl border border-slate-200 text-center text-slate-500">集計できるデータがまだありません。</div>
+              <div className="bg-white p-8 rounded-2xl border border-[#e7dfd1] text-center text-[#82786b]">集計できるデータがまだありません。</div>
             ) : (
               <>
                 <AdminSection id="adm-top" icon="📊" title="TOP10（データタブの拡大版）" desc="データタブの4つのランキングを、10位まで表示します">
@@ -6775,7 +6771,7 @@ export default function Home() {
                           <button
                             key={label}
                             onClick={() => setAdminRateRank(k)}
-                            className={`flex-1 py-1 rounded-md text-xs font-bold transition ${adminRateRank === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                            className={`flex-1 py-1 rounded-md text-xs font-bold transition ${adminRateRank === k ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}
                           >{label}</button>
                         ))}
                       </div>
@@ -6792,13 +6788,13 @@ export default function Home() {
                 <AdminSection id="adm-streak" icon="🔥" title="連続記録" desc="連勝・連敗・連続連対・連続ラス回避">
                 {/* 連続記録 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <h4 className="text-sm font-black text-slate-700">連続記録</h4>
+                  <h4 className="text-sm font-black text-[#473f36]">連続記録</h4>
                   <div className="flex gap-1">
                     {([[false, '同じ大会のみ'], [true, '大会をまたぐ']] as const).map(([v, label]) => (
-                      <button key={label} onClick={() => setAdminStreakAcross(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${adminStreakAcross === v ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                      <button key={label} onClick={() => setAdminStreakAcross(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${adminStreakAcross === v ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}>{label}</button>
                     ))}
                   </div>
-                  <span className="text-[11px] text-slate-400">選手ごとに最長の記録を1件。2回以上続いたもののみ。抜け番で出なかった回戦は飛ばして数えます{adminStreakAcross ? '（第6回・第7回は番号順に並べます）' : ''}。</span>
+                  <span className="text-[11px] text-[#a99d8c]">選手ごとに最長の記録を1件。2回以上続いたもののみ。抜け番で出なかった回戦は飛ばして数えます{adminStreakAcross ? '（第6回・第7回は番号順に並べます）' : ''}。</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="🔥 連勝ランキング" desc="1着が連続した回数" rows={adminWinStreak} emptyText="2連勝以上の記録がありません。" />
@@ -6813,15 +6809,15 @@ export default function Home() {
                 <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} desc="同卓したときのポイントの合計から見た相性">
                 {/* 相性 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
-                  <h4 className="text-sm font-black text-slate-700">{dataScopeLabel}の相性</h4>
-                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-500">
+                  <h4 className="text-sm font-black text-[#473f36]">{dataScopeLabel}の相性</h4>
+                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#82786b]">
                     同卓
                     <select value={adminSynergyMin} onChange={e => setAdminSynergyMin(Number(e.target.value))} className="p-1 border rounded-md bg-white text-xs font-bold">
                       {[3, 5, 8, 10].map(n => <option key={n} value={n}>{n}半荘以上</option>)}
                     </select>
                     の組が対象
                   </label>
-                  <span className="text-[11px] text-slate-400">「Aさん（Bさんと同卓）」= Bさんと同じ卓だった半荘での、Aさんのポイントの合計。黒子は除きます。</span>
+                  <span className="text-[11px] text-[#a99d8c]">「Aさん（Bさんと同卓）」= Bさんと同じ卓だった半荘での、Aさんのポイントの合計。黒子は除きます。</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                   <AdminRankList title="💞 相性いいランキング" desc="同卓したときの自分のポイントの合計が大きい順" rows={adminGoodMatch} emptyText={`同卓${adminSynergyMin}半荘以上の組がありません。`} />
@@ -6837,28 +6833,28 @@ export default function Home() {
 
                 <AdminSection id="adm-school" icon="🏫" title="学校別成績・学校対決" desc="学校は管理者でログインしているときだけ読み込まれます">
                 {/* 学校別成績（管理者のみ・非公開） */}
-                <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
+                <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h4 className="text-sm font-black text-slate-800">🏫 学校別成績（{dataScopeLabel}）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
+                      <h4 className="text-sm font-black text-[#2d2721]">🏫 学校別成績（{dataScopeLabel}）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
                       <div className="flex gap-1 ml-auto">
                         {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
-                          <button key={v} onClick={() => setDataScope(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${dataScope === v ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-100'}`}>{label}</button>
+                          <button key={v} onClick={() => setDataScope(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${dataScope === v ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}>{label}</button>
                         ))}
                       </div>
                     </div>
-                    <p className="text-[11px] text-slate-400 leading-snug">
+                    <p className="text-[11px] text-[#a99d8c] leading-snug">
                       選手に設定した学校ごとの、全半荘の合計です（黒子は除く）。学校名を押すと、個人成績と同じ形式の詳細（大会別成績・着順分布・半荘ごとの成績・他校との対戦）が開きます。学校は管理者でログインしているときだけ読み込まれ、一般の画面には表示されません。
                       {schoolUnsetCount > 0 ? `学校が未設定の選手 ${schoolUnsetCount}名 は集計に含まれていません。` : ''}
                     </p>
                   </div>
                   {schoolStats.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-xs text-slate-400">学校が設定された選手の記録がありません。選手の編集（今季タブ）か、新規登録で学校を入力してください。</p>
+                    <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">学校が設定された選手の記録がありません。選手の編集（今季タブ）か、新規登録で学校を入力してください。</p>
                   ) : (
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-sm whitespace-nowrap">
                         <thead>
-                          <tr className="bg-slate-100 text-slate-600 text-xs">
+                          <tr className="bg-[#f3eee4] text-[#625a4f] text-xs">
                             <th className="p-2 font-bold">順位</th>
                             <th className="p-2 font-bold">学校</th>
                             <th className="p-2 font-bold text-right">人数</th>
@@ -6874,15 +6870,15 @@ export default function Home() {
                         <tbody>
                           {schoolStats.map((sc, i) => (
                             <React.Fragment key={sc.school}>
-                              <tr className="border-b border-slate-100 align-top">
-                                <td className="p-2 text-xs font-bold text-slate-400 tabular-nums">{i + 1}</td>
+                              <tr className="border-b border-[#f3eee4] align-top">
+                                <td className="p-2 text-xs font-bold text-[#a99d8c] tabular-nums">{i + 1}</td>
                                 <td className="p-2 font-bold">
-                                  <button onClick={() => setSchoolModal(sc.school)} className="text-left text-indigo-700 hover:underline">{sc.school}</button>
-                                  <span className="ml-1 text-[10px] font-normal text-slate-400">詳細 ▸</span>
+                                  <button onClick={() => setSchoolModal(sc.school)} className="text-left text-[#a62b17] hover:underline">{sc.school}</button>
+                                  <span className="ml-1 text-[10px] font-normal text-[#a99d8c]">詳細 ▸</span>
                                 </td>
                                 <td className="p-2 text-right tabular-nums">{sc.members.size}名</td>
                                 <td className="p-2 text-right tabular-nums">{sc.games}</td>
-                                <td className={`p-2 text-right font-black tabular-nums ${sc.point > 0 ? 'text-blue-600' : sc.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r1(sc.point))}</td>
+                                <td className={`p-2 text-right font-black tabular-nums ${sc.point > 0 ? 'text-blue-600' : sc.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r1(sc.point))}</td>
                                 <td className="p-2 text-right tabular-nums">{fmtPt(r1(sc.point / sc.games))}</td>
                                 <td className="p-2 text-right tabular-nums">{(sc.rankSum / sc.games).toFixed(2)}</td>
                                 <td className="p-2 text-right tabular-nums">{((sc.dist[0] / sc.games) * 100).toFixed(1)}%</td>
@@ -6909,24 +6905,24 @@ export default function Home() {
 
                 <AdminSection id="adm-ties" icon="🤝" title="過去の同点" desc="同じ半荘で点数が同じになった組">
                 {/* 同点一覧（すべての着順・すべて表示） */}
-                <section className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                  <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50">
-                    <h4 className="text-sm font-black text-slate-800">🤝 過去の同点（すべての着順）</h4>
-                    <p className="text-[11px] text-slate-400 leading-snug">
+                <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
+                  <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
+                    <h4 className="text-sm font-black text-[#2d2721]">🤝 過去の同点（すべての着順）</h4>
+                    <p className="text-[11px] text-[#a99d8c] leading-snug">
                       同じ半荘で点数が同じになった組を、すべて表示します（全{adminTies.length}件
                       {adminTies.length > 0 ? `：1着タイ ${adminTies.filter(t => t.rankNo === 1).length} ／ 2着タイ ${adminTies.filter(t => t.rankNo === 2).length} ／ 3着タイ ${adminTies.filter(t => t.rankNo === 3).length} ／ 4着タイ ${adminTies.filter(t => t.rankNo === 4).length}` : ''}）。
                     </p>
                   </div>
                   {adminTies.length === 0 ? (
-                    <p className="px-3 py-4 text-center text-xs text-slate-400">同点の記録はありません。</p>
+                    <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">同点の記録はありません。</p>
                   ) : (
-                    <ul className="divide-y divide-slate-100 max-h-[28rem] overflow-y-auto">
+                    <ul className="divide-y divide-[#f3eee4] max-h-[28rem] overflow-y-auto">
                       {adminTies.map((t, i) => (
                         <li key={i} className="flex flex-wrap items-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-sm">
-                          <span className="w-36 text-xs text-slate-400 whitespace-nowrap">{t.where}</span>
-                          <span className="w-16 text-xs font-black text-indigo-600 whitespace-nowrap">{t.rankNo}着タイ</span>
-                          <span className="flex-1 min-w-0 font-bold text-slate-700">{t.names.join('・')}</span>
-                          <span className="font-black tabular-nums text-slate-800 whitespace-nowrap">{t.score.toLocaleString()}点</span>
+                          <span className="w-36 text-xs text-[#a99d8c] whitespace-nowrap">{t.where}</span>
+                          <span className="w-16 text-xs font-black text-[#c8361e] whitespace-nowrap">{t.rankNo}着タイ</span>
+                          <span className="flex-1 min-w-0 font-bold text-[#473f36]">{t.names.join('・')}</span>
+                          <span className="font-black tabular-nums text-[#2d2721] whitespace-nowrap">{t.score.toLocaleString()}点</span>
                         </li>
                       ))}
                     </ul>
@@ -6941,7 +6937,7 @@ export default function Home() {
         {/* ========== 生涯成績 ========== */}
         {activeTab === 'lifetime' && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-indigo-900 to-amber-600 text-white p-5 md:p-7 shadow-lg">
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-[#1c1814] via-[#5e190e] to-amber-600 text-white p-5 md:p-7 shadow-lg">
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">🏅</div>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">生涯成績</h2>
               <p className="text-xs md:text-sm text-amber-100 mt-1 leading-relaxed">
@@ -6950,22 +6946,22 @@ export default function Home() {
                   : '最高位戦ルールで開催した大会だけを集計しています。ポイントは実際の値です（換算なし）。年間チャンピオン戦のポイントは含みません。'}
               </p>
             </div>
-            <div className="flex gap-1 p-1 bg-white rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex gap-1 p-1 bg-white rounded-xl border border-[#e7dfd1] shadow-sm">
               {([['all', '全ルール（換算込み）'], ['saikoi', '最高位戦ルールのみ']] as const).map(([k, label]) => (
                 <button
                   key={k}
                   onClick={() => setLifetimeScope(k)}
-                  className={`flex-1 py-2.5 rounded-lg text-sm font-black transition ${lifetimeScope === k ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-md shadow-amber-900/20' : 'text-slate-500 hover:bg-amber-50'}`}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-black transition ${lifetimeScope === k ? 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-md shadow-amber-900/20' : 'text-[#82786b] hover:bg-amber-50'}`}
                 >{label}</button>
               ))}
             </div>
-            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="bg-white rounded-2xl shadow-sm border border-[#e7dfd1] overflow-hidden">
               {(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).length === 0 ? (
-                <p className="p-8 text-center text-sm text-slate-400">記録がまだありません。</p>
+                <p className="p-8 text-center text-sm text-[#a99d8c]">記録がまだありません。</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[560px]">
-                    <thead className="bg-slate-900 text-white text-xs">
+                    <thead className="bg-[#1c1814] text-white text-xs">
                       <tr>
                         {([
                           { key: 'rank', label: '順位', align: 'center', extra: 'w-12' },
@@ -6992,14 +6988,14 @@ export default function Home() {
                               >
                                 {col.label}
                                 {col.key === 'point' && lifetimeScope === 'all' && <span className="text-amber-300">※</span>}
-                                <span className={`ml-1 text-[10px] ${active ? 'text-amber-300' : 'text-slate-500'}`}>{active ? (lifetimeSort!.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>
+                                <span className={`ml-1 text-[10px] ${active ? 'text-amber-300' : 'text-[#82786b]'}`}>{active ? (lifetimeSort!.dir === 'asc' ? '▲' : '▼') : '⇅'}</span>
                               </button>
                             </th>
                           );
                         })}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className="divide-y divide-[#f3eee4]">
                       {sortLifetimeRows(lifetimeScope === 'all' ? lifetimeRows : lifetimeRowsSaikoi).map(r => {
                         const pctOf = (n: number) => (r.games > 0 ? `${Math.round((n / r.games) * 100)}%` : '-');
                         return (
@@ -7008,15 +7004,15 @@ export default function Home() {
                             onClick={() => setDetailModalPlayerId(r.key)}
                             className="cursor-pointer hover:bg-amber-50/60"
                           >
-                            <td className="p-2.5 text-center font-black text-slate-400">{r.rank}</td>
-                            <td className="p-2.5 font-bold text-slate-800 whitespace-nowrap"><PlayerLabel name={r.name} /></td>
-                            <td className={`p-2.5 text-right font-black tabular-nums whitespace-nowrap ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</td>
-                            <td className="p-2.5 text-right tabular-nums text-slate-500">{r.games}</td>
-                            <td className="p-2.5 text-right tabular-nums text-slate-600">{(r.rankSum / r.games).toFixed(2)}</td>
+                            <td className="p-2.5 text-center font-black text-[#a99d8c]">{r.rank}</td>
+                            <td className="p-2.5 font-bold text-[#2d2721] whitespace-nowrap"><PlayerLabel name={r.name} /></td>
+                            <td className={`p-2.5 text-right font-black tabular-nums whitespace-nowrap ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r.point)}</td>
+                            <td className="p-2.5 text-right tabular-nums text-[#82786b]">{r.games}</td>
+                            <td className="p-2.5 text-right tabular-nums text-[#625a4f]">{(r.rankSum / r.games).toFixed(2)}</td>
                             {r.dist.map((n, idx) => (
-                              <td key={idx} className="p-2.5 text-right tabular-nums text-slate-500 whitespace-nowrap">
+                              <td key={idx} className="p-2.5 text-right tabular-nums text-[#82786b] whitespace-nowrap">
                                 <span className="inline-block w-6 text-right">{n}</span>
-                                <span className="inline-block w-12 text-right text-[10px] text-slate-400">({pctOf(n)})</span>
+                                <span className="inline-block w-12 text-right text-[10px] text-[#a99d8c]">({pctOf(n)})</span>
                               </td>
                             ))}
                           </tr>
@@ -7030,15 +7026,15 @@ export default function Home() {
             {lifetimeScope === 'all' ? (
               <p className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 leading-relaxed">※ 生涯ptは、最高位戦ルール以外の大会（第1回・第2回など）を最高位戦ルールに換算して合算した、あくまで参考の値です。実際のポイントではありません。年間チャンピオン戦は含みません。</p>
             ) : (
-              <p className="text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg px-3 py-2 leading-relaxed">最高位戦ルールの大会のみの集計です（換算なし）。半荘数・着順分布には年間チャンピオン戦も含みますが、ポイントには含みません。</p>
+              <p className="text-[11px] font-bold text-[#625a4f] bg-white border border-[#e7dfd1] rounded-lg px-3 py-2 leading-relaxed">最高位戦ルールの大会のみの集計です（換算なし）。半荘数・着順分布には年間チャンピオン戦も含みますが、ポイントには含みません。</p>
             )}
-            <p className="text-[11px] text-slate-400 leading-relaxed px-1">選手名をタップすると、その選手の生涯成績（個人ページ）が開きます。選手登録のない前季のみ参加の選手も見られます。</p>
+            <p className="text-[11px] text-[#a99d8c] leading-relaxed px-1">選手名をタップすると、その選手の生涯成績（個人ページ）が開きます。選手登録のない前季のみ参加の選手も見られます。</p>
           </div>
         )}
 
         {/* ========== 今季成績 ========== */}
         {activeTab === 'totalRanking' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-[#e7dfd1] animate-in fade-in duration-300">
             <div className="flex items-start justify-between gap-3 mb-1">
               <h2 className="text-xl font-bold">今季成績ランキング</h2>
               {isAdmin && (
@@ -7063,7 +7059,7 @@ export default function Home() {
                 <button onClick={handleFixTotals} className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg font-bold text-xs transition">大会成績の合計に合わせて修正する</button>
               </div>
             )}
-            <p className="text-[11px] text-slate-500 mb-4 leading-relaxed">
+            <p className="text-[11px] text-[#82786b] mb-4 leading-relaxed">
               <span className="inline-block w-3 h-3 rounded-sm bg-emerald-100 border border-emerald-300 align-middle mr-1"></span>
               年間チャンピオン大会の出場権は各大会優勝を除き今年度に2回以上の参加が必要です
               <br />
@@ -7077,13 +7073,13 @@ export default function Home() {
               >
                 {csOnly ? '🏆 年間CS対象のみ: 表示中' : '🏆 年間CS対象のみ表示'}
               </button>
-              <span className="text-[11px] text-slate-500">出場権・対象 {csEligibleIds.length}名（上位{CS_BORDER_COUNT}名の下にボーダー線）</span>
+              <span className="text-[11px] text-[#82786b]">出場権・対象 {csEligibleIds.length}名（上位{CS_BORDER_COUNT}名の下にボーダー線）</span>
             </div>
-            <p className="text-[11px] text-slate-400 mb-3">選手名をクリックすると大会別成績が表示され、「個人成績」から着順分布・対戦相性・半荘ごとの成績なども確認できます。</p>
+            <p className="text-[11px] text-[#a99d8c] mb-3">選手名をクリックすると大会別成績が表示され、「個人成績」から着順分布・対戦相性・半荘ごとの成績なども確認できます。</p>
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
-                  <tr className="bg-slate-100 border-b border-slate-200 text-slate-600 text-sm">
+                  <tr className="bg-[#f3eee4] border-b border-[#e7dfd1] text-[#625a4f] text-sm">
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold">順位</th>
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold">選手名</th>
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">今季対局数</th>
@@ -7103,8 +7099,8 @@ export default function Home() {
                     if (csOnly && csPos === 0) return null;
                     return (
                       <React.Fragment key={p.id}>
-                        <tr className={`border-b border-slate-100 transition ${isOpen ? 'bg-indigo-50/60' : granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-slate-50'}`}>
-                          <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-slate-400">{i + 1}</td>
+                        <tr className={`border-b border-[#f3eee4] transition ${isOpen ? 'bg-[#fdf1ed]/60' : granted ? 'bg-amber-50/70 hover:bg-amber-100/70' : candidate ? 'bg-emerald-50/60 hover:bg-emerald-100/60' : 'hover:bg-[#faf7f1]'}`}>
+                          <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-[#a99d8c]">{i + 1}</td>
                           {editingPlayerId === p.id && isAdmin ? (
                             <>
                               <td className="p-2 align-top">
@@ -7114,10 +7110,10 @@ export default function Home() {
                                   <SchoolChips compact options={schoolOptions} value={editForm.school} onPick={sc => setEditForm({...editForm, school: sc})} />
                                 </div>
                               </td>
-                              <td className="p-2 text-right text-slate-400">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
+                              <td className="p-2 text-right text-[#a99d8c]">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
                               <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
                               <td className="p-2 text-center">
-                                <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-slate-300 cursor-not-allowed' : 'text-slate-600'}`}>
+                                <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-[#d4c9b7] cursor-not-allowed' : 'text-[#625a4f]'}`}>
                                   <input
                                     type="checkbox"
                                     checked={isPro(editForm.name) ? false : editForm.championshipRight}
@@ -7127,40 +7123,40 @@ export default function Home() {
                                   />
                                   出場権
                                 </label>
-                                {isPro(editForm.name) && <div className="text-[10px] text-slate-400 mt-0.5">プロは対象外</div>}
+                                {isPro(editForm.name) && <div className="text-[10px] text-[#a99d8c] mt-0.5">プロは対象外</div>}
                               </td>
                               <td className="p-2 text-center">
-                                <button onClick={saveEditPlayer} className="bg-indigo-600 text-white px-3 py-1 rounded text-sm font-bold">保存</button>
-                                <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-slate-400 text-sm">取消</button>
+                                <button onClick={saveEditPlayer} className="bg-[#c8361e] text-white px-3 py-1 rounded text-sm font-bold">保存</button>
+                                <button onClick={() => setEditingPlayerId(null)} className="ml-2 text-[#a99d8c] text-sm">取消</button>
                               </td>
                             </>
                           ) : (
                             <>
                               <td className="p-2 md:p-3 text-xs md:text-sm font-bold text-lg cursor-pointer" onClick={() => setOpenTotalPlayerId(isOpen ? null : p.id)}>
                                 <span className="inline-flex items-center gap-1.5">
-                                  <span className={`text-[10px] text-slate-400 transition ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                                  <span className={`text-[10px] text-[#a99d8c] transition ${isOpen ? 'rotate-90' : ''}`}>▶</span>
                                   <PlayerLabel name={p.name} />
                                   <PodiumBadges podium={seasonPodiums.get(p.id)} />
                                 </span>
                               </td>
-                              <td className="p-2 md:p-3 text-right text-slate-500 tabular-nums">{getTotalGames(p.id)} 半荘</td>
-                              <td className={`p-3 text-right font-black text-lg tabular-nums ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                              <td className="p-2 md:p-3 text-right text-[#82786b] tabular-nums">{getTotalGames(p.id)} 半荘</td>
+                              <td className={`p-3 text-right font-black text-lg tabular-nums ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>
                                 {fmtPt(p.totalPoint)}
                               </td>
                               <td className="p-2 md:p-3 text-center">
                                 {pro ? (
-                                  <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-400 border border-slate-200">対象外（プロ）</span>
+                                  <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#f3eee4] text-[#a99d8c] border border-[#e7dfd1]">対象外（プロ）</span>
                                 ) : granted ? (
                                   <span className="inline-block text-[11px] font-black px-2.5 py-1 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 text-white shadow-sm">🏆 出場権</span>
                                 ) : candidate ? (
                                   <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">○ 対象</span>
                                 ) : (
-                                  <span className="text-[11px] text-slate-400">出場権なし</span>
+                                  <span className="text-[11px] text-[#a99d8c]">出場権なし</span>
                                 )}
                               </td>
                               {isAdmin && (
                                 <td className="p-2 md:p-3 text-center">
-                                  <button onClick={() => startEditPlayer(p)} className="bg-slate-200 hover:bg-slate-300 text-slate-700 px-3 py-1 rounded text-sm font-bold transition">編集</button>
+                                  <button onClick={() => startEditPlayer(p)} className="bg-[#e7dfd1] hover:bg-[#d4c9b7] text-[#473f36] px-3 py-1 rounded text-sm font-bold transition">編集</button>
                                 </td>
                               )}
                             </>
@@ -7169,7 +7165,7 @@ export default function Home() {
 
                         {isOpen && (
                           <tr>
-                            <td colSpan={colSpan} className="p-0 bg-slate-50/60 border-b border-slate-200">
+                            <td colSpan={colSpan} className="p-0 bg-[#faf7f1]/60 border-b border-[#e7dfd1]">
                               <ArchiveHistoryMini
                                 history={getPlayerArchiveHistory(p.id)}
                                 onOpenDetail={() => setDetailModalPlayerId(p.id)}
@@ -7254,55 +7250,55 @@ export default function Home() {
         {activeTab === 'archives' && (
           <div className="space-y-6 animate-in fade-in duration-300">
             {isAdmin && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+              <div className="bg-white rounded-2xl shadow-sm border border-[#e7dfd1] overflow-hidden">
                 <button
                   onClick={() => setShowArchiveImport(!showArchiveImport)}
                   className="w-full flex items-center justify-between gap-3 p-4 md:p-5 text-left"
                 >
-                  <span className="font-black text-slate-800">📥 過去大会をインポート（MMCのテキストを貼り付け）</span>
-                  <span className="text-slate-400 text-xs font-bold">{showArchiveImport ? '閉じる ▲' : '開く ▼'}</span>
+                  <span className="font-black text-[#2d2721]">📥 過去大会をインポート（MMCのテキストを貼り付け）</span>
+                  <span className="text-[#a99d8c] text-xs font-bold">{showArchiveImport ? '閉じる ▲' : '開く ▼'}</span>
                 </button>
 
                 {showArchiveImport && (
-                  <div className="px-4 md:px-5 pb-5 pt-1 border-t border-slate-100 space-y-4">
-                    <p className="text-xs text-slate-500 leading-relaxed">
+                  <div className="px-4 md:px-5 pb-5 pt-1 border-t border-[#f3eee4] space-y-4">
+                    <p className="text-xs text-[#82786b] leading-relaxed">
                       MMC（mahjong-manage.com）の大会ページで「トータル成績」の一覧から「半荘ごと」のログまでをまとめて選択・コピーし、下のテキスト欄にそのまま貼り付けてください。
                       最終成績（ポイント・半荘数・順位）と、各半荘の結果を自動で読み取ります。対局時間・対局番号（◯戦目）・ルール名は読み取らないため、下の「ルール名」欄で指定してください。
                     </p>
                     <div className="grid md:grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">第何回</label>
+                        <label className="block text-xs font-bold text-[#625a4f] mb-1">第何回</label>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-500">第</span>
+                          <span className="text-sm font-bold text-[#82786b]">第</span>
                           <input
                             type="number"
                             value={archiveRoundNumber}
                             onChange={e => { archiveRoundTouched.current = true; setArchiveRoundNumber(e.target.value); }}
                             placeholder="4"
-                            className="w-20 p-2.5 border rounded-lg bg-slate-50 text-sm text-center"
+                            className="w-20 p-2.5 border rounded-lg bg-[#faf7f1] text-sm text-center"
                           />
-                          <span className="text-sm font-bold text-slate-500">回</span>
+                          <span className="text-sm font-bold text-[#82786b]">回</span>
                         </div>
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">大会名の追記（任意）</label>
-                        <input value={archiveNameSuffix} onChange={e => setArchiveNameSuffix(e.target.value)} placeholder="例: 年間チャンピオン戦" className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm" />
+                        <label className="block text-xs font-bold text-[#625a4f] mb-1">大会名の追記（任意）</label>
+                        <input value={archiveNameSuffix} onChange={e => setArchiveNameSuffix(e.target.value)} placeholder="例: 年間チャンピオン戦" className="w-full p-2.5 border rounded-lg bg-[#faf7f1] text-sm" />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">備考（任意）</label>
-                        <input value={archiveNotes} onChange={e => setArchiveNotes(e.target.value)} placeholder="任意のメモ" className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm" />
+                        <label className="block text-xs font-bold text-[#625a4f] mb-1">備考（任意）</label>
+                        <input value={archiveNotes} onChange={e => setArchiveNotes(e.target.value)} placeholder="任意のメモ" className="w-full p-2.5 border rounded-lg bg-[#faf7f1] text-sm" />
                       </div>
                       <div className="md:col-span-3">
                         {archiveNameSuffix.includes(SEPARATE_EVENT_KEYWORD) && (
                           <p className="mb-2 text-[11px] font-bold text-amber-700">「{archiveNameSuffix.trim()}」は別大会として登録され、生涯ポイントには加算されません（着順分布・半荘数には含まれます）。</p>
                         )}
-                        <label className="block text-xs font-bold text-slate-600 mb-1">ルール名（「{RULE_NAME}」以外は、生涯ポイントには最高位戦ルールに換算した参考値として反映されます）</label>
+                        <label className="block text-xs font-bold text-[#625a4f] mb-1">ルール名（「{RULE_NAME}」以外は、生涯ポイントには最高位戦ルールに換算した参考値として反映されます）</label>
                         <input
                           list="archive-rule-names"
                           value={archiveRuleName}
                           onChange={e => { archiveRuleTouched.current = true; setArchiveRuleName(e.target.value); }}
                           placeholder={RULE_NAME}
-                          className="w-full p-2.5 border rounded-lg bg-slate-50 text-sm"
+                          className="w-full p-2.5 border rounded-lg bg-[#faf7f1] text-sm"
                         />
                         <datalist id="archive-rule-names">
                           <option value={RULE_NAME} />
@@ -7317,40 +7313,40 @@ export default function Home() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">MMCのページテキスト（トータル成績〜半荘ごとのログ）</label>
+                      <label className="block text-xs font-bold text-[#625a4f] mb-1">MMCのページテキスト（トータル成績〜半荘ごとのログ）</label>
                       <textarea
                         value={archiveRawText}
                         onChange={e => { setArchiveRawText(e.target.value); setArchivePreview(null); }}
                         rows={10}
                         placeholder={"1 あおい +200.1 10戦 1.90\n2 尾崎太郎 +171.9 10戦 2.10\n...\n5戦目 07/12 14:28\n最高位戦ルール\n供託 0.0\n1\n立直\n+33.0(33,000)\n2\n鯨井商事\n+11.0(31,000)\n..."}
-                        className="w-full p-3 border rounded-lg bg-slate-50 text-xs font-mono"
+                        className="w-full p-3 border rounded-lg bg-[#faf7f1] text-xs font-mono"
                       />
                     </div>
 
                     <div className="flex flex-wrap gap-2">
-                      <button onClick={handlePreviewArchiveText} disabled={!archiveRawText.trim()} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-slate-800 hover:bg-slate-700 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                      <button onClick={handlePreviewArchiveText} disabled={!archiveRawText.trim()} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-[#2d2721] hover:bg-[#473f36] text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">
                         🔍 解析してプレビュー
                       </button>
                       {archivePreview && (
-                        <button onClick={handleCommitArchiveImport} disabled={isImportingArchive} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                        <button onClick={handleCommitArchiveImport} disabled={isImportingArchive} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">
                           {isImportingArchive ? '登録中...' : '✅ この内容で登録する'}
                         </button>
                       )}
                     </div>
 
                     {archivePreview && (
-                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3">
-                        <p className="text-xs font-bold text-slate-600">
+                      <div className="bg-[#faf7f1] border border-[#e7dfd1] rounded-xl p-4 space-y-3">
+                        <p className="text-xs font-bold text-[#625a4f]">
                           解析結果: 最終成績 {archivePreview.leaderboard.length}名 ／ 半荘ログ {archivePreview.hanchans.length}半荘
                           {archivePreview.newNames.length > 0 && <span className="text-amber-600"> ／ 新規登録される選手 {archivePreview.newNames.length}名</span>}
                         </p>
                         {archivePreview.newNames.length > 0 && (
-                          <p className="text-[11px] text-slate-500">新規: {archivePreview.newNames.join('、')}</p>
+                          <p className="text-[11px] text-[#82786b]">新規: {archivePreview.newNames.join('、')}</p>
                         )}
                         <div className="overflow-x-auto">
                           <table className="w-full text-xs">
                             <thead>
-                              <tr className="text-slate-400 border-b border-slate-200">
+                              <tr className="text-[#a99d8c] border-b border-[#e7dfd1]">
                                 <th className="text-left py-1 pr-2">順位</th>
                                 <th className="text-left py-1 pr-2">名前</th>
                                 <th className="text-right py-1 pr-2">半荘数</th>
@@ -7359,11 +7355,11 @@ export default function Home() {
                             </thead>
                             <tbody>
                               {archivePreview.leaderboard.map(row => (
-                                <tr key={row.rank} className="border-b border-slate-100">
-                                  <td className="py-1 pr-2 text-slate-400">{row.rank}</td>
-                                  <td className="py-1 pr-2 font-bold text-slate-700">{row.name}</td>
-                                  <td className="py-1 pr-2 text-right text-slate-500">{row.gameCount}</td>
-                                  <td className={`py-1 text-right font-bold tabular-nums ${row.point > 0 ? 'text-blue-600' : row.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(row.point)}</td>
+                                <tr key={row.rank} className="border-b border-[#f3eee4]">
+                                  <td className="py-1 pr-2 text-[#a99d8c]">{row.rank}</td>
+                                  <td className="py-1 pr-2 font-bold text-[#473f36]">{row.name}</td>
+                                  <td className="py-1 pr-2 text-right text-[#82786b]">{row.gameCount}</td>
+                                  <td className={`py-1 text-right font-bold tabular-nums ${row.point > 0 ? 'text-blue-600' : row.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(row.point)}</td>
                                 </tr>
                               ))}
                             </tbody>
@@ -7422,16 +7418,16 @@ export default function Home() {
               </div>
             )}
 
-            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200">
+            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-[#e7dfd1]">
               <h2 className="text-xl font-bold mb-4">過去大会一覧</h2>
               {archives.length === 0 ? (
-                <p className="text-sm text-slate-400">登録されている過去大会はまだありません。</p>
+                <p className="text-sm text-[#a99d8c]">登録されている過去大会はまだありません。</p>
               ) : (
                 <div className="space-y-3">
                   {[...archives].sort((x, y) => tournamentSortKey(x.name) - tournamentSortKey(y.name)).map(a => {
                     const isOpen = openArchiveId === a.id;
                     return (
-                      <div key={a.id} className="border border-slate-200 rounded-xl overflow-hidden">
+                      <div key={a.id} className="border border-[#e7dfd1] rounded-xl overflow-hidden">
                         <button
                           onClick={() => {
                             const next = isOpen ? null : a.id;
@@ -7439,15 +7435,15 @@ export default function Home() {
                             setOpenArchivePlayerId(null);
                             setOpenArchiveHanchanIdx(null);
                           }}
-                          className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-slate-50 hover:bg-slate-100 transition text-left"
+                          className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-[#faf7f1] hover:bg-[#f3eee4] transition text-left"
                         >
-                          <span className="font-black text-slate-800">{a.name}</span>
-                          <span className="text-xs text-slate-400 flex items-center gap-3">
+                          <span className="font-black text-[#2d2721]">{a.name}</span>
+                          <span className="text-xs text-[#a99d8c] flex items-center gap-3">
                             {a.standings.length}名 ／ {a.hanchans.length}半荘
                             <span
                               role="button"
                               onClick={(e) => { e.stopPropagation(); handleExportArchivePdf(a); }}
-                              className="text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                              className="text-[#c8361e] hover:text-[#822213] font-bold cursor-pointer"
                             >📄 PDF</span>
                             {isAdmin && (
                               <button
@@ -7459,12 +7455,12 @@ export default function Home() {
                         </button>
                         {isOpen && (
                           <div className="p-4">
-                            {a.notes && <p className="text-xs text-slate-500 mb-3">📝 {a.notes}</p>}
-                            <p className="text-[11px] text-slate-400 mb-2">選手名をクリックすると半荘ごとの成績、さらにその半荘をクリックすると同卓者が見られます。</p>
+                            {a.notes && <p className="text-xs text-[#82786b] mb-3">📝 {a.notes}</p>}
+                            <p className="text-[11px] text-[#a99d8c] mb-2">選手名をクリックすると半荘ごとの成績、さらにその半荘をクリックすると同卓者が見られます。</p>
                             <div className="overflow-x-auto">
                               <table className="w-full text-xs">
                                 <thead>
-                                  <tr className="text-slate-400 border-b border-slate-200">
+                                  <tr className="text-[#a99d8c] border-b border-[#e7dfd1]">
                                     <th className="text-left py-1 pr-2">順位</th>
                                     <th className="text-left py-1 pr-2">名前</th>
                                     <th className="text-right py-1 pr-2">半荘数</th>
@@ -7478,48 +7474,48 @@ export default function Home() {
                                     return (
                                       <React.Fragment key={s.playerId}>
                                         <tr
-                                          className={`border-b border-slate-100 cursor-pointer transition ${isPlayerOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                          className={`border-b border-[#f3eee4] cursor-pointer transition ${isPlayerOpen ? 'bg-[#fdf1ed]/60' : 'hover:bg-[#faf7f1]'}`}
                                           onClick={() => {
                                             const next = isPlayerOpen ? null : s.playerId;
                                             setOpenArchivePlayerId(next);
                                             setOpenArchiveHanchanIdx(null);
                                           }}
                                         >
-                                          <td className="py-1 pr-2 text-slate-400">{s.rank}</td>
-                                          <td className="py-1 pr-2 font-bold text-slate-700"><PlayerLabel name={nameOf(s.playerId, s.name)} /></td>
-                                          <td className="py-1 pr-2 text-right text-slate-500">{s.gameCount}</td>
-                                          <td className={`py-1 text-right font-bold tabular-nums ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(s.totalPoint)}</td>
+                                          <td className="py-1 pr-2 text-[#a99d8c]">{s.rank}</td>
+                                          <td className="py-1 pr-2 font-bold text-[#473f36]"><PlayerLabel name={nameOf(s.playerId, s.name)} /></td>
+                                          <td className="py-1 pr-2 text-right text-[#82786b]">{s.gameCount}</td>
+                                          <td className={`py-1 text-right font-bold tabular-nums ${s.totalPoint > 0 ? 'text-blue-600' : s.totalPoint < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(s.totalPoint)}</td>
                                         </tr>
                                         {isPlayerOpen && (
                                           <tr>
-                                            <td colSpan={4} className="p-0 bg-slate-50/60 border-b border-slate-200">
+                                            <td colSpan={4} className="p-0 bg-[#faf7f1]/60 border-b border-[#e7dfd1]">
                                               <div className="px-3 py-2 space-y-1">
                                                 {rows.length === 0 ? (
-                                                  <p className="text-slate-400 py-1">半荘ごとの記録がありません。</p>
+                                                  <p className="text-[#a99d8c] py-1">半荘ごとの記録がありません。</p>
                                                 ) : rows.map((r, i) => {
                                                   const hKey = i;
                                                   const isHOpen = openArchiveHanchanIdx === hKey;
                                                   return (
-                                                    <div key={i} className="bg-white border border-slate-200 rounded-lg overflow-hidden">
+                                                    <div key={i} className="bg-white border border-[#e7dfd1] rounded-lg overflow-hidden">
                                                       <div
-                                                        className={`flex items-center justify-between gap-2 px-3 py-1.5 cursor-pointer transition ${isHOpen ? 'bg-indigo-50/60' : 'hover:bg-slate-50'}`}
+                                                        className={`flex items-center justify-between gap-2 px-3 py-1.5 cursor-pointer transition ${isHOpen ? 'bg-[#fdf1ed]/60' : 'hover:bg-[#faf7f1]'}`}
                                                         onClick={() => setOpenArchiveHanchanIdx(isHOpen ? null : hKey)}
                                                       >
-                                                        <span className="text-slate-400 w-8">#{i + 1}</span>
-                                                        <span className="text-slate-600 font-bold w-10">{r.rank}位</span>
-                                                        <span className="text-slate-500 tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
-                                                        <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                                                        <span className="text-[#a99d8c] w-8">#{i + 1}</span>
+                                                        <span className="text-[#625a4f] font-bold w-10">{r.rank}位</span>
+                                                        <span className="text-[#82786b] tabular-nums flex-1 text-right">{(r.score * 100).toLocaleString()}点</span>
+                                                        <span className={`font-black tabular-nums w-16 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r.point)}</span>
                                                       </div>
                                                       {isHOpen && (
-                                                        <div className="px-3 pb-2 pt-1 bg-white border-t border-slate-100">
+                                                        <div className="px-3 pb-2 pt-1 bg-white border-t border-[#f3eee4]">
                                                           {r.table.map(tp => (
-                                                            <div key={tp.playerId} className={`flex items-center justify-between px-2 py-1 text-[11px] rounded ${tp.playerId === s.playerId ? 'bg-indigo-50' : ''}`}>
-                                                              <span className="text-slate-600 font-bold truncate flex-1">
-                                                                <span className="text-slate-400 font-mono mr-1">{tp.rank}位</span>
+                                                            <div key={tp.playerId} className={`flex items-center justify-between px-2 py-1 text-[11px] rounded ${tp.playerId === s.playerId ? 'bg-[#fdf1ed]' : ''}`}>
+                                                              <span className="text-[#625a4f] font-bold truncate flex-1">
+                                                                <span className="text-[#a99d8c] font-mono mr-1">{tp.rank}位</span>
                                                                 <PlayerLabel name={tp.name} />
                                                               </span>
-                                                              <span className="text-slate-400 mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
-                                                              <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(tp.point)}</span>
+                                                              <span className="text-[#a99d8c] mr-3 tabular-nums">{(tp.score * 100).toLocaleString()}点</span>
+                                                              <span className={`font-bold tabular-nums ${tp.point > 0 ? 'text-blue-600' : tp.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(tp.point)}</span>
                                                             </div>
                                                           ))}
                                                         </div>
@@ -7542,10 +7538,10 @@ export default function Home() {
                               <div className="mt-4">
                                 <button
                                   onClick={() => setOpenHanchanListIds(prev => ({ ...prev, [a.id]: !prev[a.id] }))}
-                                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-100 rounded-lg transition text-left"
+                                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-[#fdf1ed] hover:bg-[#fbddd3] border border-[#fbddd3] rounded-lg transition text-left"
                                 >
-                                  <span className="text-sm font-black text-indigo-900">🀄 半荘ごとの成績（{a.hanchans.length}半荘）</span>
-                                  <span className="text-xs font-bold text-indigo-500">{openHanchanListIds[a.id] ? '閉じる ▲' : '開く ▼'}</span>
+                                  <span className="text-sm font-black text-[#5e190e]">🀄 半荘ごとの成績（{a.hanchans.length}半荘）</span>
+                                  <span className="text-xs font-bold text-[#d9452b]">{openHanchanListIds[a.id] ? '閉じる ▲' : '開く ▼'}</span>
                                 </button>
                                 {openHanchanListIds[a.id] && (
                                   <div className="mt-2 space-y-3">
@@ -7556,31 +7552,31 @@ export default function Home() {
                                       </div>
                                     )}
                                     {groupArchiveHanchans(a.hanchans).map(g => (
-                                      <div key={g.no} className="border border-indigo-100 rounded-xl overflow-hidden bg-white">
+                                      <div key={g.no} className="border border-[#fbddd3] rounded-xl overflow-hidden bg-white">
                                         {!g.items.some(h => typeof h.table === 'number') && (
-                                          <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 border-b border-indigo-100">
-                                            <span className="text-sm font-black text-indigo-900">{g.no}半荘目</span>
+                                          <div className="flex items-center gap-2 px-3 py-1.5 bg-[#fdf1ed] border-b border-[#fbddd3]">
+                                            <span className="text-sm font-black text-[#5e190e]">{g.no}半荘目</span>
                                           </div>
                                         )}
                                         <div className="p-2 grid gap-2 md:grid-cols-2">
                                           {g.items.map((h, k) => (
-                                            <div key={k} className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+                                            <div key={k} className="border border-[#e7dfd1] rounded-lg overflow-hidden bg-white">
                                               {(typeof h.table === 'number' || h.deposit > 0) && (
-                                                <div className="flex items-center justify-between px-3 py-1 bg-slate-50 border-b border-slate-100">
-                                                  <span className="text-xs font-black text-indigo-900">{typeof h.table === 'number' ? `${g.no}半荘目-${h.table}卓` : ''}</span>
-                                                  {h.deposit > 0 && <span className="text-[10px] text-slate-400">供託 {h.deposit.toFixed(1)}</span>}
+                                                <div className="flex items-center justify-between px-3 py-1 bg-[#faf7f1] border-b border-[#f3eee4]">
+                                                  <span className="text-xs font-black text-[#5e190e]">{typeof h.table === 'number' ? `${g.no}半荘目-${h.table}卓` : ''}</span>
+                                                  {h.deposit > 0 && <span className="text-[10px] text-[#a99d8c]">供託 {h.deposit.toFixed(1)}</span>}
                                                 </div>
                                               )}
                                               <div className="px-2 py-1">
                                                 {[...h.results].sort((x, y) => x.rank - y.rank).map((r, m) => (
                                                   <div key={m} className={`flex items-center justify-between gap-2 px-1 py-1 text-[11px] ${r.excluded ? 'opacity-60' : ''}`}>
-                                                    <span className="text-slate-400 font-mono w-5">{r.rank}位</span>
-                                                    <span className="flex-1 min-w-0 truncate font-bold text-slate-700">
+                                                    <span className="text-[#a99d8c] font-mono w-5">{r.rank}位</span>
+                                                    <span className="flex-1 min-w-0 truncate font-bold text-[#473f36]">
                                                       <PlayerLabel name={nameOf(r.playerId, r.name)} />
-                                                      {r.excluded && <span className="ml-1 text-[9px] font-bold bg-slate-200 text-slate-500 px-1 rounded">順位外</span>}
+                                                      {r.excluded && <span className="ml-1 text-[9px] font-bold bg-[#e7dfd1] text-[#82786b] px-1 rounded">順位外</span>}
                                                     </span>
-                                                    <span className="text-slate-400 tabular-nums">{(r.score * 100).toLocaleString()}点</span>
-                                                    <span className={`font-black tabular-nums w-14 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>{fmtPt(r.point)}</span>
+                                                    <span className="text-[#a99d8c] tabular-nums">{(r.score * 100).toLocaleString()}点</span>
+                                                    <span className={`font-black tabular-nums w-14 text-right ${r.point > 0 ? 'text-blue-600' : r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r.point)}</span>
                                                   </div>
                                                 ))}
                                               </div>
@@ -7596,7 +7592,7 @@ export default function Home() {
                             {(a.penalties.length > 0 || isAdmin) && (
                               <div className="mt-4">
                                 <p className="text-xs font-bold text-red-600 mb-2">🚫 ペナルティ</p>
-                                {a.penalties.length === 0 && <p className="text-[11px] text-slate-400 mb-1">ペナルティの記録はありません。</p>}
+                                {a.penalties.length === 0 && <p className="text-[11px] text-[#a99d8c] mb-1">ペナルティの記録はありません。</p>}
                                 <div className="space-y-1">
                                   {a.penalties.map((p, i) => (
                                     <div key={i} className="flex items-center justify-between gap-2 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5 text-xs">
@@ -7613,15 +7609,15 @@ export default function Home() {
                                   const d = penaltyDrafts[a.id] || { playerId: '', point: '', reason: '' };
                                   const setD = (patch: Partial<typeof d>) => setPenaltyDrafts(prev => ({ ...prev, [a.id]: { ...d, ...patch } }));
                                   return (
-                                    <div className="mt-2 flex flex-wrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-lg p-2">
-                                      <select value={d.playerId} onChange={e => setD({ playerId: e.target.value })} className="border border-slate-300 rounded-md px-2 py-1 text-xs bg-white">
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 bg-[#faf7f1] border border-[#e7dfd1] rounded-lg p-2">
+                                      <select value={d.playerId} onChange={e => setD({ playerId: e.target.value })} className="border border-[#d4c9b7] rounded-md px-2 py-1 text-xs bg-white">
                                         <option value="">選手を選ぶ</option>
                                         {[...a.standings].sort((x, y) => x.rank - y.rank).map(st => (
                                           <option key={st.playerId} value={st.playerId}>{st.rank}位 {nameOf(st.playerId, st.name)}</option>
                                         ))}
                                       </select>
-                                      <input type="number" step="0.1" min="0" value={d.point} onChange={e => setD({ point: e.target.value })} placeholder="減点 例:20" className="w-24 border border-slate-300 rounded-md px-2 py-1 text-xs bg-white" />
-                                      <input type="text" value={d.reason} onChange={e => setD({ reason: e.target.value })} placeholder="理由 例:チョンボ・遅刻" className="flex-1 min-w-[8rem] border border-slate-300 rounded-md px-2 py-1 text-xs bg-white" />
+                                      <input type="number" step="0.1" min="0" value={d.point} onChange={e => setD({ point: e.target.value })} placeholder="減点 例:20" className="w-24 border border-[#d4c9b7] rounded-md px-2 py-1 text-xs bg-white" />
+                                      <input type="text" value={d.reason} onChange={e => setD({ reason: e.target.value })} placeholder="理由 例:チョンボ・遅刻" className="flex-1 min-w-[8rem] border border-[#d4c9b7] rounded-md px-2 py-1 text-xs bg-white" />
                                       <button onClick={() => handleAddArchivePenalty(a)} className="bg-red-600 hover:bg-red-700 text-white font-bold px-3 py-1.5 rounded-md text-xs">＋ ペナルティを付ける</button>
                                     </div>
                                   );
@@ -7641,13 +7637,13 @@ export default function Home() {
 
         {/* ========== 今大会成績 ========== */}
         {activeTab === 'currentRanking' && (
-          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-200 animate-in fade-in duration-300">
+          <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-[#e7dfd1] animate-in fade-in duration-300">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3 mb-5">
               <h2 className="text-2xl font-black text-teal-800">🏆 今大会の成績</h2>
               <div className="flex flex-wrap gap-2 items-center">
                 <button
                   onClick={() => setShowKuroko(!showKuroko)}
-                  className={`px-3 py-2 rounded-lg text-xs font-bold border-2 transition ${showKuroko ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-500 border-slate-300 hover:border-slate-500'}`}
+                  className={`px-3 py-2 rounded-lg text-xs font-bold border-2 transition ${showKuroko ? 'bg-[#2d2721] text-white border-[#2d2721]' : 'bg-white text-[#82786b] border-[#d4c9b7] hover:border-[#82786b]'}`}
                   title="今大会成績での黒子の表示を切り替えます">
                   {showKuroko ? '🕶️ 黒子: 表示中' : '🕶️ 黒子: 非表示'}
                 </button>
@@ -7661,10 +7657,10 @@ export default function Home() {
             </div>
 
             {tournamentPhase === 'entry' || hideSeating ? (
-              <p className="text-slate-500">{generalDrawingScreen ? '卓組抽選中です。大会が始まるまでお待ちください。' : '大会が始まっていません。'}</p>
+              <p className="text-[#82786b]">{generalDrawingScreen ? '卓組抽選中です。大会が始まるまでお待ちください。' : '大会が始まっていません。'}</p>
             ) : (
               <>
-                <p className="text-xs text-slate-500 mb-3">選手名をクリックすると、今大会の全成績（これからの対局予定を含む）が表示されます。</p>
+                <p className="text-xs text-[#82786b] mb-3">選手名をクリックすると、今大会の全成績（これからの対局予定を含む）が表示されます。</p>
                 <div className="space-y-2">
                   {displayCurrentRanking.map((p, i) => {
                     const isOpen = openPlayerId === p.id;
@@ -7675,22 +7671,22 @@ export default function Home() {
                           onClick={() => { setOpenPlayerId(isOpen ? null : p.id); setOpenGameKey(null); }}
                           className={`w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3.5 sm:py-4 text-left transition ${isOpen ? 'bg-emerald-50' : 'bg-gradient-to-r from-emerald-50/70 to-white hover:from-emerald-100/70'}`}
                         >
-                          <span className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center font-black text-sm ${i === 0 ? 'bg-yellow-400 text-white' : i === 1 ? 'bg-slate-400 text-white' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                          <span className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center font-black text-sm ${i === 0 ? 'bg-yellow-400 text-white' : i === 1 ? 'bg-[#a99d8c] text-white' : i === 2 ? 'bg-amber-700 text-white' : 'bg-[#e7dfd1] text-[#625a4f]'}`}>
                             {i + 1}
                           </span>
                           <span className="flex-1 min-w-0">
-                            <span className="block font-black text-base sm:text-lg text-slate-800 truncate">
+                            <span className="block font-black text-base sm:text-lg text-[#2d2721] truncate">
                               <PlayerLabel name={p.name} />
-                              {isKuroko(p.name) && <span className="ml-2 text-[10px] font-bold bg-slate-800 text-white px-2 py-0.5 rounded-full align-middle">黒子</span>}
+                              {isKuroko(p.name) && <span className="ml-2 text-[10px] font-bold bg-[#2d2721] text-white px-2 py-0.5 rounded-full align-middle">黒子</span>}
                               {p.chonbo > 0 && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full align-middle">🚫 {p.chonbo}</span>}
                             </span>
-                            <span className="block sm:hidden text-[11px] text-slate-400 mt-0.5">{p.games}戦 ／ 平均着順 {p.games > 0 ? p.avgRank.toFixed(2) : '-'}</span>
+                            <span className="block sm:hidden text-[11px] text-[#a99d8c] mt-0.5">{p.games}戦 ／ 平均着順 {p.games > 0 ? p.avgRank.toFixed(2) : '-'}</span>
                           </span>
-                          <span className={`font-black text-xl sm:text-2xl tabular-nums ${p.point > 0 ? 'text-emerald-700' : p.point < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                          <span className={`font-black text-xl sm:text-2xl tabular-nums ${p.point > 0 ? 'text-emerald-700' : p.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>
                             {fmtPt(p.point)}
                           </span>
-                          <span className="hidden sm:block w-16 text-right text-sm text-slate-400 font-medium">{p.games}戦</span>
-                          <span className="hidden sm:block w-14 text-right text-sm text-slate-500 tabular-nums">
+                          <span className="hidden sm:block w-16 text-right text-sm text-[#a99d8c] font-medium">{p.games}戦</span>
+                          <span className="hidden sm:block w-14 text-right text-sm text-[#82786b] tabular-nums">
                             {p.games > 0 ? p.avgRank.toFixed(2) : '-'}
                           </span>
                         </button>
@@ -7698,7 +7694,7 @@ export default function Home() {
                         {isOpen && (
                           <div className="bg-white border-t border-teal-100">
                             {schedule.length === 0 && (
-                              <p className="px-6 py-4 text-sm text-slate-400">対局の予定がありません。</p>
+                              <p className="px-6 py-4 text-sm text-[#a99d8c]">対局の予定がありません。</p>
                             )}
                             {schedule.map(g => {
                               const gKey = `${p.id}-${g.key}`;
@@ -7708,12 +7704,12 @@ export default function Home() {
                               // --- 未定 (最後の2回戦) ---
                               if (g.status === 'pending') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0 bg-slate-50/60">
-                                    <span className="font-mono text-xs sm:text-sm text-slate-400 w-28 sm:w-40 flex-shrink-0">
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-[#f3eee4] last:border-b-0 bg-[#faf7f1]/60">
+                                    <span className="font-mono text-xs sm:text-sm text-[#a99d8c] w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦{time && <span className="ml-2 text-[10px]">{time}〜</span>}
                                     </span>
-                                    <span className="flex-1 text-center text-sm font-bold text-slate-400">卓組未定</span>
-                                    <span className="text-[10px] text-slate-400 text-right">
+                                    <span className="flex-1 text-center text-sm font-bold text-[#a99d8c]">卓組未定</span>
+                                    <span className="text-[10px] text-[#a99d8c] text-right">
                                       {g.roundNo === roundsCount ? '最終戦は直前の回戦終了後に決定' : '前の回戦が全て終了した時点で決定'}
                                     </span>
                                   </div>
@@ -7723,12 +7719,12 @@ export default function Home() {
                               // --- 抜け番 ---
                               if (g.status === 'sitout') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0">
-                                    <span className="font-mono text-xs sm:text-sm text-slate-400 w-28 sm:w-40 flex-shrink-0">
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-[#f3eee4] last:border-b-0">
+                                    <span className="font-mono text-xs sm:text-sm text-[#a99d8c] w-28 sm:w-40 flex-shrink-0">
                                       {g.roundNo}回戦{time && <span className="ml-2 text-[10px]">{time}〜</span>}
                                     </span>
-                                    <span className="flex-1 text-center text-sm text-slate-400">抜け番</span>
-                                    <span className="w-12 text-right text-slate-300 font-bold">(-)</span>
+                                    <span className="flex-1 text-center text-sm text-[#a99d8c]">抜け番</span>
+                                    <span className="w-12 text-right text-[#d4c9b7] font-bold">(-)</span>
                                   </div>
                                 );
                               }
@@ -7736,15 +7732,15 @@ export default function Home() {
                               // --- 対局予定 ---
                               if (g.status === 'ready') {
                                 return (
-                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-slate-100 last:border-b-0 bg-indigo-50/40">
-                                    <span className="font-mono text-xs sm:text-sm text-slate-500 w-28 sm:w-40 flex-shrink-0">
-                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
+                                  <div key={gKey} className="flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 border-b border-[#f3eee4] last:border-b-0 bg-[#fdf1ed]/40">
+                                    <span className="font-mono text-xs sm:text-sm text-[#82786b] w-28 sm:w-40 flex-shrink-0">
+                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-[#a99d8c]">{time}〜</span>}
                                     </span>
-                                    <span className="flex-1 text-center text-sm font-bold text-indigo-500">
+                                    <span className="flex-1 text-center text-sm font-bold text-[#d9452b]">
                                       対局予定（{g.wind}家）
                                       {g.roundNo === roundsCount && g.tableNo === 1 && <span className="ml-2 text-[10px] font-black text-amber-600">👑 決勝卓</span>}
                                     </span>
-                                    <span className="w-12 text-right text-slate-300 font-bold">(-)</span>
+                                    <span className="w-12 text-right text-[#d4c9b7] font-bold">(-)</span>
                                   </div>
                                 );
                               }
@@ -7753,39 +7749,39 @@ export default function Home() {
                               const ranked = getTableRankList(g.table as Table);
                               const deposit = getTableDeposit(g.table as Table);
                               return (
-                                <div key={gKey} className="border-b border-slate-100 last:border-b-0">
+                                <div key={gKey} className="border-b border-[#f3eee4] last:border-b-0">
                                   <button
                                     onClick={() => setOpenGameKey(isGOpen ? null : gKey)}
-                                    className={`w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 sm:py-3 text-left transition ${isGOpen ? 'bg-emerald-50/60' : 'hover:bg-slate-50'}`}
+                                    className={`w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3.5 sm:py-3 text-left transition ${isGOpen ? 'bg-emerald-50/60' : 'hover:bg-[#faf7f1]'}`}
                                   >
-                                    <span className="font-mono text-xs sm:text-sm text-slate-600 w-28 sm:w-40 flex-shrink-0">
-                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-slate-400">{time}〜</span>}
+                                    <span className="font-mono text-xs sm:text-sm text-[#625a4f] w-28 sm:w-40 flex-shrink-0">
+                                      {g.roundNo}回戦 / {tableTag(g.tableNo)}{time && <span className="ml-2 text-[10px] text-[#a99d8c]">{time}〜</span>}
                                     </span>
-                                    <span className={`flex-1 text-center font-black text-lg tabular-nums ${(g.point || 0) > 0 ? 'text-emerald-700' : (g.point || 0) < 0 ? 'text-red-600' : 'text-slate-400'}`}>
+                                    <span className={`flex-1 text-center font-black text-lg tabular-nums ${(g.point || 0) > 0 ? 'text-emerald-700' : (g.point || 0) < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>
                                       {fmtPt(g.point || 0)}
                                     </span>
                                     {(g.chonbo || 0) > 0 && <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🚫 {g.chonbo}</span>}
-                                    <span className="w-12 text-right text-slate-400 font-bold">({g.rank})</span>
+                                    <span className="w-12 text-right text-[#a99d8c] font-bold">({g.rank})</span>
                                   </button>
 
                                   {isGOpen && (
                                     <div className="px-3 sm:px-6 pb-4 pt-1 bg-white">
-                                      <div className="border border-slate-200 rounded-lg overflow-hidden">
+                                      <div className="border border-[#e7dfd1] rounded-lg overflow-hidden">
                                         {ranked.map((rp, rIdx2) => (
-                                          <div key={rp.playerId} className={`flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 text-sm ${rp.playerId === p.id ? 'bg-emerald-50' : 'bg-white'} ${rIdx2 < 3 ? 'border-b border-slate-100' : ''}`}>
-                                            <span className="text-slate-700 font-bold truncate">
-                                              <span className="text-slate-400 font-mono mr-2">{rIdx2 + 1}</span>
+                                          <div key={rp.playerId} className={`flex items-center justify-between gap-2 px-3 sm:px-4 py-2.5 text-sm ${rp.playerId === p.id ? 'bg-emerald-50' : 'bg-white'} ${rIdx2 < 3 ? 'border-b border-[#f3eee4]' : ''}`}>
+                                            <span className="text-[#473f36] font-bold truncate">
+                                              <span className="text-[#a99d8c] font-mono mr-2">{rIdx2 + 1}</span>
                                               <PlayerLabel name={rp.name} />
-                                              <span className="text-slate-400 font-normal text-xs ml-2">| {rp.wind}家 / {rp.score * 100}点</span>
+                                              <span className="text-[#a99d8c] font-normal text-xs ml-2">| {rp.wind}家 / {rp.score * 100}点</span>
                                               {(rp.chonbo || 0) > 0 && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-1.5 py-0.5 rounded">🚫{rp.chonbo}</span>}
                                             </span>
-                                            <span className={`font-mono font-bold tabular-nums ${rp.point > 0 ? 'text-slate-800' : rp.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                            <span className={`font-mono font-bold tabular-nums ${rp.point > 0 ? 'text-[#2d2721]' : rp.point < 0 ? 'text-red-600' : 'text-[#82786b]'}`}>
                                               {rp.point > 0 ? rp.point.toFixed(1) : `−${Math.abs(rp.point).toFixed(1)}`}
                                             </span>
                                           </div>
                                         ))}
                                       </div>
-                                      <div className="flex justify-between items-start mt-2 text-[11px] text-slate-400">
+                                      <div className="flex justify-between items-start mt-2 text-[11px] text-[#a99d8c]">
                                         <span>{RULE_NAME}</span>
                                         <div className="text-right">
                                           <div>供託・不足分：{(deposit * 100).toLocaleString()}点</div>
@@ -7803,11 +7799,11 @@ export default function Home() {
                     );
                   })}
                   {displayCurrentRanking.length === 0 && (
-                    <p className="text-slate-400 text-sm py-6 text-center">表示できるデータがありません。</p>
+                    <p className="text-[#a99d8c] text-sm py-6 text-center">表示できるデータがありません。</p>
                   )}
                 </div>
 
-                <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 text-[11px] text-slate-400 mt-4 pr-2">
+                <div className="flex flex-wrap justify-end gap-x-6 gap-y-1 text-[11px] text-[#a99d8c] mt-4 pr-2">
                   <span>右端の数値は平均着順</span>
                   <span>Ⓟ = 麻雀プロ</span>
                   <span>チョンボ: 1回 −{CHONBO_PENALTY.toFixed(1)}pt</span>
@@ -7823,22 +7819,22 @@ export default function Home() {
 
             {/* 次の大会の参加選手の事前登録（管理者のみ。今の大会が進行中・終了後でも登録できる） */}
             {isAdmin && (
-              <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <button onClick={() => setNextEntryOpen(v => !v)} className="w-full flex items-center justify-between gap-3 px-4 md:px-5 py-3.5 text-left hover:bg-slate-50 transition">
+              <div className="bg-white rounded-2xl shadow-sm border border-[#e7dfd1] overflow-hidden">
+                <button onClick={() => setNextEntryOpen(v => !v)} className="w-full flex items-center justify-between gap-3 px-4 md:px-5 py-3.5 text-left hover:bg-[#faf7f1] transition">
                   <span className="min-w-0">
-                    <span className="block text-sm md:text-base font-black text-slate-800">📝 次の大会の参加選手を事前登録</span>
-                    <span className="block text-[11px] text-slate-500 mt-0.5">
+                    <span className="block text-sm md:text-base font-black text-[#2d2721]">📝 次の大会の参加選手を事前登録</span>
+                    <span className="block text-[11px] text-[#82786b] mt-0.5">
                       {nextEntry && nextEntry.playerIds.length > 0
                         ? `第${nextEntry.no || '?'}回: ${nextEntry.playerIds.length}名を登録済み${Object.keys(nextEntry.limits || {}).length > 0 ? `（出場限定 ${Object.keys(nextEntry.limits || {}).length}名）` : ''}`
                         : '今の大会の進行中・終了後でも、先に参加選手を登録しておけます'}
                     </span>
                   </span>
-                  <span className="text-xs font-bold text-slate-400 whitespace-nowrap">{nextEntryOpen ? '閉じる ▲' : '開く ▼'}</span>
+                  <span className="text-xs font-bold text-[#a99d8c] whitespace-nowrap">{nextEntryOpen ? '閉じる ▲' : '開く ▼'}</span>
                 </button>
                 {nextEntryOpen && (
-                  <div className="px-4 md:px-5 pb-5 pt-1 space-y-3 border-t border-slate-100">
+                  <div className="px-4 md:px-5 pb-5 pt-1 space-y-3 border-t border-[#f3eee4]">
                     <div className="flex flex-wrap items-center gap-3 pt-3">
-                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-[#625a4f]">
                         第
                         <input
                           type="number" min="1" inputMode="numeric"
@@ -7848,7 +7844,7 @@ export default function Home() {
                         />
                         回の参加選手
                       </label>
-                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-slate-600">
+                      <label className="inline-flex items-center gap-1.5 text-sm font-bold text-[#625a4f]">
                         全
                         <input
                           type="number" min="1" max="20" inputMode="numeric"
@@ -7858,8 +7854,8 @@ export default function Home() {
                         />
                         回戦
                       </label>
-                      <span className="text-sm font-black text-indigo-700">{nextEntry ? nextEntry.playerIds.length : 0}名</span>
-                      <span className={`text-[11px] font-bold ${nextSaveState === 'error' ? 'text-red-600' : 'text-slate-400'}`}>
+                      <span className="text-sm font-black text-[#a62b17]">{nextEntry ? nextEntry.playerIds.length : 0}名</span>
+                      <span className={`text-[11px] font-bold ${nextSaveState === 'error' ? 'text-red-600' : 'text-[#a99d8c]'}`}>
                         {nextSaveState === 'saving' ? '保存中…' : nextSaveState === 'saved' ? '✓ 保存しました' : nextSaveState === 'error' ? '保存に失敗しました（もう一度操作してください）' : ''}
                       </span>
                     </div>
@@ -7870,12 +7866,12 @@ export default function Home() {
                         placeholder="名前で絞り込み"
                         className="flex-1 min-w-[10rem] p-2 border rounded-lg text-sm"
                       />
-                      <button onClick={() => setNextEntryAll(true)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">全員を選択</button>
-                      <button onClick={() => setNextEntryAll(false)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">すべて解除</button>
+                      <button onClick={() => setNextEntryAll(true)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-[#e7dfd1] hover:bg-[#faf7f1] text-[#625a4f]">全員を選択</button>
+                      <button onClick={() => setNextEntryAll(false)} className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-[#e7dfd1] hover:bg-[#faf7f1] text-[#625a4f]">すべて解除</button>
                       <button
                         onClick={copyCurrentEntryToNext}
                         disabled={entryPlayerIds.length === 0}
-                        className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 disabled:opacity-40"
+                        className="text-xs font-bold px-3 py-2 rounded-lg bg-white border border-[#e7dfd1] hover:bg-[#faf7f1] text-[#625a4f] disabled:opacity-40"
                         title="いまの大会のエントリーを、次の大会の候補としてコピーします"
                       >今の大会の参加者をコピー</button>
                     </div>
@@ -7888,15 +7884,15 @@ export default function Home() {
                             <button
                               key={pl.id}
                               onClick={() => toggleNextEntry(pl.id)}
-                              className={`px-3.5 py-2 rounded-full font-bold text-sm transition border-2 ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 border-slate-200 hover:border-indigo-300'}`}
+                              className={`px-3.5 py-2 rounded-full font-bold text-sm transition border-2 ${on ? 'bg-[#c8361e] text-white border-[#c8361e]' : 'bg-white text-[#625a4f] border-[#e7dfd1] hover:border-[#ef937c]'}`}
                             ><PlayerLabel name={pl.name} /> {on && '✓'}</button>
                           );
                         })}
                     </div>
                     {/* 出場試合数の限定（任意）: 事前登録した選手の中から、出る回戦を選ぶ */}
                     <div className="p-3 bg-amber-50/60 rounded-xl border border-amber-200">
-                      <h4 className="text-sm font-black text-slate-700 mb-1">出場試合数を限定する選手（任意）</h4>
-                      <p className="text-[11px] text-slate-500 mb-2 leading-relaxed">基本は全試合に出場します。出る回戦を連続していなくても自由に選べます（例: 1〜3回戦と7〜9回戦、2・5・8回戦）。</p>
+                      <h4 className="text-sm font-black text-[#473f36] mb-1">出場試合数を限定する選手（任意）</h4>
+                      <p className="text-[11px] text-[#82786b] mb-2 leading-relaxed">基本は全試合に出場します。出る回戦を連続していなくても自由に選べます（例: 1〜3回戦と7〜9回戦、2・5・8回戦）。</p>
                       <div className="flex flex-wrap items-center gap-2">
                         <select
                           value={nextLimitPlayerId}
@@ -7911,14 +7907,14 @@ export default function Home() {
                         <button
                           onClick={addNextLimit}
                           disabled={!nextLimitPlayerId || nextLimitRounds.length === 0}
-                          className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition"
+                          className="px-4 py-2 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition"
                         >{nextLimitPlayerId && nextEntry?.limits?.[nextLimitPlayerId] ? '更新' : '追加'}</button>
                       </div>
                       <div className="mt-2">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-bold text-slate-600">出場する回戦（タップで選択）</span>
+                          <span className="text-xs font-bold text-[#625a4f]">出場する回戦（タップで選択）</span>
                           <button onClick={() => setNextLimitRounds(Array.from({ length: nextRoundsN() }, (_, i) => i + 1))} className="text-[11px] font-bold text-amber-700 underline">全選択</button>
-                          <button onClick={() => setNextLimitRounds([])} className="text-[11px] font-bold text-slate-500 underline">クリア</button>
+                          <button onClick={() => setNextLimitRounds([])} className="text-[11px] font-bold text-[#82786b] underline">クリア</button>
                           {nextLimitRounds.length > 0 && <span className="text-[11px] font-bold text-amber-700">→ {formatLimitRounds(nextLimitRounds.filter(n => n <= nextRoundsN()))}</span>}
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -7928,7 +7924,7 @@ export default function Home() {
                               <button
                                 key={n}
                                 onClick={() => toggleNextLimitRound(n)}
-                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'}`}
+                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-[#e7dfd1] text-[#82786b] hover:border-amber-300'}`}
                               >{n}</button>
                             );
                           })}
@@ -7937,14 +7933,14 @@ export default function Home() {
                       {Object.keys(nextEntry?.limits || {}).length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
                           {(Object.entries(nextEntry?.limits ?? {}) as [string, PlayerLimit][]).map(([id, l]) => (
-                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-slate-700">
+                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-[#473f36]">
                               <PlayerLabel name={dbPlayers.find(pl => pl.id === id)?.name || '不明'} />
                               <button
                                 onClick={() => { setNextLimitPlayerId(id); setNextLimitRounds(l.rounds); }}
                                 className="text-xs text-amber-700 underline decoration-dotted hover:text-amber-900"
                                 title="出場回戦を編集"
                               >{formatLimitRounds(l.rounds)}</button>
-                              <button onClick={() => removeNextLimit(id)} className="w-5 h-5 rounded-full bg-slate-200 hover:bg-red-200 text-slate-500 hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
+                              <button onClick={() => removeNextLimit(id)} className="w-5 h-5 rounded-full bg-[#e7dfd1] hover:bg-red-200 text-[#82786b] hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
                             </span>
                           ))}
                         </div>
@@ -7954,7 +7950,7 @@ export default function Home() {
                       {nextEntry && nextEntry.playerIds.length > 0 && (
                         <button onClick={clearNextEntryAll} className="text-xs font-bold px-3 py-2 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200">事前登録を消す</button>
                       )}
-                      <p className="text-[11px] text-slate-400 leading-relaxed">
+                      <p className="text-[11px] text-[#a99d8c] leading-relaxed">
                         登録した選手は、新しい大会のエントリー画面で「事前登録を読み込む」を押すと、そのまま参加者になります。この大会を開始すると、事前登録は自動で消えます。
                       </p>
                     </div>
@@ -7980,7 +7976,7 @@ export default function Home() {
                       <span className={`px-2 py-1 rounded-full border ${drawReport.repeatPairs === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
                         {drawReport.repeatPairs === 0 ? '✅ 同卓: 通常回戦で同じ相手との同卓はありません' : `同卓: 2回以上同卓する組が${drawReport.repeatPairs}組（最大${drawReport.maxPair}回）`}
                       </span>
-                      <span className="px-2 py-1 rounded-full border bg-white text-slate-500 border-slate-200">{drawReport.rounds}回戦・{drawReport.attempts}パターンから最良を採用</span>
+                      <span className="px-2 py-1 rounded-full border bg-white text-[#82786b] border-[#e7dfd1]">{drawReport.rounds}回戦・{drawReport.attempts}パターンから最良を採用</span>
                     </div>
                   )}
                 </div>
@@ -7988,12 +7984,12 @@ export default function Home() {
                   {!drawingAnnounced ? (
                     <button
                       onClick={() => handleToggleDrawingAnnounce(true)}
-                      className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-black py-3 px-8 rounded-xl text-base transition"
+                      className="w-full md:w-auto bg-[#c8361e] hover:bg-[#a62b17] text-white font-black py-3 px-8 rounded-xl text-base transition"
                     >🎰 抽選（一般画面に「抽選中」を表示）</button>
                   ) : (
                     <button
                       onClick={() => handleToggleDrawingAnnounce(false)}
-                      className="w-full md:w-auto bg-white hover:bg-slate-50 text-slate-600 font-bold py-2 px-6 rounded-xl text-xs border border-slate-200 transition"
+                      className="w-full md:w-auto bg-white hover:bg-[#faf7f1] text-[#625a4f] font-bold py-2 px-6 rounded-xl text-xs border border-[#e7dfd1] transition"
                     >「抽選中」の表示を取り消す</button>
                   )}
                   <button
@@ -8011,7 +8007,7 @@ export default function Home() {
 
             {/* 卓組抽選中（管理者以外）: 抽選中アニメーション */}
             {generalDrawingScreen && (
-              <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
+              <div className="bg-white p-8 md:p-12 rounded-2xl shadow-sm border border-[#e7dfd1] text-center">
                 <div className="flex justify-center gap-3 mb-6" aria-hidden="true">
                   {['🀄', '🀅', '🀀', '🀁'].map((tile, i) => (
                     <span
@@ -8021,35 +8017,35 @@ export default function Home() {
                     >{tile}</span>
                   ))}
                 </div>
-                <h2 className="text-2xl md:text-3xl font-black text-indigo-900 animate-pulse">卓組抽選中...</h2>
-                <p className="text-sm text-slate-500 mt-3 leading-relaxed">
+                <h2 className="text-2xl md:text-3xl font-black text-[#5e190e] animate-pulse">卓組抽選中...</h2>
+                <p className="text-sm text-[#82786b] mt-3 leading-relaxed">
                   ただいま対局者及び席順がなるべく公平になるようランダムで生成しています。<br />しばらくお待ちください。
                 </p>
               </div>
             )}
 
             {((tournamentPhase === 'entry' && !generalDrawingScreen) || generalEntryView) && (
-              <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-200">
-                <h2 className="text-2xl font-black text-indigo-900 mb-6">今大会のエントリー</h2>
+              <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-[#e7dfd1]">
+                <h2 className="text-2xl font-black text-[#5e190e] mb-6">今大会のエントリー</h2>
                 
                 {!isAdmin ? (
-                   <p className="text-slate-600 font-bold">管理者が大会を開始するのをお待ちください...</p>
+                   <p className="text-[#625a4f] font-bold">管理者が大会を開始するのをお待ちください...</p>
                 ) : (
                   <>
                     {nextEntry && nextEntry.playerIds.length > 0 && tournamentPhase === 'entry' && (
-                      <div className="mb-4 p-3 rounded-xl border border-indigo-200 bg-indigo-50/60 flex flex-wrap items-center gap-3">
-                        <span className="text-sm font-bold text-indigo-900">📝 事前登録した第{nextEntry.no || '?'}回の参加選手（{nextEntry.playerIds.length}名{Object.keys(nextEntry.limits || {}).length > 0 ? `・出場限定 ${Object.keys(nextEntry.limits || {}).length}名` : ''}）があります</span>
-                        <button onClick={loadNextEntryIntoCurrent} className="text-xs font-black px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white">📥 事前登録を読み込む</button>
+                      <div className="mb-4 p-3 rounded-xl border border-[#f7bcab] bg-[#fdf1ed]/60 flex flex-wrap items-center gap-3">
+                        <span className="text-sm font-bold text-[#5e190e]">📝 事前登録した第{nextEntry.no || '?'}回の参加選手（{nextEntry.playerIds.length}名{Object.keys(nextEntry.limits || {}).length > 0 ? `・出場限定 ${Object.keys(nextEntry.limits || {}).length}名` : ''}）があります</span>
+                        <button onClick={loadNextEntryIntoCurrent} className="text-xs font-black px-4 py-2 rounded-lg bg-[#c8361e] hover:bg-[#a62b17] text-white">📥 事前登録を読み込む</button>
                       </div>
                     )}
-                    <div className="mb-8 p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h3 className="font-bold text-slate-700 mb-3">参加者を選択 (クリックで追加)</h3>
+                    <div className="mb-8 p-4 bg-[#faf7f1] rounded-xl border border-[#e7dfd1]">
+                      <h3 className="font-bold text-[#473f36] mb-3">参加者を選択 (クリックで追加)</h3>
                       <div className="flex flex-wrap gap-2">
                         {dbPlayers.map(p => {
                           const isEntry = entryPlayerIds.includes(p.id);
                           return (
                             <button key={p.id} onClick={() => toggleEntry(p.id)}
-                              className={`px-4 py-2.5 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:border-indigo-400'}`}>
+                              className={`px-4 py-2.5 rounded-full font-bold text-sm transition border-2 ${isEntry ? 'bg-[#c8361e] text-white border-[#c8361e]' : 'bg-white text-[#625a4f] hover:border-[#e5664c]'}`}>
                               <PlayerLabel name={p.name} /> {isEntry && '✓'}
                             </button>
                           );
@@ -8059,8 +8055,8 @@ export default function Home() {
 
                     {/* 出場試合数の限定 */}
                     <div className="mb-8 p-4 bg-amber-50/60 rounded-xl border border-amber-200">
-                      <h3 className="font-bold text-slate-700 mb-1">出場試合数を限定する選手（任意）</h3>
-                      <p className="text-[11px] text-slate-500 mb-3 leading-relaxed">
+                      <h3 className="font-bold text-[#473f36] mb-1">出場試合数を限定する選手（任意）</h3>
+                      <p className="text-[11px] text-[#82786b] mb-3 leading-relaxed">
                         基本は全選手が全試合に出場します。一部の選手のみ、出場する回戦を自由に選んで限定できます（例: 1〜3回戦のみ、7〜9回戦のみ、1〜3回戦＋7〜9回戦、2・5・8回戦のみ）。<br />
                         限定された選手は、順位順で決まる回戦では黒子と同様に上位8位（2卓）に入らず、弾かれた場合は9位の位置に入ります。今大会成績のランキングには表示されず、通算成績には通常通り加算されます。
                       </p>
@@ -8071,13 +8067,13 @@ export default function Home() {
                             <option key={p.id} value={p.id}>{proMarkedName(p.name)}{playerLimits[p.id] ? '（設定済み）' : ''}</option>
                           ))}
                         </select>
-                        <button onClick={handleAddLimit} disabled={!limitPlayerId || limitRounds.length === 0} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">{limitPlayerId && playerLimits[limitPlayerId] ? '更新' : '追加'}</button>
+                        <button onClick={handleAddLimit} disabled={!limitPlayerId || limitRounds.length === 0} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">{limitPlayerId && playerLimits[limitPlayerId] ? '更新' : '追加'}</button>
                       </div>
                       <div className="mt-3">
                         <div className="flex items-center gap-2 mb-1.5">
-                          <span className="text-xs font-bold text-slate-600">出場する回戦（タップで選択）</span>
+                          <span className="text-xs font-bold text-[#625a4f]">出場する回戦（タップで選択）</span>
                           <button onClick={() => setLimitRounds(Array.from({ length: roundsCount }, (_, i) => i + 1))} className="text-[11px] font-bold text-amber-700 underline">全選択</button>
-                          <button onClick={() => setLimitRounds([])} className="text-[11px] font-bold text-slate-500 underline">クリア</button>
+                          <button onClick={() => setLimitRounds([])} className="text-[11px] font-bold text-[#82786b] underline">クリア</button>
                           {limitRounds.length > 0 && <span className="text-[11px] font-bold text-amber-700">→ {formatLimitRounds(limitRounds.filter(n => n <= roundsCount))}</span>}
                         </div>
                         <div className="flex flex-wrap gap-1.5">
@@ -8087,20 +8083,20 @@ export default function Home() {
                               <button
                                 key={n}
                                 onClick={() => toggleLimitRound(n)}
-                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-slate-200 text-slate-500 hover:border-amber-300'}`}
+                                className={`min-w-[2.75rem] px-2 py-2 rounded-lg text-sm font-black border-2 transition ${on ? 'bg-amber-500 border-amber-500 text-white shadow' : 'bg-white border-[#e7dfd1] text-[#82786b] hover:border-amber-300'}`}
                               >{n}</button>
                             );
                           })}
                         </div>
-                        <p className="text-[10px] text-slate-400 mt-1.5">※ {roundsCount - 1}・{roundsCount}回戦は順位順で決まる回戦です。</p>
+                        <p className="text-[10px] text-[#a99d8c] mt-1.5">※ {roundsCount - 1}・{roundsCount}回戦は順位順で決まる回戦です。</p>
                       </div>
                       {limitEntries.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-3">
                           {limitEntries.map(([id, l]) => (
-                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-slate-700">
+                            <span key={id} className="inline-flex items-center gap-2 bg-white border border-amber-300 rounded-full pl-3 pr-1.5 py-1 text-sm font-bold text-[#473f36]">
                               <PlayerLabel name={dbPlayers.find(p => p.id === id)?.name || '不明'} />
                               <button onClick={() => handleEditLimit(id)} className="text-xs text-amber-700 underline decoration-dotted hover:text-amber-900" title="出場回戦を編集">{limitLabel(l)}</button>
-                              <button onClick={() => handleRemoveLimit(id)} className="w-5 h-5 rounded-full bg-slate-200 hover:bg-red-200 text-slate-500 hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
+                              <button onClick={() => handleRemoveLimit(id)} className="w-5 h-5 rounded-full bg-[#e7dfd1] hover:bg-red-200 text-[#82786b] hover:text-red-700 text-xs leading-none transition" title="限定を解除">×</button>
                             </span>
                           ))}
                         </div>
@@ -8109,35 +8105,35 @@ export default function Home() {
 
                     <div className="flex flex-col md:flex-row gap-6 items-end border-t pt-6">
                       <div className="w-full md:w-auto">
-                        <label className="block text-sm font-bold text-slate-600 mb-2">参加予定</label>
-                        <div className="text-2xl font-black text-indigo-600">{entryPlayerIds.length} <span className="text-base text-slate-500 font-normal">名</span></div>
+                        <label className="block text-sm font-bold text-[#625a4f] mb-2">参加予定</label>
+                        <div className="text-2xl font-black text-[#c8361e]">{entryPlayerIds.length} <span className="text-base text-[#82786b] font-normal">名</span></div>
                       </div>
                       <div className="w-full md:w-auto">
-                        <label className="block text-sm font-bold text-slate-600 mb-2">大会の回</label>
+                        <label className="block text-sm font-bold text-[#625a4f] mb-2">大会の回</label>
                         {isAdmin ? (
                           <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-bold text-slate-500">第</span>
+                            <span className="text-sm font-bold text-[#82786b]">第</span>
                             <input type="number" min="1" inputMode="numeric" value={tournamentNo} onChange={e => handleChangeTournamentNo(e.target.value)} className="w-20 p-3 border rounded-lg text-lg font-bold text-center"/>
-                            <span className="text-sm font-bold text-slate-500">回</span>
+                            <span className="text-sm font-bold text-[#82786b]">回</span>
                           </div>
                         ) : (
-                          <div className="text-2xl font-black text-indigo-600">第{tournamentNo || '?'}回</div>
+                          <div className="text-2xl font-black text-[#c8361e]">第{tournamentNo || '?'}回</div>
                         )}
                       </div>
                       <div className="w-full md:w-auto">
-                        <label className="block text-sm font-bold text-slate-600 mb-2">回戦数</label>
+                        <label className="block text-sm font-bold text-[#625a4f] mb-2">回戦数</label>
                         <input type="number" min="1" value={roundsCount} onChange={e => setRoundsCount(Number(e.target.value))} className="w-24 p-3 border rounded-lg text-lg font-bold text-center"/>
                       </div>
                       <div className="flex-1"></div>
                       <button
                         onClick={() => handleToggleDrawingAnnounce(!drawingAnnounced)}
-                        className={`w-full md:w-auto font-bold py-4 px-6 rounded-xl border-2 transition ${drawingAnnounced ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-indigo-200 text-indigo-700 hover:bg-indigo-50'}`}
+                        className={`w-full md:w-auto font-bold py-4 px-6 rounded-xl border-2 transition ${drawingAnnounced ? 'bg-amber-50 border-amber-300 text-amber-800' : 'bg-white border-[#f7bcab] text-[#a62b17] hover:bg-[#fdf1ed]'}`}
                       >{drawingAnnounced ? '🎰 「抽選中」を表示中（押すと取り消し）' : '🎰 抽選（一般画面に「抽選中」を表示）'}</button>
-                      <button onClick={handleGenerateTables} className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-4 px-8 rounded-xl shadow-lg transition">
+                      <button onClick={handleGenerateTables} className="w-full md:w-auto bg-[#c8361e] hover:bg-[#a62b17] text-white font-bold py-4 px-8 rounded-xl shadow-lg transition">
                         自動卓組を生成
                       </button>
                     </div>
-                    <p className="text-xs text-slate-500 mt-4 leading-relaxed">
+                    <p className="text-xs text-[#82786b] mt-4 leading-relaxed">
                       ※ 「抽選」ボタンは、一般の画面に「卓組抽選中」を表示するためのボタンです（押すまで、一般の画面はこれまでどおりの表示）。卓組の生成そのものは「自動卓組を生成」で行われます。<br />
                       ※ 生成後は、管理者が卓組を確認して「大会開始」を押すまで得点入力はできません。<br />
                       ※ {roundsCount - 1}回戦・{roundsCount}回戦は、それ以前の全ての対局が終了した瞬間に順位順（1234／5678…）で自動決定されます。<br />
@@ -8152,11 +8148,11 @@ export default function Home() {
             {(tournamentPhase === 'playing' || (tournamentPhase === 'drawing' && isAdmin)) && (
               <div className="space-y-6">
                 {(isAdmin || !loggedInPlayerId) && (
-                <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                <div className="bg-[#fdf1ed] border border-[#fbddd3] p-4 rounded-xl">
                   <div className="flex justify-between items-center gap-4">
                     <div>
-                      <h2 className="text-lg font-black text-indigo-900">第{tournamentNo || '?'}回 {tournamentPhase === 'drawing' ? '卓組の確認（大会開始前）' : '大会進行中'}</h2>
-                      <p className="text-sm text-indigo-700 font-medium">参加者: {entryPlayerIds.length}名 / 全{roundsCount}回戦</p>
+                      <h2 className="text-lg font-black text-[#5e190e]">第{tournamentNo || '?'}回 {tournamentPhase === 'drawing' ? '卓組の確認（大会開始前）' : '大会進行中'}</h2>
+                      <p className="text-sm text-[#a62b17] font-medium">参加者: {entryPlayerIds.length}名 / 全{roundsCount}回戦</p>
                       {limitEntries.length > 0 && (
                         <p className="text-xs text-amber-700 font-bold mt-1">
                           出場限定: {limitEntries.map(([id, l]) => `${proMarkedName(dbPlayers.find(p => p.id === id)?.name || '不明')}（${limitLabel(l)}）`).join('、')}
@@ -8165,7 +8161,7 @@ export default function Home() {
                     </div>
                     {isAdmin && (
                       <div className="flex gap-2">
-                        <button onClick={() => setShowAdminTools(!showAdminTools)} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${showAdminTools ? 'bg-slate-800 text-white' : 'bg-white text-slate-600 border border-slate-300 hover:bg-slate-100'}`}>
+                        <button onClick={() => setShowAdminTools(!showAdminTools)} className={`px-4 py-2 rounded-lg font-bold text-sm transition ${showAdminTools ? 'bg-[#2d2721] text-white' : 'bg-white text-[#625a4f] border border-[#d4c9b7] hover:bg-[#f3eee4]'}`}>
                           🛠️ 選手の追加・差し替え
                         </button>
                         {currentTournamentArchived && (
@@ -8174,7 +8170,7 @@ export default function Home() {
                           </button>
                         )}
                         {tournamentPhase === 'playing' && !currentTournamentArchived && (
-                          <button onClick={handleArchiveCurrentTournament} disabled={isArchivingCurrent} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white px-4 py-2 rounded-lg font-bold text-sm transition">
+                          <button onClick={handleArchiveCurrentTournament} disabled={isArchivingCurrent} className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-[#d4c9b7] text-white px-4 py-2 rounded-lg font-bold text-sm transition">
                             {isArchivingCurrent ? '保存中...' : '📦 過去大会にアーカイブ'}
                           </button>
                         )}
@@ -8185,10 +8181,10 @@ export default function Home() {
                     )}
                   </div>
                   {/* 開始時間（1回戦は目安） */}
-                  <p className="mt-3 text-[10px] text-indigo-400 leading-relaxed">
+                  <p className="mt-3 text-[10px] text-[#e5664c] leading-relaxed">
                     開始時間（1回戦は目安、2回戦以降は前の回戦の全卓送信＋休憩{timerState.breakMinutes}分）:&nbsp;
                     {scheduleTimes.slice(0, roundsCount).map((t, i) => (
-                      <span key={i} className={`mr-2 whitespace-nowrap ${timerState.startAts[i + 1] ? 'text-indigo-700 font-bold' : ''}`}>{i + 1}回戦 {startTimeOf(i + 1) || t}</span>
+                      <span key={i} className={`mr-2 whitespace-nowrap ${timerState.startAts[i + 1] ? 'text-[#a62b17] font-bold' : ''}`}>{i + 1}回戦 {startTimeOf(i + 1) || t}</span>
                     ))}
                   </p>
                 </div>
@@ -8196,19 +8192,19 @@ export default function Home() {
 
                 {/* ---- 成績表（リーグ戦と同じ形式）。Xへは、この表を画面に出してスクリーンショットで手動投稿する（管理者用） ---- */}
                 {isAdmin && (
-                  <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4">
+                  <div className="bg-white p-4 md:p-5 rounded-2xl shadow-sm border border-[#e7dfd1] space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h3 className="text-base font-black text-slate-800">📋 成績表（Xポスト用）</h3>
+                      <h3 className="text-base font-black text-[#2d2721]">📋 成績表（Xポスト用）</h3>
                       <div className="flex flex-wrap items-center gap-2">
                         <button
                           onClick={() => copyText(xPostText(effectiveSheetRound() || 1), '投稿文')}
                           className="text-xs font-bold px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white"
                         >📝 {effectiveSheetRound() > 0 ? `${effectiveSheetRound()}回戦の` : ''}投稿文をコピー</button>
-                        <button onClick={handleSaveSheetImages} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-600">🖼️ 画像を保存</button>
-                        <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600">{showSheet ? '閉じる ▲' : '開く ▼'}</button>
+                        <button onClick={handleSaveSheetImages} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-white border border-[#e7dfd1] hover:bg-[#faf7f1] text-[#625a4f]">🖼️ 画像を保存</button>
+                        <button onClick={() => setShowSheet(v => !v)} className="text-xs font-bold px-3 py-1.5 rounded-lg bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f]">{showSheet ? '閉じる ▲' : '開く ▼'}</button>
                       </div>
                     </div>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
+                    <p className="text-[11px] text-[#82786b] leading-relaxed">
                       各回戦が終わったら、下の成績表を画面に出してスクリーンショットを撮り、「投稿文をコピー」の文面と一緒にXへ投稿してください（2回戦以降は、前の投稿への返信でつなぐと見やすくなります）。
                       成績表は選んだ回戦までの最新4半荘分で、18人以内なら1枚、それより多いと上位・下位の2枚です。
                     </p>
@@ -8217,12 +8213,12 @@ export default function Home() {
                     {/* 何回戦終了時点の成績表にするか（投稿し忘れた回戦に巻き戻せる） */}
                     {latestStartedRound() > 0 && (
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="text-[11px] font-bold text-slate-500 mr-1">表示する回戦:</span>
+                        <span className="text-[11px] font-bold text-[#82786b] mr-1">表示する回戦:</span>
                         {Array.from({ length: latestStartedRound() }, (_, i) => i + 1).map(n => (
                           <button
                             key={n}
                             onClick={() => setSheetRound(n === latestStartedRound() ? null : n)}
-                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition ${effectiveSheetRound() === n ? 'bg-slate-800 text-white border-slate-800' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+                            className={`text-xs font-bold px-2.5 py-1 rounded-lg border transition ${effectiveSheetRound() === n ? 'bg-[#2d2721] text-white border-[#2d2721]' : 'bg-white text-[#625a4f] border-[#e7dfd1] hover:bg-[#faf7f1]'}`}
                           >{n}回戦終了時</button>
                         ))}
                         {effectiveSheetRound() < latestStartedRound() && (
@@ -8234,7 +8230,7 @@ export default function Home() {
                     {showSheet && (() => {
                       const roundNos = sheetRoundNos();
                       const rows = buildSheetRows(roundNos);
-                      if (rows.length === 0) return <p className="text-sm text-slate-400">成績表に載せる選手がいません。</p>;
+                      if (rows.length === 0) return <p className="text-sm text-[#a99d8c]">成績表に載せる選手がいません。</p>;
                       return (
                         <div className="space-y-5">
                           {splitSheetPages(rows).map(pg => (
@@ -8242,7 +8238,7 @@ export default function Home() {
                               <StandingsSheetTable rows={pg.rows} roundNos={roundNos} title={pageTitle(pg.label)} />
                             </React.Fragment>
                           ))}
-                          <p className="text-[11px] text-slate-400">順位・ポイント・対局数は今大会の成績です（今大会に出場していない選手は載せていません）。今季通算は、今季ここまでの通算ポイント（今大会の分を含む）です。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
+                          <p className="text-[11px] text-[#a99d8c]">順位・ポイント・対局数は今大会の成績です（今大会に出場していない選手は載せていません）。今季通算は、今季ここまでの通算ポイント（今大会の分を含む）です。黒子・プロは載せていません。順位の数字: 4位まで緑、8位まで青、それ以下は黒（ポイントがマイナスの選手は赤）。</p>
                         </div>
                       );
                     })()}
@@ -8251,17 +8247,17 @@ export default function Home() {
 
                 {/* ---- 管理者用ツール ---- */}
                 {isAdmin && showAdminTools && (
-                  <div className="bg-white border-2 border-slate-800 rounded-2xl p-5 space-y-5">
+                  <div className="bg-white border-2 border-[#2d2721] rounded-2xl p-5 space-y-5">
                     <div className="flex items-start justify-between gap-4">
-                      <h3 className="font-black text-slate-800">🛠️ 選手の追加・差し替え（管理者用）</h3>
-                      <p className="text-[11px] text-slate-400 text-right leading-relaxed">
+                      <h3 className="font-black text-[#2d2721]">🛠️ 選手の追加・差し替え（管理者用）</h3>
+                      <p className="text-[11px] text-[#a99d8c] text-right leading-relaxed">
                         誤操作防止のため、確認ダイアログを経てから反映されます。<br />送信済みの卓は変更できません。
                       </p>
                     </div>
 
                     {/* 追加 */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="font-bold text-sm text-slate-700 mb-3">① 大会に選手を追加（途中参加）</h4>
+                    <div className="p-4 bg-[#faf7f1] rounded-xl border border-[#e7dfd1]">
+                      <h4 className="font-bold text-sm text-[#473f36] mb-3">① 大会に選手を追加（途中参加）</h4>
                       <div className="grid md:grid-cols-2 gap-4">
                         <div className="flex gap-2">
                           <select value={addExistingId} onChange={e => setAddExistingId(e.target.value)} className="flex-1 p-2.5 border rounded-lg bg-white text-sm">
@@ -8270,19 +8266,19 @@ export default function Home() {
                               <option key={p.id} value={p.id}>{proMarkedName(p.name)}</option>
                             ))}
                           </select>
-                          <button onClick={handleAddExistingToTournament} disabled={!addExistingId} className="px-4 py-2 rounded-lg font-bold text-sm bg-indigo-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">追加</button>
+                          <button onClick={handleAddExistingToTournament} disabled={!addExistingId} className="px-4 py-2 rounded-lg font-bold text-sm bg-[#c8361e] text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">追加</button>
                         </div>
                         <div className="flex gap-2">
                           <input value={quickName} onChange={e => setQuickName(e.target.value)} placeholder="新規選手名（例: 黒子A）" className="flex-1 p-2.5 border rounded-lg bg-white text-sm" />
-                          <button onClick={handleQuickRegister} disabled={!quickName.trim()} className="px-4 py-2 rounded-lg font-bold text-sm bg-slate-800 text-white disabled:bg-slate-200 disabled:text-slate-400 transition whitespace-nowrap">登録して追加</button>
+                          <button onClick={handleQuickRegister} disabled={!quickName.trim()} className="px-4 py-2 rounded-lg font-bold text-sm bg-[#2d2721] text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition whitespace-nowrap">登録して追加</button>
                         </div>
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-2">追加した選手は下の「差し替え」で席に入れてください。</p>
+                      <p className="text-[11px] text-[#a99d8c] mt-2">追加した選手は下の「差し替え」で席に入れてください。</p>
                     </div>
 
                     {/* 差し替え */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="font-bold text-sm text-slate-700 mb-3">② 席の差し替え（1人を別の選手に交代）</h4>
+                    <div className="p-4 bg-[#faf7f1] rounded-xl border border-[#e7dfd1]">
+                      <h4 className="font-bold text-sm text-[#473f36] mb-3">② 席の差し替え（1人を別の選手に交代）</h4>
                       <div className="grid md:grid-cols-3 gap-3 items-center">
                         <select value={replaceSeatKey} onChange={e => setReplaceSeatKey(e.target.value)} className="p-2.5 border rounded-lg bg-white text-sm">
                           <option value="">対象の席を選ぶ...</option>
@@ -8292,15 +8288,15 @@ export default function Home() {
                           <option value="">交代する選手を選ぶ...</option>
                           {dbPlayers.map(p => <option key={p.id} value={p.id}>{proMarkedName(p.name)}{entryPlayerIds.includes(p.id) ? '' : '（未エントリー）'}</option>)}
                         </select>
-                        <button onClick={handleReplaceSeat} disabled={!replaceSeatKey || !replaceWithId} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                        <button onClick={handleReplaceSeat} disabled={!replaceSeatKey || !replaceWithId} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-amber-500 hover:bg-amber-600 text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">
                           差し替える
                         </button>
                       </div>
                     </div>
 
                     {/* 入れ替え */}
-                    <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
-                      <h4 className="font-bold text-sm text-slate-700 mb-3">③ 席の入れ替え（同じ回戦の2人を交換）</h4>
+                    <div className="p-4 bg-[#faf7f1] rounded-xl border border-[#e7dfd1]">
+                      <h4 className="font-bold text-sm text-[#473f36] mb-3">③ 席の入れ替え（同じ回戦の2人を交換）</h4>
                       <div className="grid md:grid-cols-3 gap-3 items-center">
                         <select value={swapSeatA} onChange={e => setSwapSeatA(e.target.value)} className="p-2.5 border rounded-lg bg-white text-sm">
                           <option value="">席A を選ぶ...</option>
@@ -8310,7 +8306,7 @@ export default function Home() {
                           <option value="">席B を選ぶ...</option>
                           {editableSeats.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                         </select>
-                        <button onClick={handleSwapSeats} disabled={!swapSeatA || !swapSeatB} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white disabled:bg-slate-200 disabled:text-slate-400 transition">
+                        <button onClick={handleSwapSeats} disabled={!swapSeatA || !swapSeatB} className="px-4 py-2.5 rounded-lg font-bold text-sm bg-teal-600 hover:bg-teal-700 text-white disabled:bg-[#e7dfd1] disabled:text-[#a99d8c] transition">
                           入れ替える
                         </button>
                       </div>
@@ -8324,54 +8320,54 @@ export default function Home() {
                   const open = roundIsOpen(r);
                   const time = startTimeOf(r.round);
                   return (
-                    <div key={r.round} className={`bg-white rounded-2xl shadow-sm border transition ${finished ? 'border-slate-200' : 'border-indigo-100'}`}>
+                    <div key={r.round} className={`bg-white rounded-2xl shadow-sm border transition ${finished ? 'border-[#e7dfd1]' : 'border-[#fbddd3]'}`}>
                       {/* 回戦ヘッダー */}
                       <div className="flex flex-wrap items-center gap-3 p-4 md:p-5">
                         <button onClick={() => toggleRound(r)} className="flex items-center gap-3 text-left group">
-                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-sm transition ${open ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-500 group-hover:bg-slate-300'}`}>
+                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-sm transition ${open ? 'bg-[#2d2721] text-white' : 'bg-[#e7dfd1] text-[#82786b] group-hover:bg-[#d4c9b7]'}`}>
                             {open ? '−' : '+'}
                           </span>
-                          <span className="text-xl md:text-2xl font-black text-slate-800">{r.round}回戦</span>
+                          <span className="text-xl md:text-2xl font-black text-[#2d2721]">{r.round}回戦</span>
                         </button>
 
-                        {time && <span className={`text-[11px] font-bold ${timerState.startAts[r.round] ? 'text-indigo-500' : 'text-slate-400'}`}>{timerState.startAts[r.round] ? '開始時間' : '開始目安'} {time}〜</span>}
+                        {time && <span className={`text-[11px] font-bold ${timerState.startAts[r.round] ? 'text-[#d9452b]' : 'text-[#a99d8c]'}`}>{timerState.startAts[r.round] ? '開始時間' : '開始目安'} {time}〜</span>}
 
                         {r.mode === 'rankTopFirst' && <span className="text-[11px] font-bold bg-amber-100 text-amber-800 px-2 py-1 rounded">順位戦 / 上位から東南西北</span>}
                         {r.mode === 'rankBottomFirst' && <span className="text-[11px] font-bold bg-rose-100 text-rose-800 px-2 py-1 rounded">最終戦 / 下位から東南西北</span>}
-                        {finished && <span className="text-[11px] font-bold bg-slate-200 text-slate-600 px-2 py-1 rounded-full">✓ 全{r.tables.length}卓 終了</span>}
+                        {finished && <span className="text-[11px] font-bold bg-[#e7dfd1] text-[#625a4f] px-2 py-1 rounded-full">✓ 全{r.tables.length}卓 終了</span>}
 
                         <div className="flex-1" />
 
                         {!r.isPending && r.tables.length > 0 && open && (
                           <div className="flex gap-1">
-                            <button onClick={() => setAllTablesOfRound(r, false)} className="text-xs sm:text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て畳む</button>
-                            <button onClick={() => setAllTablesOfRound(r, true)} className="text-xs sm:text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-500 px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て開く</button>
+                            <button onClick={() => setAllTablesOfRound(r, false)} className="text-xs sm:text-[11px] bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#82786b] px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て畳む</button>
+                            <button onClick={() => setAllTablesOfRound(r, true)} className="text-xs sm:text-[11px] bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#82786b] px-3 sm:px-2.5 py-2 sm:py-1.5 rounded-lg font-bold transition">全て開く</button>
                           </div>
                         )}
                         {!r.isPending && isAdmin && r.mode !== 'normal' && !r.tables.some(t => t.isSubmitted) && (
-                          <button onClick={() => handleReshufflePendingRound(rIdx)} className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2.5 py-1.5 rounded-lg font-bold transition">
+                          <button onClick={() => handleReshufflePendingRound(rIdx)} className="text-[11px] bg-[#f3eee4] hover:bg-[#e7dfd1] text-[#625a4f] px-2.5 py-1.5 rounded-lg font-bold transition">
                             🔄 現在の順位で再決定
                           </button>
                         )}
                       </div>
 
                       {open && (
-                        <div className="px-4 md:px-5 pb-5 border-t border-slate-100 pt-5">
+                        <div className="px-4 md:px-5 pb-5 border-t border-[#f3eee4] pt-5">
                           {r.isPending ? (
-                            <div className="p-8 rounded-xl border-2 border-dashed border-slate-300 bg-slate-50 text-center">
+                            <div className="p-8 rounded-xl border-2 border-dashed border-[#d4c9b7] bg-[#faf7f1] text-center">
                               <p className="text-3xl mb-2">🔒</p>
-                              <p className="font-black text-slate-600 mb-1">卓組はまだ決定していません</p>
-                              <p className="text-sm text-slate-500">
+                              <p className="font-black text-[#625a4f] mb-1">卓組はまだ決定していません</p>
+                              <p className="text-sm text-[#82786b]">
                                 {r.round - 1}回戦までの全ての対局が終了した瞬間に、順位順（1234／5678…）で自動決定されます。
                               </p>
-                              <p className="text-xs text-slate-400 mt-2">
+                              <p className="text-xs text-[#a99d8c] mt-2">
                                 席順: {r.mode === 'rankBottomFirst' ? '卓内下位から 東→南→西→北' : '卓内上位から 東→南→西→北'} ／ 上位2卓（8位まで）に「黒子」「プロ」は入りません。それ以外の卓も、プロ・黒子は1卓に1人までです
                               </p>
                             </div>
                           ) : (
                             <>
                               {(r.sitOutIds && r.sitOutIds.length > 0) && (
-                                <p className="text-xs text-slate-500 mb-4">
+                                <p className="text-xs text-[#82786b] mb-4">
                                   抜け番: {r.sitOutIds.map(id => proMarkedName(dbPlayers.find(p => p.id === id)?.name || '不明')).join('、')}
                                 </p>
                               )}
@@ -8392,9 +8388,9 @@ export default function Home() {
                                       className={`border-2 rounded-xl transition relative ${
                                         isFinal
                                           ? 'border-amber-400 bg-gradient-to-br from-amber-50 via-white to-amber-50 shadow-[0_0_28px_-6px_rgba(245,158,11,0.75)] ring-1 ring-amber-200'
-                                          : table.isSubmitted ? 'bg-slate-50 border-slate-200'
-                                          : table.isCalculated ? 'bg-slate-50 border-indigo-200'
-                                          : 'bg-white border-indigo-100'
+                                          : table.isSubmitted ? 'bg-[#faf7f1] border-[#e7dfd1]'
+                                          : table.isCalculated ? 'bg-[#faf7f1] border-[#f7bcab]'
+                                          : 'bg-white border-[#fbddd3]'
                                       }`}
                                     >
                                       {isFinal && (
@@ -8406,17 +8402,17 @@ export default function Home() {
                                       {/* 卓ヘッダー（クリックで開閉） */}
                                       <button onClick={() => toggleTable(r, table)} className="w-full flex justify-between items-center gap-2 p-3 sm:p-4 md:p-5 pb-3 text-left">
                                         <div className="flex items-center gap-2">
-                                          <h4 className={`font-black text-lg px-3 py-1 rounded ${tableColor(table.tableNumber) ? `${tableColor(table.tableNumber)!.badge} ${table.isSubmitted ? 'opacity-60' : ''}` : isFinal ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : table.isSubmitted ? 'bg-slate-400 text-white' : 'bg-slate-800 text-white'}`}>
+                                          <h4 className={`font-black text-lg px-3 py-1 rounded ${tableColor(table.tableNumber) ? `${tableColor(table.tableNumber)!.badge} ${table.isSubmitted ? 'opacity-60' : ''}` : isFinal ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-white' : table.isSubmitted ? 'bg-[#a99d8c] text-white' : 'bg-[#2d2721] text-white'}`}>
                                             {tableName(table.tableNumber)}
                                           </h4>
-                                          <span className={`text-slate-400 text-xs font-bold`}>{isOpen ? '▼' : '▶'}</span>
+                                          <span className={`text-[#a99d8c] text-xs font-bold`}>{isOpen ? '▼' : '▶'}</span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                           {tableChonbo > 0 && (
                                             <span className="text-[11px] px-2 py-1 rounded-full font-bold bg-red-100 text-red-700">🚫 {tableChonbo}</span>
                                           )}
                                           {table.isSubmitted ? (
-                                            <span className="text-xs px-3 py-1 rounded-full font-bold bg-slate-300 text-slate-700">✓ 送信済み</span>
+                                            <span className="text-xs px-3 py-1 rounded-full font-bold bg-[#d4c9b7] text-[#473f36]">✓ 送信済み</span>
                                           ) : (
                                             <span className={`text-[11px] px-2 py-1 rounded-full font-bold ${isValidSum ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                                               {isValidSum ? (diff === 0 ? '合計 120000点 ✓' : `合計 ${currentSum}00 (供託等 ${diff}00) ✓`) : `異常 ${currentSum}00点 ✗`}
@@ -8430,12 +8426,12 @@ export default function Home() {
                                         <div className="px-4 md:px-5 pb-4 space-y-1">
                                           {ranked.map((p, i2) => (
                                             <div key={p.playerId} className="flex items-center justify-between text-sm">
-                                              <span className="truncate text-slate-600">
-                                                <span className="text-slate-400 font-mono mr-1.5">{table.isSubmitted ? i2 + 1 : '-'}</span>
+                                              <span className="truncate text-[#625a4f]">
+                                                <span className="text-[#a99d8c] font-mono mr-1.5">{table.isSubmitted ? i2 + 1 : '-'}</span>
                                                 <PlayerLabel name={p.name} />
-                                                <span className="text-slate-400 text-xs ml-1.5">({p.wind})</span>
+                                                <span className="text-[#a99d8c] text-xs ml-1.5">({p.wind})</span>
                                               </span>
-                                              <span className={`font-bold tabular-nums ${!table.isSubmitted && !table.isCalculated ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                              <span className={`font-bold tabular-nums ${!table.isSubmitted && !table.isCalculated ? 'text-[#d4c9b7]' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-[#82786b]'}`}>
                                                 {table.isSubmitted || table.isCalculated ? fmtPt(p.point) : '-'}
                                               </span>
                                             </div>
@@ -8450,22 +8446,22 @@ export default function Home() {
                                             {table.players.map((p, pIdx) => {
                                               const chonbo = p.chonbo || 0;
                                               return (
-                                                <div key={pIdx} className={`p-2 rounded-lg ${table.isSubmitted ? 'opacity-80' : 'bg-slate-50'} ${chonbo > 0 ? 'ring-1 ring-red-200 bg-red-50/60' : ''}`}>
+                                                <div key={pIdx} className={`p-2 rounded-lg ${table.isSubmitted ? 'opacity-80' : 'bg-[#faf7f1]'} ${chonbo > 0 ? 'ring-1 ring-red-200 bg-red-50/60' : ''}`}>
                                                   <div className="flex justify-between items-center gap-2 sm:gap-3">
-                                                    <span className="flex-1 min-w-0 font-bold text-slate-700 leading-snug break-words">
-                                                      <span className="text-slate-400 mr-1">{p.wind}</span><PlayerLabel name={p.name} className="text-indigo-900" />
+                                                    <span className="flex-1 min-w-0 font-bold text-[#473f36] leading-snug break-words">
+                                                      <span className="text-[#a99d8c] mr-1">{p.wind}</span><PlayerLabel name={p.name} className="text-[#5e190e]" />
                                                     </span>
                                                     
-                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-2 sm:py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-slate-200 border-slate-300' : 'bg-white focus-within:border-indigo-500'}`}>
+                                                    <div className={`flex items-center border-2 rounded-lg px-2 py-2 sm:py-1.5 transition ${table.isSubmitted || !canEditTable(table) ? 'bg-[#e7dfd1] border-[#d4c9b7]' : 'bg-white focus-within:border-[#d9452b]'}`}>
                                                       <input
                                                         type="number" value={p.score} disabled={table.isSubmitted || !canEditTable(table)}
                                                         onChange={(e) => handleScoreChange(rIdx, tIdx, pIdx, Number(e.target.value))}
-                                                        className={`w-14 sm:w-20 text-right font-mono font-bold text-xl sm:text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-slate-600' : 'text-slate-800'}`}
+                                                        className={`w-14 sm:w-20 text-right font-mono font-bold text-xl sm:text-lg outline-none ${table.isSubmitted || !canEditTable(table) ? 'bg-transparent text-[#625a4f]' : 'text-[#2d2721]'}`}
                                                       />
-                                                      <span className="text-slate-400 font-bold text-sm ml-1 select-none">00</span>
+                                                      <span className="text-[#a99d8c] font-bold text-sm ml-1 select-none">00</span>
                                                     </div>
 
-                                                    <span className={`w-14 sm:w-20 flex-shrink-0 text-right font-black text-lg sm:text-xl tabular-nums ${!table.isCalculated && !table.isSubmitted ? 'text-slate-300' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-slate-500'}`}>
+                                                    <span className={`w-14 sm:w-20 flex-shrink-0 text-right font-black text-lg sm:text-xl tabular-nums ${!table.isCalculated && !table.isSubmitted ? 'text-[#d4c9b7]' : p.point > 0 ? 'text-blue-600' : p.point < 0 ? 'text-red-600' : 'text-[#82786b]'}`}>
                                                       {table.isCalculated || table.isSubmitted ? fmtPt(p.point) : '-'}
                                                     </span>
                                                   </div>
@@ -8473,14 +8469,14 @@ export default function Home() {
                                                   {/* チョンボ */}
                                                   {(canEditTable(table) && !table.isSubmitted) ? (
                                                     <div className="flex items-center justify-end gap-2 mt-2 pr-1">
-                                                      <span className="text-xs font-bold text-slate-400 mr-auto pl-1">チョンボ</span>
+                                                      <span className="text-xs font-bold text-[#a99d8c] mr-auto pl-1">チョンボ</span>
                                                       <button onClick={() => handleChonboChange(rIdx, tIdx, pIdx, -1)}
-                                                        className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-white border border-slate-300 text-slate-600 text-lg font-black hover:bg-slate-100 transition disabled:opacity-40"
+                                                        className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-white border border-[#d4c9b7] text-[#625a4f] text-lg font-black hover:bg-[#f3eee4] transition disabled:opacity-40"
                                                         disabled={chonbo === 0}>−</button>
-                                                      <span className={`w-8 text-center font-black tabular-nums ${chonbo > 0 ? 'text-red-600' : 'text-slate-400'}`}>{chonbo}</span>
+                                                      <span className={`w-8 text-center font-black tabular-nums ${chonbo > 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{chonbo}</span>
                                                       <button onClick={() => handleChonboChange(rIdx, tIdx, pIdx, 1)}
                                                         className="w-11 h-11 sm:w-8 sm:h-8 rounded-lg bg-red-500 text-white text-lg font-black hover:bg-red-600 transition">＋</button>
-                                                      <span className={`w-16 text-right text-xs font-bold ${chonbo > 0 ? 'text-red-600' : 'text-slate-300'}`}>
+                                                      <span className={`w-16 text-right text-xs font-bold ${chonbo > 0 ? 'text-red-600' : 'text-[#d4c9b7]'}`}>
                                                         {chonbo > 0 ? `−${(CHONBO_PENALTY * chonbo).toFixed(1)}` : '−0.0'}
                                                       </span>
                                                     </div>
@@ -8504,10 +8500,10 @@ export default function Home() {
                                             <div className="mt-3 flex gap-2">
                                               {!table.isSubmitted ? (
                                                 <>
-                                                  <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-slate-200 text-slate-600' : 'bg-indigo-600 text-white'}`}>
+                                                  <button onClick={() => calculateTablePoints(rIdx, tIdx)} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-[#e7dfd1] text-[#625a4f]' : 'bg-[#c8361e] text-white'}`}>
                                                     {table.isCalculated ? '再計算' : '計算・確定'}
                                                   </button>
-                                                  <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-slate-100 text-slate-400 cursor-not-allowed'}`}>
+                                                  <button onClick={() => handleSubmitTable(rIdx, tIdx)} disabled={!table.isCalculated} className={`flex-1 py-4 sm:py-3 rounded-xl sm:rounded-lg font-bold text-base sm:text-sm transition ${table.isCalculated ? 'bg-green-500 text-white' : 'bg-[#f3eee4] text-[#a99d8c] cursor-not-allowed'}`}>
                                                     送信する
                                                   </button>
                                                 </>
