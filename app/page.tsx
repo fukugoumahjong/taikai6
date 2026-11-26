@@ -4574,11 +4574,16 @@ export default function Home() {
     return qualifyingTournaments >= CHAMPIONSHIP_MIN_TOURNAMENTS;
   };
 
-  // 年間CSの出場権保持者＋対象選手（今季ポイント順）。8人目の下にボーダー線を引く
-  const CS_BORDER_COUNT = 8;
+  // 年間CSの出場権保持者＋対象選手（今季ポイント順）
+  const CS_BORDER_COUNT = 8; // 年間CSの出場枠
   const csEligibleIds = totalRankingPlayers
     .filter(p => hasChampionshipRight(p) || isChampionshipCandidate(p))
     .map(p => p.id);
+  // ボーダー線: すでに出場権を獲得した選手の人数を x としたとき、出場権を獲得した選手を除いた「対象」の上位 (8 − x) 人の下に引く
+  const csGrantedCount = totalRankingPlayers.filter(p => hasChampionshipRight(p)).length;
+  const csOpenSlots = Math.max(0, CS_BORDER_COUNT - csGrantedCount);
+  const csCandidateIds = totalRankingPlayers.filter(p => !hasChampionshipRight(p) && isChampionshipCandidate(p)).map(p => p.id);
+  const csBorderPlayerId: string | null = csOpenSlots > 0 && csCandidateIds.length >= csOpenSlots ? csCandidateIds[csOpenSlots - 1] : null;
 
   // 今大会成績: 黒子の表示/非表示を選択可能 (デフォルト非表示)
   const currentRankingAll = entryPlayerIds
@@ -7016,7 +7021,7 @@ export default function Home() {
               >
                 {csOnly ? '🏆 年間CS対象のみ: 表示中' : '🏆 年間CS対象のみ表示'}
               </button>
-              <span className="text-[11px] text-[#82786b]">出場権・対象 {csEligibleIds.length}名（上位{CS_BORDER_COUNT}名の下にボーダー線）</span>
+              <span className="text-[11px] text-[#82786b]">出場権・対象 {csEligibleIds.length}名</span>
             </div>
             <p className="text-[11px] text-[#a99d8c] mb-3">選手名をクリックすると大会別成績が表示され、「個人成績」から着順分布・対戦相性・半荘ごとの成績なども確認できます。</p>
             <div className="overflow-x-auto">
@@ -7117,14 +7122,10 @@ export default function Home() {
                           </tr>
                         )}
 
-                        {csPos === CS_BORDER_COUNT && (
+                        {csBorderPlayerId === p.id && (
                           <tr aria-hidden="true">
                             <td colSpan={colSpan} className="p-0">
-                              <div className="relative h-0 border-t-[3px] border-dashed border-rose-500">
-                                <span className="absolute right-2 -top-[9px] bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
-                                  ▲ 年間CS ボーダー（上位{CS_BORDER_COUNT}名）
-                                </span>
-                              </div>
+                              <div className="h-0 border-t-[3px] border-dashed border-[#c8361e]" />
                             </td>
                           </tr>
                         )}
