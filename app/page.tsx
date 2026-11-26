@@ -666,7 +666,6 @@ const SchoolDetailModal = ({
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-[#a99d8c] mt-2">順位は、その大会に出場した学校どうしの合計ポイントの順位です。</p>
           </section>
 
           <section>
@@ -771,7 +770,6 @@ const SchoolDetailModal = ({
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-[#a99d8c] mt-2">同じ卓になった半荘ごとに、各校の選手のポイント平均を比べています。プラスは「この学校が相手より合計で勝っている」ことを表します。</p>
           </section>
         </div>
       </div>
@@ -833,7 +831,6 @@ const SchoolH2HPanel = ({
     <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
       <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
         <h4 className="text-sm font-black text-[#2d2721]">⚔️ 学校対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">非公開</span></h4>
-        <p className="text-[11px] text-[#a99d8c] leading-snug">2つの学校を選ぶと、{label}の直接対決と成績の比較が見られます（上の「今季／通算」に連動します）。</p>
       </div>
       <div className="p-3 md:p-4 space-y-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -875,7 +872,6 @@ const SchoolH2HPanel = ({
                   </p>
                 </>
               )}
-              <p className="text-[11px] text-[#a99d8c] mt-1">同卓した半荘ごとに、各校の選手のポイント平均を比べて勝敗を決めています（人数が違っても公平になるよう平均です）。</p>
             </div>
 
             <div>
@@ -996,7 +992,7 @@ const SchoolH2HPanel = ({
 // 同卓数の分析・個人対決・管理用データの部品（管理者のみ）
 // ==========================================
 type PlayerOption = { key: string; name: string };
-type TourneyStanding = { key: string; name: string; tKey: string; tName: string; tOrder: number; season: boolean; separate: boolean; point: number; rank: number; total: number; gameCount: number };
+type TourneyStanding = { key: string; name: string; tKey: string; tName: string; tOrder: number; season: boolean; separate: boolean; point: number; conv: number; isConverted: boolean; rank: number; total: number; gameCount: number };
 
 // ---- 同卓数: 「ともに参加した大会で、同じ卓になった回数」が、ランダムな卓組での期待値からどれだけ外れているか ----
 // 1回戦あたり N 人が出場、1卓 k 人のとき、2人が同じ卓になる確率は (k-1)/(N-1)。
@@ -1144,7 +1140,7 @@ const CoSeatPanel = ({ games, scope, players }: { games: SGame[]; scope: SchoolS
           <span className="text-[11px] text-[#a99d8c]">{label}・対象 {eligible.length}組 ／ 全{stats.length}組</span>
         </div>
         <div className="grid grid-cols-3 gap-2 text-center">
-          <div className="rounded-lg bg-[#faf7f1] border border-[#e7dfd1] py-2"><p className="text-[10px] font-bold text-[#a99d8c]">偏りの大きさ（標準偏差）</p><p className="text-xl font-black tabular-nums text-[#2d2721]">{sd.toFixed(2)}<span className="text-xs text-[#a99d8c]">σ</span></p><p className="text-[10px] text-[#a99d8c]">1.0に近いほど均等</p></div>
+          <div className="rounded-lg bg-[#faf7f1] border border-[#e7dfd1] py-2"><p className="text-[10px] font-bold text-[#a99d8c]">偏りの大きさ（標準偏差）</p><p className="text-xl font-black tabular-nums text-[#2d2721]">{sd.toFixed(2)}<span className="text-xs text-[#a99d8c]">σ</span></p></div>
           <div className="rounded-lg bg-rose-50 border border-rose-100 py-2"><p className="text-[10px] font-bold text-rose-400">かなり多く同卓（+2σ以上）</p><p className="text-xl font-black tabular-nums text-rose-600">{strong}<span className="text-xs">組</span></p></div>
           <div className="rounded-lg bg-sky-50 border border-sky-100 py-2"><p className="text-[10px] font-bold text-sky-400">ほとんど同卓せず（−2σ以下）</p><p className="text-xl font-black tabular-nums text-sky-600">{weak}<span className="text-xs">組</span></p></div>
         </div>
@@ -1178,22 +1174,16 @@ const CoSeatPanel = ({ games, scope, players }: { games: SGame[]; scope: SchoolS
         <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
           <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-rose-50 to-white">
             <h4 className="text-sm font-black text-[#2d2721]">🔥 通常より同卓している組</h4>
-            <p className="text-[11px] text-[#a99d8c] leading-snug">期待値を上回っている順（標準化スコア σ）</p>
           </div>
           {more.length === 0 ? <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">該当する組がありません。</p> : <ol className="divide-y divide-[#f3eee4]">{more.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
         </section>
         <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
           <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-sky-50 to-white">
             <h4 className="text-sm font-black text-[#2d2721]">🧊 通常より同卓していない組</h4>
-            <p className="text-[11px] text-[#a99d8c] leading-snug">期待値を下回っている順（標準化スコア σ）</p>
           </div>
           {less.length === 0 ? <p className="px-3 py-4 text-center text-xs text-[#a99d8c]">該当する組がありません。</p> : <ol className="divide-y divide-[#f3eee4]">{less.map((p, i) => <CoSeatRow key={`${p.ka}-${p.kb}`} p={p} focus={focus} i={i} />)}</ol>}
         </section>
       </div>
-      <p className="text-[11px] text-[#a99d8c] leading-relaxed">
-        ともに参加した大会ごとに「ランダムに卓を組んだときの同卓回数の期待値」を計算し、実際の同卓回数との差を標準化したものです（+は期待より多く、−は少なく同卓）。
-        抜け番・出場回戦数の違いも考慮しています。大会の序盤は回転式、終盤は順位順の卓組のため完全なランダムではなく、あくまで偏りの目安です（±2σを超えると、かなり珍しい偏りです）。
-      </p>
     </div>
   );
 };
@@ -1287,7 +1277,6 @@ const PlayerH2HPanel = ({
     <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
       <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
         <h4 className="text-sm font-black text-[#2d2721]">🥊 個人対決（直対成績・成績比較）<span className="ml-2 text-[10px] font-bold text-rose-500 border border-rose-200 rounded px-1.5 py-0.5 align-middle">管理者のみ</span></h4>
-        <p className="text-[11px] text-[#a99d8c] leading-snug">2人の選手を選ぶと、{label}の直接対決（同卓した半荘の着順の勝敗）と成績の比較が見られます。</p>
       </div>
       <div className="p-3 md:p-4 space-y-5">
         <div className="flex flex-wrap items-center gap-2">
@@ -1329,7 +1318,6 @@ const PlayerH2HPanel = ({
                   </p>
                 </>
               )}
-              <p className="text-[11px] text-[#a99d8c] mt-1">同じ卓の半荘ごとに、着順が上だった方の勝ちとしています。</p>
             </div>
 
             <div>
@@ -1871,12 +1859,12 @@ const SchoolChips = ({ options, value, onPick, compact }: { options: string[]; v
   );
 };
 
-type AdminRow = { rank: number; name: string; value: string; sub?: string };
-const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string; desc: string; rows: AdminRow[]; extra?: React.ReactNode; emptyText?: string }) => (
+type AdminRow = { rank: number; name: string; value: string; sub?: string; orig?: string }; // orig=元の点数（換算した値を value に出すときの、換算前の値）
+const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string; desc?: string; rows: AdminRow[]; extra?: React.ReactNode; emptyText?: string }) => (
   <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
     <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-gradient-to-r from-[#faf7f1] to-white">
       <h4 className="text-sm font-black text-[#2d2721]">{title}</h4>
-      <p className="text-[11px] text-[#a99d8c] leading-snug">{desc}</p>
+      {desc && <p className="text-[11px] text-[#a99d8c] leading-snug">{desc}</p>}
       {extra && <div className="mt-2">{extra}</div>}
     </div>
     {rows.length === 0 ? (
@@ -1888,6 +1876,7 @@ const AdminRankList = ({ title, desc, rows, extra, emptyText }: { title: string;
             <span className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-black tabular-nums ${r.rank === 1 ? 'bg-gradient-to-br from-yellow-300 to-amber-500 text-white shadow-sm' : r.rank === 2 ? 'bg-gradient-to-br from-[#d4c9b7] to-[#a99d8c] text-white' : r.rank === 3 ? 'bg-gradient-to-br from-orange-300 to-orange-500 text-white' : 'text-[#a99d8c]'}`}>{r.rank}</span>
             <span className="flex-1 min-w-0 truncate font-bold text-[#473f36]"><PlayerLabel name={r.name} /></span>
             {r.sub && <span className="text-[11px] text-[#a99d8c] whitespace-nowrap">{r.sub}</span>}
+            {r.orig && <span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 whitespace-nowrap tabular-nums">元 {r.orig}</span>}
             <span className={`w-20 text-right font-black tabular-nums ${r.value.startsWith('-') ? 'text-red-600' : 'text-[#2d2721]'}`}>{r.value}</span>
           </li>
         ))}
@@ -4979,10 +4968,13 @@ export default function Home() {
         const separate = isSeparateEventArchive(a);
         const tOrder = tournamentSortKey(a.name);
         const list = a.standings.filter(st => !isKuroko(nameOf(st.playerId, st.name)));
+        // 最高位戦ルール以外の大会は、最高位戦ルールに換算した値（生涯ポイントと同じ換算）も持つ
+        const convMap = effectiveArchiveRuleName(a) === RULE_NAME ? null : convertedArchivePoints(a);
         return list.map(st => {
           const nm = nameOf(st.playerId, st.name);
           const key = lifetimeKeyOf(st.playerId, nm);
-          return { key, name: dbNameById.get(key) || nm, tKey: a.id, tName: a.name, tOrder, season, separate, point: st.totalPoint, rank: st.rank, total: list.length, gameCount: st.gameCount };
+          const conv = convMap ? (convMap.get(key) ?? st.totalPoint) : st.totalPoint;
+          return { key, name: dbNameById.get(key) || nm, tKey: a.id, tName: a.name, tOrder, season, separate, point: st.totalPoint, conv, isConverted: !!convMap, rank: st.rank, total: list.length, gameCount: st.gameCount };
         });
       })
     : [];
@@ -5882,11 +5874,17 @@ export default function Home() {
     ? toAdminRows(sumByPlayer(g => g.slice(-1)), x => x.total, x => ({ name: x.name, value: fmtPt(x.total), sub: `${x.tournaments}大会の最終戦` }))
     : [];
   // 一大会の最終スコアランキング（1つの大会での最終ポイント。年間チャンピオン戦は除く）。今季と通算を並べて出す
+  // 今季は大会ルールでの実際の値、通算は最高位戦ルールに換算した値（ルールが違う大会は、元の点数も併記）
   const finalScoreRows = (scope: SchoolScope): AdminRow[] => adminOn
-    ? toAdminRows(
-        tourneyStandings.filter(x => !x.separate && (scope === 'all' || x.season)).sort((x, y) => y.point - x.point || x.rank - y.rank),
-        x => r1(x.point),
-        x => ({ name: x.name, value: fmtPt(r1(x.point)), sub: `${x.tName}・${x.rank}位・${x.gameCount}半荘` }))
+    ? (scope === 'all'
+        ? toAdminRows(
+            tourneyStandings.filter(x => !x.separate).sort((x, y) => y.conv - x.conv || x.rank - y.rank),
+            x => r1(x.conv),
+            x => ({ name: x.name, value: fmtPt(r1(x.conv)), sub: `${x.tName}・${x.rank}位・${x.gameCount}半荘`, orig: x.isConverted ? fmtPt(r1(x.point)) : undefined }))
+        : toAdminRows(
+            tourneyStandings.filter(x => !x.separate && x.season).sort((x, y) => y.point - x.point || x.rank - y.rank),
+            x => r1(x.point),
+            x => ({ name: x.name, value: fmtPt(r1(x.point)), sub: `${x.tName}・${x.rank}位・${x.gameCount}半荘` })))
     : [];
   const finalScoreSeason = finalScoreRows('season');
   const finalScoreAll = finalScoreRows('all');
@@ -6717,7 +6715,6 @@ export default function Home() {
               <div className="absolute -right-6 -top-8 text-[120px] opacity-10 select-none leading-none" aria-hidden="true">🛠️</div>
               <p className="text-[11px] font-black tracking-[0.25em] text-[#ef937c]">ADMIN ONLY</p>
               <h2 className="text-xl md:text-2xl font-black tracking-wide">管理用データ</h2>
-              <p className="text-xs md:text-sm text-[#f7bcab] mt-1">管理者のみに表示されます。{dataScope === 'season' ? `今季の大会（${dataArchives.length}大会）` : `過去の全ての大会（${dataArchives.length}大会）`} ＋ 今大会（送信済みの卓）の記録から集計（黒子は除く）</p>
               <div className="flex gap-1 mt-3">
                 {([['season', '今季'], ['all', '通算']] as const).map(([v, label]) => (
                   <button
@@ -6742,21 +6739,20 @@ export default function Home() {
               <div className="bg-white p-8 rounded-2xl border border-[#e7dfd1] text-center text-[#82786b]">集計できるデータがまだありません。</div>
             ) : (
               <>
-                <AdminSection id="adm-final" icon="🏆" title="一大会の最終スコアランキング" desc="1つの大会が終わった時点での最終ポイント（ペナルティ反映後）の高い順。年間チャンピオン戦は除きます。今季と通算を並べて表示">
+                <AdminSection id="adm-final" icon="🏆" title="一大会の最終スコアランキング">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    <AdminRankList title="🌸 今季の最終スコア TOP10" desc="今季の大会での、1大会あたりの最終ポイント" rows={finalScoreSeason} />
-                    <AdminRankList title="👑 通算の最終スコア TOP10" desc="過去の全大会での、1大会あたりの最終ポイント（ルールが違う大会もそのままの値）" rows={finalScoreAll} />
+                    <AdminRankList title="🌸 今季の最終スコア TOP10" rows={finalScoreSeason} />
+                    <AdminRankList title="👑 通算の最終スコア（換算値）TOP10" rows={finalScoreAll} />
                   </div>
                 </AdminSection>
 
-                <AdminSection id="adm-rank" icon="📉" title={`各種ランキング（${dataScopeLabel}）`} desc="スコア・素点・順位点・順位別率・大会内の位置ごとの合計" right={scopeToggle}>
+                <AdminSection id="adm-rank" icon="📉" title={`各種ランキング（${dataScopeLabel}）`} right={scopeToggle}>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <AdminRankList title="📉 最低スコア" desc="1半荘あたりの最低スコア" rows={adminLow} />
-                  <AdminRankList title="💎 素点ランキング" desc={`素点ポイント（スコア − 30,000点 を1,000点＝1ptとしたもの）の${dataScopeLabel}合計。順位点は含みません`} rows={adminRaw} />
-                  <AdminRankList title="🏅 順位点ランキング" desc={`ポイントから素点を引いた分（順位点・オカ・供託など）の${dataScopeLabel}合計。素点は含みません`} rows={adminUma} />
+                  <AdminRankList title="📉 最低スコア" rows={adminLow} />
+                  <AdminRankList title="💎 素点ランキング" rows={adminRaw} />
+                  <AdminRankList title="🏅 順位点ランキング" rows={adminUma} />
                   <AdminRankList
                     title="📊 順位別率ランキング"
-                    desc={`各順位になった割合の高い順（${MIN_GAMES_FOR_RATE}半荘以上の選手が対象）`}
                     rows={adminRates[adminRateRank]}
                     emptyText={`${MIN_GAMES_FOR_RATE}半荘以上の選手がまだいません`}
                     extra={
@@ -6771,15 +6767,15 @@ export default function Home() {
                       </div>
                     }
                   />
-                  <AdminRankList title={`⏩ ${dataScopeLabel}の5戦目以降ランキング`} desc="各大会の5戦目以降に積み上げたポイントの、全大会の合計（5半荘以上出場した大会が対象。年間チャンピオン戦は除く）" rows={adminFifth} emptyText="5半荘以上出場した大会がありません。" />
-                  <AdminRankList title={`1️⃣ ${dataScopeLabel}の1戦目ランキング`} desc="各大会の1戦目のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminFirst} />
-                  <AdminRankList title={`🏁 ${dataScopeLabel}の最終戦ランキング`} desc="各大会での、その選手の最後の半荘のポイントの、全大会の合計（年間チャンピオン戦は除く）" rows={adminLast} />
+                  <AdminRankList title={`⏩ ${dataScopeLabel}の5戦目以降ランキング`} rows={adminFifth} emptyText="5半荘以上出場した大会がありません。" />
+                  <AdminRankList title={`1️⃣ ${dataScopeLabel}の1戦目ランキング`} rows={adminFirst} />
+                  <AdminRankList title={`🏁 ${dataScopeLabel}の最終戦ランキング`} rows={adminLast} />
                 </div>
 
 
                 </AdminSection>
 
-                <AdminSection id="adm-streak" icon="🔥" title="連続記録" desc="連勝・連敗・連続連対・連続ラス回避" right={scopeToggle}>
+                <AdminSection id="adm-streak" icon="🔥" title="連続記録" right={scopeToggle}>
                 {/* 連続記録 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <h4 className="text-sm font-black text-[#473f36]">連続記録</h4>
@@ -6788,19 +6784,18 @@ export default function Home() {
                       <button key={label} onClick={() => setAdminStreakAcross(v)} className={`px-3 py-1 rounded-md text-xs font-bold transition ${adminStreakAcross === v ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}>{label}</button>
                     ))}
                   </div>
-                  <span className="text-[11px] text-[#a99d8c]">選手ごとに最長の記録を1件。2回以上続いたもののみ。抜け番で出なかった回戦は飛ばして数えます{adminStreakAcross ? '（第6回・第7回は番号順に並べます）' : ''}。</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <AdminRankList title="🔥 連勝ランキング" desc="1着が連続した回数" rows={adminWinStreak} emptyText="2連勝以上の記録がありません。" />
-                  <AdminRankList title="🧊 連敗ランキング" desc="ラス（4着）が連続した回数" rows={adminLoseStreak} emptyText="2連続ラスの記録がありません。" />
-                  <AdminRankList title="🥈 連続連対記録" desc="1着か2着が連続した回数" rows={adminRentaiStreak} />
-                  <AdminRankList title="🛡️ 連続ラス回避記録" desc="ラス（4着）以外が連続した回数" rows={adminAvoidStreak} />
+                  <AdminRankList title="🔥 連勝ランキング" rows={adminWinStreak} emptyText="2連勝以上の記録がありません。" />
+                  <AdminRankList title="🧊 連敗ランキング" rows={adminLoseStreak} emptyText="2連続ラスの記録がありません。" />
+                  <AdminRankList title="🥈 連続連対記録" rows={adminRentaiStreak} />
+                  <AdminRankList title="🛡️ 連続ラス回避記録" rows={adminAvoidStreak} />
                 </div>
 
 
                 </AdminSection>
 
-                <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} desc="同卓したときのポイントの合計から見た相性" right={scopeToggle}>
+                <AdminSection id="adm-synergy" icon="💞" title={`相性（${dataScopeLabel}）`} right={scopeToggle}>
                 {/* 相性 */}
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <h4 className="text-sm font-black text-[#473f36]">{dataScopeLabel}の相性</h4>
@@ -6811,21 +6806,20 @@ export default function Home() {
                     </select>
                     の組が対象
                   </label>
-                  <span className="text-[11px] text-[#a99d8c]">「Aさん（Bさんと同卓）」= Bさんと同じ卓だった半荘での、Aさんのポイントの合計。黒子は除きます。</span>
                 </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  <AdminRankList title="💞 相性いいランキング" desc="同卓したときの自分のポイントの合計が大きい順" rows={adminGoodMatch} emptyText={`同卓${adminSynergyMin}半荘以上の組がありません。`} />
-                  <AdminRankList title="💢 相性悪いランキング" desc="同卓したときの自分のポイントの合計が小さい順" rows={adminBadMatch} emptyText={`同卓${adminSynergyMin}半荘以上の組がありません。`} />
+                  <AdminRankList title="💞 相性いいランキング" rows={adminGoodMatch} emptyText={`同卓${adminSynergyMin}半荘以上の組がありません。`} />
+                  <AdminRankList title="💢 相性悪いランキング" rows={adminBadMatch} emptyText={`同卓${adminSynergyMin}半荘以上の組がありません。`} />
                 </div>
 
 
                 </AdminSection>
 
-                <AdminSection id="adm-coseat" icon="🎲" title={`同卓数の分布（${dataScopeLabel}）`} desc="ともに参加した大会での同卓回数が、期待値をどれだけ上回っているか／下回っているか" right={scopeToggle}>
+                <AdminSection id="adm-coseat" icon="🎲" title={`同卓数の分布（${dataScopeLabel}）`} right={scopeToggle}>
                   <CoSeatPanel games={schoolGames} scope={dataScope} players={playerOptions} />
                 </AdminSection>
 
-                <AdminSection id="adm-school" icon="🏫" title="学校別成績・学校対決" desc="学校は管理者でログインしているときだけ読み込まれます" right={scopeToggle}>
+                <AdminSection id="adm-school" icon="🏫" title="学校別成績・学校対決" right={scopeToggle}>
                 {/* 学校別成績（管理者のみ・非公開） */}
                 <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
                   <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
@@ -6838,8 +6832,7 @@ export default function Home() {
                       </div>
                     </div>
                     <p className="text-[11px] text-[#a99d8c] leading-snug">
-                      選手に設定した学校ごとの、全半荘の合計です（黒子は除く）。学校名を押すと、個人成績と同じ形式の詳細（大会別成績・着順分布・半荘ごとの成績・他校との対戦）が開きます。学校は管理者でログインしているときだけ読み込まれ、一般の画面には表示されません。
-                      {schoolUnsetCount > 0 ? `学校が未設定の選手 ${schoolUnsetCount}名 は集計に含まれていません。` : ''}
+                                            {schoolUnsetCount > 0 ? `学校が未設定の選手 ${schoolUnsetCount}名 は集計に含まれていません。` : ''}
                     </p>
                   </div>
                   {schoolStats.length === 0 ? (
@@ -6893,18 +6886,18 @@ export default function Home() {
 
                 </AdminSection>
 
-                <AdminSection id="adm-player" icon="🥊" title="個人対決" desc="2人の選手の直接対決と成績比較" right={scopeToggle}>
+                <AdminSection id="adm-player" icon="🥊" title="個人対決" right={scopeToggle}>
                   <PlayerH2HPanel players={playerOptions} games={schoolGames} standings={tourneyStandings} scope={dataScope} a={phA} b={phB} setA={setPhA} setB={setPhB} />
                 </AdminSection>
 
-                <AdminSection id="adm-ties" icon="🤝" title="過去の同点" desc="同じ半荘で点数が同じになった組">
+                <AdminSection id="adm-ties" icon="🤝" title="過去の同点">
                 {/* 同点一覧（すべての着順・すべて表示） */}
                 <section className="bg-white rounded-xl border border-[#e7dfd1] overflow-hidden">
                   <div className="px-3 py-2.5 border-b border-[#f3eee4] bg-[#faf7f1]">
                     <h4 className="text-sm font-black text-[#2d2721]">🤝 過去の同点（すべての着順）</h4>
                     <p className="text-[11px] text-[#a99d8c] leading-snug">
-                      同じ半荘で点数が同じになった組を、すべて表示します（全{adminTies.length}件
-                      {adminTies.length > 0 ? `：1着タイ ${adminTies.filter(t => t.rankNo === 1).length} ／ 2着タイ ${adminTies.filter(t => t.rankNo === 2).length} ／ 3着タイ ${adminTies.filter(t => t.rankNo === 3).length} ／ 4着タイ ${adminTies.filter(t => t.rankNo === 4).length}` : ''}）。
+                      全{adminTies.length}件
+                      {adminTies.length > 0 ? `：1着タイ ${adminTies.filter(t => t.rankNo === 1).length} ／ 2着タイ ${adminTies.filter(t => t.rankNo === 2).length} ／ 3着タイ ${adminTies.filter(t => t.rankNo === 3).length} ／ 4着タイ ${adminTies.filter(t => t.rankNo === 4).length}` : ''}
                     </p>
                   </div>
                   {adminTies.length === 0 ? (
