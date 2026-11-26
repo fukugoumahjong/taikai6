@@ -29,19 +29,12 @@ const ROUND_START_TIMES_BY_TOURNAMENT: Record<number, string[]> = {
 };
 // 次に入力する大会の回（運営都合で第7回が第6回より先に開催される）。管理者が画面から手動で変更できる。
 const DEFAULT_TOURNAMENT_NO = '7';
-// 第7回のみ、卓の名前を「1卓・2卓・3卓」ではなく色名で呼ぶ（12名・3卓のため）。
-// 1卓目が白卓。順位順で決まる回戦では上位の卓が1卓目になるので、自動的に上位が白卓になる。
-const TABLE_NAMES_BY_TOURNAMENT: Record<number, string[]> = {
-  7: ['白卓', '橙卓', '黒卓'],
-};
+// 卓の名前は、すべての大会で「1卓・2卓・3卓…」と表示する。
+// （第7回だけ色名［白卓・橙卓・黒卓］で呼ぶ仕様は、大会が終了したため廃止した。
+//   特定の回だけ名前や色を変えたい場合は、下の2つに「回の番号: [...]」を追加する）
+const TABLE_NAMES_BY_TOURNAMENT: Record<number, string[]> = {};
 // 卓の色（アイコン）。badge=卓ヘッダーの色、dot=小さな丸いアイコン、emoji=文字だけの場所用
-const TABLE_COLORS_BY_TOURNAMENT: Record<number, { badge: string; dot: string; emoji: string }[]> = {
-  7: [
-    { badge: 'bg-white text-[#2d2721] border-2 border-[#d4c9b7]', dot: 'bg-white border-[#a99d8c]', emoji: '⚪' },
-    { badge: 'bg-orange-500 text-white border-2 border-orange-500', dot: 'bg-orange-500 border-orange-600', emoji: '🟠' },
-    { badge: 'bg-[#1c1814] text-white border-2 border-[#1c1814]', dot: 'bg-[#1c1814] border-[#1c1814]', emoji: '⚫' },
-  ],
-};
+const TABLE_COLORS_BY_TOURNAMENT: Record<number, { badge: string; dot: string; emoji: string }[]> = {};
 const tableColorFor = (tournamentNo: string, tableNo?: number) =>
   tableNo ? TABLE_COLORS_BY_TOURNAMENT[Number(tournamentNo)]?.[tableNo - 1] || null : null;
 const tableNameFor = (tournamentNo: string, tableNo?: number): string => {
@@ -1634,7 +1627,7 @@ const PODIUM_STYLE = [
   { plinth: 'from-[#f1eee8] via-[#d2ccc1] to-[#a39c90]', num: 'text-[#473f36]' },
   { plinth: 'from-[#f2bd99] via-[#da8d5e] to-[#a8562f]', num: 'text-[#5e2a12]' },
 ];
-const PODIUM_MAX_H = 200; // 柱の最大の高さ(px)
+const PODIUM_MAX_H = 150; // 柱の最大の高さ(px)
 const PODIUM_MIN_H = 30;  // 0以下のポイントでも、順位の数字が見える最小の高さ(px)
 const Podium = ({ entries, maxPoint }: { entries: PodiumEntry[]; maxPoint: number }) => {
   if (entries.length === 0) return <p className="text-xs text-[#a99d8c] text-center py-3">成績がありません。</p>;
@@ -1676,7 +1669,7 @@ type UpcomingMatch = {
   time: string | null;
   status: 'ready' | 'pending' | 'sitout';
   tableNo?: number;
-  tableLabel?: string; // 卓の表示名（例: 白卓）。無ければ「◯卓」
+  tableLabel?: string; // 卓の表示名。無ければ「◯卓」
   wind?: string;
   isFinal?: boolean;
   opponents?: { name: string; wind: string }[];
@@ -2876,7 +2869,7 @@ export default function Home() {
   const [roundsCount, setRoundsCount] = useState(ROUND_START_TIMES_BY_TOURNAMENT[Number(DEFAULT_TOURNAMENT_NO)]?.length ?? 4);
   // この回の開始目安（回ごとに異なる）
   const scheduleTimes = scheduleFor(tournamentNo);
-  // 卓の表示名（第7回は 白卓／橙卓／黒卓、それ以外は 1卓／2卓…）
+  // 卓の表示名（1卓／2卓…）
   const tableName = (n?: number) => tableNameFor(tournamentNo, n);
   // 卓の色。色が決まっていない回は null
   const tableColor = (n?: number) => tableColorFor(tournamentNo, n);
