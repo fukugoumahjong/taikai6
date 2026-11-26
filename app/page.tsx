@@ -1626,14 +1626,17 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
   };
 };
 
-// 大会の表彰台（上位3名）。1位を中央に高く、2位を左・3位を右に置く
+// 大会の表彰台（上位3名）。1位を中央、2位を左、3位を右に置く。
+// 柱の高さはポイントに比例し、すべての表彰台で共通の基準（maxPoint = 柱の最大の高さになるポイント）を使う
 type PodiumEntry = { rank: number; name: string; point: number; gameCount: number };
 const PODIUM_STYLE = [
-  { plinth: 'from-[#f6dc8a] via-[#e2b84a] to-[#b8892b]', h: 'h-24', num: 'text-[#5c4315]' },
-  { plinth: 'from-[#f1eee8] via-[#d2ccc1] to-[#a39c90]', h: 'h-16', num: 'text-[#473f36]' },
-  { plinth: 'from-[#f2bd99] via-[#da8d5e] to-[#a8562f]', h: 'h-12', num: 'text-[#5e2a12]' },
+  { plinth: 'from-[#f6dc8a] via-[#e2b84a] to-[#b8892b]', num: 'text-[#5c4315]' },
+  { plinth: 'from-[#f1eee8] via-[#d2ccc1] to-[#a39c90]', num: 'text-[#473f36]' },
+  { plinth: 'from-[#f2bd99] via-[#da8d5e] to-[#a8562f]', num: 'text-[#5e2a12]' },
 ];
-const Podium = ({ entries }: { entries: PodiumEntry[] }) => {
+const PODIUM_MAX_H = 200; // 柱の最大の高さ(px)
+const PODIUM_MIN_H = 30;  // 0以下のポイントでも、順位の数字が見える最小の高さ(px)
+const Podium = ({ entries, maxPoint }: { entries: PodiumEntry[]; maxPoint: number }) => {
   if (entries.length === 0) return <p className="text-xs text-[#a99d8c] text-center py-3">成績がありません。</p>;
   const order = [entries[1], entries[0], entries[2]].filter(Boolean) as PodiumEntry[];
   return (
@@ -1641,6 +1644,7 @@ const Podium = ({ entries }: { entries: PodiumEntry[] }) => {
       <div className="flex items-end gap-1.5 sm:gap-2">
         {order.map(e => {
           const st = PODIUM_STYLE[Math.min(2, Math.max(0, e.rank - 1))];
+          const h = Math.max(PODIUM_MIN_H, Math.round((Math.max(0, e.point) / Math.max(1, maxPoint)) * PODIUM_MAX_H));
           return (
             <div key={`${e.rank}-${e.name}`} className="flex-1 min-w-0 flex flex-col items-center justify-end">
               {e.rank === 1 && <span className="text-xl leading-none mb-0.5" aria-hidden="true">👑</span>}
@@ -1649,8 +1653,8 @@ const Podium = ({ entries }: { entries: PodiumEntry[] }) => {
                 <div className={`font-black tabular-nums text-xl sm:text-2xl leading-tight ${e.point > 0 ? 'text-blue-600' : e.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(e.point)}</div>
                 <div className="text-[10px] text-[#a99d8c]">{e.gameCount}半荘</div>
               </div>
-              <div className={`mt-1.5 w-full ${st.h} rounded-t-lg bg-gradient-to-b ${st.plinth} flex items-start justify-center pt-1.5`}>
-                <span className={`text-3xl font-black leading-none ${st.num}`} style={{ fontFamily: "'Shippori Mincho B1', serif" }}>{e.rank}</span>
+              <div className={`mt-1.5 w-full rounded-t-lg bg-gradient-to-b ${st.plinth} flex items-start justify-center pt-1.5`} style={{ height: `${h}px` }}>
+                <span className={`${h >= 56 ? 'text-3xl' : 'text-xl'} font-black leading-none ${st.num}`} style={{ fontFamily: "'Shippori Mincho B1', serif" }}>{e.rank}</span>
               </div>
             </div>
           );
@@ -6063,7 +6067,9 @@ export default function Home() {
       .map(st => ({ rank: st.rank, name: nameOf(st.playerId, st.name), point: st.totalPoint, gameCount: st.gameCount }));
   const podiumArchives = [...archives]
     .filter(a => podiumScope === 'all' || !isPreviousSeasonArchive(a))
-    .sort((x, y) => tournamentSortKey(y.name) - tournamentSortKey(x.name));
+    .sort((x, y) => tournamentSortKey(x.name) - tournamentSortKey(y.name)); // 回数の若い大会から
+  // 表彰台の柱の高さの基準: 表示する大会の上位3名のうち、最大のポイント（全ての表彰台で共通）
+  const podiumMaxPoint = Math.max(1, ...podiumArchives.flatMap(a => archiveTop3(a).map(e => e.point)));
 
   // 管理用データの各セクションの見出しに置く「今季／通算」の切り替え（上のバナーのボタンと同じ設定を切り替える）
   const scopeToggle = (
@@ -7446,7 +7452,7 @@ export default function Home() {
                         </button>
                         {isOpen && (
                           <div className="p-4">
-                            <div className="mb-5 max-w-xl mx-auto"><Podium entries={archiveTop3(a)} /></div>
+                            <div className="mb-5 max-w-xl mx-auto"><Podium entries={archiveTop3(a)} maxPoint={Math.max(podiumMaxPoint, ...archiveTop3(a).map(e => e.point))} /></div>
                             {a.notes && <p className="text-xs text-[#82786b] mb-3">📝 {a.notes}</p>}
                             <p className="text-[11px] text-[#a99d8c] mb-2">選手名をクリックすると半荘ごとの成績、さらにその半荘をクリックすると同卓者が見られます。</p>
                             <div className="overflow-x-auto">
@@ -7656,7 +7662,7 @@ export default function Home() {
                           className="text-[11px] font-bold text-[#c8361e] hover:text-[#822213] whitespace-nowrap"
                         >成績を見る ▸</button>
                       </div>
-                      <Podium entries={archiveTop3(a)} />
+                      <Podium entries={archiveTop3(a)} maxPoint={podiumMaxPoint} />
                     </div>
                   ))}
                 </div>
