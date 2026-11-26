@@ -1626,6 +1626,41 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
   };
 };
 
+// 大会の表彰台（上位3名）。1位を中央に高く、2位を左・3位を右に置く
+type PodiumEntry = { rank: number; name: string; point: number; gameCount: number };
+const PODIUM_STYLE = [
+  { plinth: 'from-[#f6dc8a] via-[#e2b84a] to-[#b8892b]', h: 'h-24', num: 'text-[#5c4315]' },
+  { plinth: 'from-[#f1eee8] via-[#d2ccc1] to-[#a39c90]', h: 'h-16', num: 'text-[#473f36]' },
+  { plinth: 'from-[#f2bd99] via-[#da8d5e] to-[#a8562f]', h: 'h-12', num: 'text-[#5e2a12]' },
+];
+const Podium = ({ entries }: { entries: PodiumEntry[] }) => {
+  if (entries.length === 0) return <p className="text-xs text-[#a99d8c] text-center py-3">成績がありません。</p>;
+  const order = [entries[1], entries[0], entries[2]].filter(Boolean) as PodiumEntry[];
+  return (
+    <div>
+      <div className="flex items-end gap-1.5 sm:gap-2">
+        {order.map(e => {
+          const st = PODIUM_STYLE[Math.min(2, Math.max(0, e.rank - 1))];
+          return (
+            <div key={`${e.rank}-${e.name}`} className="flex-1 min-w-0 flex flex-col items-center justify-end">
+              {e.rank === 1 && <span className="text-xl leading-none mb-0.5" aria-hidden="true">👑</span>}
+              <div className="w-full text-center px-0.5">
+                <div className="text-xs sm:text-sm font-black text-[#2d2721] truncate"><PlayerLabel name={e.name} /></div>
+                <div className={`font-black tabular-nums text-xl sm:text-2xl leading-tight ${e.point > 0 ? 'text-blue-600' : e.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(e.point)}</div>
+                <div className="text-[10px] text-[#a99d8c]">{e.gameCount}半荘</div>
+              </div>
+              <div className={`mt-1.5 w-full ${st.h} rounded-t-lg bg-gradient-to-b ${st.plinth} flex items-start justify-center pt-1.5`}>
+                <span className={`text-3xl font-black leading-none ${st.num}`} style={{ fontFamily: "'Shippori Mincho B1', serif" }}>{e.rank}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="h-1.5 rounded-b bg-[#1c1814]" />
+    </div>
+  );
+};
+
 // 個人成績（モーダル）：通算成績・大会別成績・着順分布・半荘ごとの成績・対戦相性・ペナルティ履歴をまとめて表示
 type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
@@ -2888,6 +2923,7 @@ export default function Home() {
   const [openTotalPlayerId, setOpenTotalPlayerId] = useState<string | null>(null);
   const [detailModalPlayerId, setDetailModalPlayerId] = useState<string | null>(null);
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
+  const [podiumScope, setPodiumScope] = useState<'season' | 'all'>('season'); // 大会別の表彰台: 表示する範囲（今季が初期値）
   const [penaltyDrafts, setPenaltyDrafts] = useState<Record<string, { playerId: string; point: string; reason: string }>>({});
   const [openArchivePlayerId, setOpenArchivePlayerId] = useState<string | null>(null);
   const [openHanchanListIds, setOpenHanchanListIds] = useState<Record<string, boolean>>({});
@@ -6018,6 +6054,17 @@ export default function Home() {
     );
   };
 
+  // 過去大会の上位3名（表彰台用）
+  const archiveTop3 = (a: TournamentArchive): PodiumEntry[] =>
+    [...a.standings]
+      .filter(st => !isKuroko(nameOf(st.playerId, st.name)))
+      .sort((x, y) => x.rank - y.rank || y.totalPoint - x.totalPoint)
+      .slice(0, 3)
+      .map(st => ({ rank: st.rank, name: nameOf(st.playerId, st.name), point: st.totalPoint, gameCount: st.gameCount }));
+  const podiumArchives = [...archives]
+    .filter(a => podiumScope === 'all' || !isPreviousSeasonArchive(a))
+    .sort((x, y) => tournamentSortKey(y.name) - tournamentSortKey(x.name));
+
   // 管理用データの各セクションの見出しに置く「今季／通算」の切り替え（上のバナーのボタンと同じ設定を切り替える）
   const scopeToggle = (
     <div className="flex gap-1 flex-shrink-0">
@@ -7371,7 +7418,7 @@ export default function Home() {
                   {[...archives].sort((x, y) => tournamentSortKey(x.name) - tournamentSortKey(y.name)).map(a => {
                     const isOpen = openArchiveId === a.id;
                     return (
-                      <div key={a.id} className="border border-[#e7dfd1] rounded-xl overflow-hidden">
+                      <div key={a.id} id={`archive-${a.id}`} className="border border-[#e7dfd1] rounded-xl overflow-hidden scroll-mt-4">
                         <button
                           onClick={() => {
                             const next = isOpen ? null : a.id;
@@ -7399,6 +7446,7 @@ export default function Home() {
                         </button>
                         {isOpen && (
                           <div className="p-4">
+                            <div className="mb-5 max-w-xl mx-auto"><Podium entries={archiveTop3(a)} /></div>
                             {a.notes && <p className="text-xs text-[#82786b] mb-3">📝 {a.notes}</p>}
                             <p className="text-[11px] text-[#a99d8c] mb-2">選手名をクリックすると半荘ごとの成績、さらにその半荘をクリックすると同卓者が見られます。</p>
                             <div className="overflow-x-auto">
@@ -7573,6 +7621,44 @@ export default function Home() {
                       </div>
                     );
                   })}
+                </div>
+              )}
+            </div>
+
+            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-[#e7dfd1]">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 className="text-xl font-bold">🏆 大会別 表彰台</h2>
+                <div className="flex gap-1">
+                  {([['season', '今季'], ['all', 'すべて']] as const).map(([v, label]) => (
+                    <button
+                      key={v}
+                      onClick={() => setPodiumScope(v)}
+                      className={`px-3 py-1 rounded-md text-xs font-bold transition ${podiumScope === v ? 'bg-[#c8361e] text-white' : 'bg-white border border-[#e7dfd1] text-[#82786b] hover:bg-[#f3eee4]'}`}
+                    >{label}</button>
+                  ))}
+                </div>
+              </div>
+              {podiumArchives.length === 0 ? (
+                <p className="text-sm text-[#a99d8c]">表示できる大会がありません。</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {podiumArchives.map(a => (
+                    <div key={a.id} className="rounded-xl border border-[#e7dfd1] bg-[#faf7f1]/70 p-3 sm:p-4">
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <span className="font-black text-[#2d2721]" style={{ fontFamily: "'Shippori Mincho B1', serif" }}>{a.name}</span>
+                        <button
+                          onClick={() => {
+                            setOpenArchiveId(a.id);
+                            setOpenArchivePlayerId(null);
+                            setOpenArchiveHanchanIdx(null);
+                            setTimeout(() => document.getElementById(`archive-${a.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                          }}
+                          className="text-[11px] font-bold text-[#c8361e] hover:text-[#822213] whitespace-nowrap"
+                        >成績を見る ▸</button>
+                      </div>
+                      <Podium entries={archiveTop3(a)} />
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
