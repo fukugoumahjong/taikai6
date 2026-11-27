@@ -1467,12 +1467,14 @@ const AdminSection = ({ id, icon, title, desc, right, children }: { id: string; 
 
 // ==========================================
 // 卓組抽選（通常回戦の卓組と席順）
-// 優先順位: ① 席順（東南西北）を全員できるだけ公平に → ② 同じ相手とできるだけ同卓しない
-// ③ 過去の大会の同卓の偏り（期待値との差）は、同点のときに効く程度の、ごくわずかな参考
+// 優先順位: ① 席順（東南西北）を全員できるだけ公平に
+//           ② 同じ相手とできるだけ同卓しない（同じ相手と何度も同卓させない）
+//           ③ 過去の大会までの「同卓数の偏り」（期待値との差を標準化したスコアz）の標準偏差が、1（ランダムな卓組と同じ）に近づくようにする
+//              ※ ③は、同卓が少なかった組を優先的に当てる程度のもの。②（同じ相手との重複を避ける）を覆すほど強くはしない
 // 卓の分け方（誰と同卓するか）と席順（卓内の東南西北）は独立に決められるので、
-//   手順1: 焼きなまし法で「同卓の重複が最小になる卓分け」を探す
+//   手順1: 焼きなまし法で「同卓の重複が少なく、②③がよい卓分け」を探す
 //   手順2: その卓分けのまま、卓内の席順を入れ替えて「全員の東南西北の回数が均等」になるよう調整する
-// を何度も繰り返し、席順の偏りが最小（なるべく0）のものの中から、同卓の重複が最小のものを採用する
+// を何度も繰り返し、席順の偏りが最小のものの中から、②③の合計が最良のものを採用する
 // ==========================================
 type SeatPlan = {
   tables: string[][][]; // [回戦][卓] = 東南西北の順の選手ID
@@ -1480,14 +1482,19 @@ type SeatPlan = {
   pairSq: number;       // 同卓回数の二乗和（小さいほど、同じ相手との同卓が少ない）
   maxPair: number;      // 同じ相手との同卓の最大回数
   repeatPairs: number;  // 2回以上同卓する組の数
+  distSd: number | null; // この大会を加えた後の、同卓数の偏りzの標準偏差（1に近いほどよい）。評価できないときは null
+  distSdBefore: number | null; // この大会を加える前の標準偏差
   attempts: number;
 };
+// 過去の大会までの、2人の同卓の記録（d = 実際の同卓回数 − 期待値, v = 分散, e = 期待値）
+type CoSeatHistory = { a: string; b: string; d: number; v: number; e: number };
 
-const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 1200, maxAttempts = 80 }: {
+const planSeating = ({ rounds, specialIds, banPair, history, minExpected = 2, timeBudgetMs = 1200, maxAttempts = 80 }: {
   rounds: string[][];                      // 各回戦の出場者（抜け番を除いた4の倍数）
   specialIds: Set<string>;                 // プロ・黒子（1卓に1人まで）
   banPair?: [string, string] | null;       // 同卓は通算1回までの組
-  histBias: (a: string, b: string) => number; // 過去の同卓の偏りによる、ごくわずかな加点（正=避けたい、負=歓迎）
+  history?: CoSeatHistory[];               // 過去の大会までの同卓の偏り
+  minExpected?: number;                    // 偏りの集計の対象にする、期待同卓回数の下限（管理用データの初期値と同じ2回）
   timeBudgetMs?: number;
   maxAttempts?: number;
 }): SeatPlan => {
@@ -1497,8 +1504,6 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
   const R = rounds.length;
   const act = rounds.map(r => r.map(id => idx.get(id)!));
   const isSp = ids.map(id => specialIds.has(id));
-  const hist = new Float64Array(P * P);
-  for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) { const h = histBias(ids[i], ids[j]); hist[i * P + j] = h; hist[j * P + i] = h; }
   const banA = banPair && idx.has(banPair[0]) ? idx.get(banPair[0])! : -1;
   const banB = banPair && idx.has(banPair[1]) ? idx.get(banPair[1])! : -1;
   const WP = 100, HEAVY = 100000;
@@ -1507,6 +1512,41 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
   const gamesOf = new Int32Array(P);
   act.forEach(a => a.forEach(i => { gamesOf[i] += 1; }));
   const minWindSq = (g: number) => { const q = Math.floor(g / 4), r = g % 4; return (4 - r) * q * q + r * (q + 1) * (q + 1); };
+
+  // ---- ③ 同卓数の偏りの標準偏差（zのRMS）を1に近づけるための準備 ----
+  // この大会の期待同卓回数・分散（回戦数R、1回戦あたりの出場人数N、1卓4人として、各組ごとに計算）
+  let totalPG = 0; gamesOf.forEach(g => { totalPG += g; });
+  const Nround = R > 0 ? totalPG / R : 0;
+  const base = Nround > 1 ? 3 / (Nround - 1) : 0;
+  const d0 = new Float64Array(P * P), v1 = new Float64Array(P * P), eNew = new Float64Array(P * P), elig = new Uint8Array(P * P);
+  const histMap = new Map<string, CoSeatHistory>();
+  (history || []).forEach(h => histMap.set(h.a < h.b ? `${h.a}\u0001${h.b}` : `${h.b}\u0001${h.a}`, h));
+  let Sconst = 0, nPairs = 0;
+  const entrantPair = (i: number, j: number) => { const a = ids[i], b = ids[j]; return histMap.get(a < b ? `${a}\u0001${b}` : `${b}\u0001${a}`); };
+  for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) {
+    const h = entrantPair(i, j);
+    const q = R > 0 ? Math.min(1, ((gamesOf[i] * gamesOf[j]) / (R * R)) * base) : 0;
+    const en = R * q, vn = R * q * (1 - q);
+    const e1 = (h ? h.e : 0) + en, vv = (h ? h.v : 0) + vn;
+    const k = i * P + j;
+    d0[k] = h ? h.d : 0; v1[k] = vv; eNew[k] = en;
+    if (e1 >= minExpected && vv > 0) { elig[k] = 1; nPairs += 1; }
+  }
+  // この大会に出ない組（両方が出場する組以外）は、座席に関係なく一定
+  (history || []).forEach(h => {
+    if (idx.has(h.a) && idx.has(h.b)) return;
+    if (h.e >= minExpected && h.v > 0) { Sconst += (h.d * h.d) / h.v; nPairs += 1; }
+  });
+  const useDist = nPairs >= 20;
+  const WS = 12 * Math.max(1, nPairs); // 偏りを整える力。同じ相手との重複を避ける力（WP）を覆さないよう、控えめにする（組の数に比例させて、人数が変わっても同じ強さにする）
+  const contrib = (k: number, c: number) => { if (!elig[k]) return 0; const x = d0[k] + c - eNew[k]; return (x * x) / v1[k]; };
+  const J = (S: number) => { const sd = Math.sqrt(Math.max(0, S) / Math.max(1, nPairs)); return (sd - 1) * (sd - 1); };
+
+  // 参考: この大会を加える前の標準偏差
+  let Sbefore = 0;
+  (history || []).forEach(h => { if (h.e >= minExpected && h.v > 0) Sbefore += (h.d * h.d) / h.v; });
+  let nBefore = 0; (history || []).forEach(h => { if (h.e >= minExpected && h.v > 0) nBefore += 1; });
+  const distSdBefore = nBefore >= 20 ? Math.sqrt(Sbefore / nBefore) : null;
 
   const attempt = () => {
     const seat = act.map(a => shuffle([...a]));
@@ -1520,11 +1560,18 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
         }
       }
     });
+    // 偏りの二乗和の初期値
+    let S = Sconst;
+    if (useDist) for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) S += contrib(i * P + j, cnt[i * P + j]);
     const isBan = (i: number, j: number) => (i === banA && j === banB) || (i === banB && j === banA);
+    // 組(i,j)の同卓回数を d だけ変える。戻り値は「同じ相手との重複」の分のコストの変化。偏りの二乗和 S も更新する
     const change = (i: number, j: number, d: number) => {
+      const lo = i < j ? i : j, hi = i < j ? j : i;
+      const kk = lo * P + hi;
       const k = i * P + j; const old = cnt[k]; const nw = old + d;
-      let delta = WP * (nw * nw - old * old) + hist[k] * d;
+      let delta = WP * (nw * nw - old * old);
       if (isBan(i, j)) delta += HEAVY * (Math.max(0, nw - 1) - Math.max(0, old - 1));
+      if (useDist) S += contrib(kk, nw) - contrib(kk, old);
       cnt[k] = nw; cnt[j * P + i] = nw;
       return delta;
     };
@@ -1541,11 +1588,13 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
       let t2 = Math.floor(Math.random() * (nT - 1)); if (t2 >= t1) t2 += 1;
       const u1 = Math.floor(Math.random() * 4), u2 = Math.floor(Math.random() * 4);
       const a = s[t1 * 4 + u1], b = s[t2 * 4 + u2];
+      const S0 = S;
       let delta = 0;
       for (let u = 0; u < 4; u++) {
         if (u !== u1) { const m = s[t1 * 4 + u]; delta += change(a, m, -1); delta += change(b, m, +1); }
         if (u !== u2) { const m = s[t2 * 4 + u]; delta += change(b, m, -1); delta += change(a, m, +1); }
       }
+      if (useDist) delta += WS * (J(S) - J(S0));
       const sa = isSp[a] ? 1 : 0, sb = isSp[b] ? 1 : 0;
       const c1 = spCount[r][t1], c2 = spCount[r][t2];
       delta += spPen(c1 - sa + sb) + spPen(c2 - sb + sa) - spPen(c1) - spPen(c2);
@@ -1583,27 +1632,34 @@ const planSeating = ({ rounds, specialIds, banPair, histBias, timeBudgetMs = 120
       for (let p = 0; p < P; p++) { let sq = 0; for (let k = 0; k < 4; k++) sq += wc[p * 4 + k] * wc[p * 4 + k]; pen += sq - minWindSq(gamesOf[p]); }
       if (pen < bestWind) { bestWind = pen; bestSeat = cur.map(s => [...s]); }
     }
-    let pairSq = 0, maxPair = 0, repeatPairs = 0, histSum = 0;
+    let pairSq = 0, maxPair = 0, repeatPairs = 0;
     for (let i = 0; i < P; i++) for (let j = i + 1; j < P; j++) {
-      const c = cnt[i * P + j]; pairSq += c * c; if (c > maxPair) maxPair = c; if (c > 1) repeatPairs += 1; histSum += hist[i * P + j] * c;
+      const c = cnt[i * P + j]; pairSq += c * c; if (c > maxPair) maxPair = c; if (c > 1) repeatPairs += 1;
       if (isBan(i, j) && c > 1) pairSq += 1000;
     }
-    return { seat: bestSeat, windPenalty: bestWind, pairSq, repeatPairs, maxPair, histSum };
+    const distSd = useDist ? Math.sqrt(Math.max(0, S) / nPairs) : null;
+    const total = WP * pairSq + (useDist ? WS * J(S) : 0);
+    return { seat: bestSeat, windPenalty: bestWind, pairSq, repeatPairs, maxPair, distSd, total };
   };
 
   const started = Date.now();
-  let best: ReturnType<typeof attempt> | null = null;
-  let attempts = 0;
-  while (attempts < maxAttempts && (attempts < 3 || Date.now() - started < timeBudgetMs)) {
-    const a = attempt(); attempts += 1;
-    // 席順の偏り → 同卓の重複 → （ごくわずかな参考）過去の同卓の偏り の順に比べる
-    if (!best || a.windPenalty < best.windPenalty
-      || (a.windPenalty === best.windPenalty && (a.pairSq < best.pairSq || (a.pairSq === best.pairSq && a.histSum < best.histSum)))) best = a;
-  }
-  const b = best!;
+  const results: ReturnType<typeof attempt>[] = [];
+  while (results.length < maxAttempts && (results.length < 3 || Date.now() - started < timeBudgetMs)) results.push(attempt());
+  const attempts = results.length;
+  // ① 席順の偏りが最小のものだけを残す
+  const minWind = Math.min(...results.map(r => r.windPenalty));
+  const okWind = results.filter(r => r.windPenalty === minWind);
+  // ② 同じ相手との重複が、最も少ないもの（にほぼ等しい: 重複の二乗和の差が2以内＝重複する組が1組増える程度まで）を残す。
+  //    同卓数の偏りを整えるために、同じ相手と何度も同卓させることはしない
+  const minPairSq = Math.min(...okWind.map(r => r.pairSq));
+  const okPair = okWind.filter(r => r.pairSq <= minPairSq + 2 && r.maxPair <= Math.min(...okWind.map(x => x.maxPair)));
+  // ③ その中で、同卓数の偏りの標準偏差が1に最も近いもの
+  const pool = okPair.length ? okPair : okWind;
+  const best: ReturnType<typeof attempt> = pool.reduce((acc, r) => (!acc || r.pairSq * WP + (useDist ? WS * J(r.distSd === null ? 1 : r.distSd * r.distSd * nPairs) : 0) < acc.pairSq * WP + (useDist ? WS * J(acc.distSd === null ? 1 : acc.distSd * acc.distSd * nPairs) : 0) ? r : acc), null as unknown as ReturnType<typeof attempt>);
+  const b = best;
   return {
     tables: b.seat.map(s => { const out: string[][] = []; for (let t = 0; t < s.length / 4; t++) out.push(s.slice(t * 4, t * 4 + 4).map(i => ids[i])); return out; }),
-    windPenalty: b.windPenalty, pairSq: b.pairSq, maxPair: b.maxPair, repeatPairs: b.repeatPairs, attempts,
+    windPenalty: b.windPenalty, pairSq: b.pairSq, maxPair: b.maxPair, repeatPairs: b.repeatPairs, distSd: b.distSd, distSdBefore, attempts,
   };
 };
 
@@ -1642,6 +1698,86 @@ const Podium = ({ entries, maxPoint }: { entries: PodiumEntry[]; maxPoint: numbe
         })}
       </div>
       <div className="h-1.5 rounded-b bg-[#1c1814]" />
+    </div>
+  );
+};
+
+// 過去の大会を「今大会の成績」の画面に、一時的に表示するための部品（閲覧中の画面だけに反映。データは変更しない）
+const ArchivePreview = ({ archive, nameOf }: { archive: TournamentArchive; nameOf: (playerId: string, fallback: string) => string }) => {
+  const [openPlayer, setOpenPlayer] = useState<string | null>(null);
+  const [openGame, setOpenGame] = useState<string | null>(null);
+  const chrono = [...archive.hanchans].reverse(); // 保存順は新しい半荘が先頭なので、古い順にする
+  const rows = [...archive.standings]
+    .filter(st => !isKuroko(nameOf(st.playerId, st.name)))
+    .sort((x, y) => x.rank - y.rank || y.totalPoint - x.totalPoint)
+    .map(st => {
+      const games = chrono.flatMap((h, i) => {
+        const r = h.results.find(x => x.playerId === st.playerId && !x.excluded);
+        return r ? [{ h, i, r }] : [];
+      });
+      const avgRank = games.length ? games.reduce((a, g) => a + g.r.rank, 0) / games.length : 0;
+      const penalty = archive.penalties.filter(p => p.playerId === st.playerId).reduce((a, p) => a + p.point, 0);
+      return { st, games, avgRank, penalty };
+    });
+  const labelOf = (h: ArchiveHanchan, i: number) => `${h.round ?? i + 1}半荘目${h.table ? ` ${h.table}卓` : ''}`;
+  if (rows.length === 0) return <p className="text-[#82786b]">この大会の成績がありません。</p>;
+  return (
+    <div className="space-y-2">
+      {rows.map(({ st, games, avgRank, penalty }) => {
+        const name = nameOf(st.playerId, st.name);
+        const isOpen = openPlayer === st.playerId;
+        return (
+          <div key={st.playerId} className={`rounded-xl overflow-hidden border ${isOpen ? 'border-teal-300 shadow-sm' : 'border-transparent'}`}>
+            <button
+              onClick={() => { setOpenPlayer(isOpen ? null : st.playerId); setOpenGame(null); }}
+              className={`w-full flex items-center gap-2.5 sm:gap-3 px-3 sm:px-4 py-3.5 sm:py-4 text-left transition ${isOpen ? 'bg-emerald-50' : 'bg-gradient-to-r from-emerald-50/70 to-white hover:from-emerald-100/70'}`}
+            >
+              <span className={`w-9 h-9 flex-shrink-0 rounded-full flex items-center justify-center font-black text-sm ${st.rank === 1 ? 'bg-yellow-400 text-white' : st.rank === 2 ? 'bg-[#a99d8c] text-white' : st.rank === 3 ? 'bg-orange-400 text-white' : 'bg-[#f3eee4] text-[#82786b]'}`}>{st.rank}</span>
+              <span className="flex-1 min-w-0">
+                <span className="block font-black text-base sm:text-lg text-[#2d2721] truncate">
+                  <PlayerLabel name={name} />
+                  {penalty < 0 && <span className="ml-2 text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full align-middle">🚫 {fmtPt(penalty)}</span>}
+                </span>
+                <span className="block sm:hidden text-[11px] text-[#a99d8c] mt-0.5">{st.gameCount}戦 ／ 平均着順 {games.length ? avgRank.toFixed(2) : '-'}</span>
+              </span>
+              <span className={`font-black text-xl sm:text-2xl tabular-nums ${st.totalPoint > 0 ? 'text-emerald-700' : st.totalPoint < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(st.totalPoint)}</span>
+              <span className="hidden sm:block w-16 text-right text-sm text-[#a99d8c] font-medium">{st.gameCount}戦</span>
+              <span className="hidden sm:block w-14 text-right text-sm text-[#82786b] tabular-nums">{games.length ? avgRank.toFixed(2) : '-'}</span>
+            </button>
+            {isOpen && (
+              <div className="bg-white border-t border-teal-100">
+                {games.length === 0 && <p className="px-6 py-4 text-sm text-[#a99d8c]">対局の記録がありません。</p>}
+                {games.map(g => {
+                  const gKey = `${st.playerId}-${g.h.no}-${g.i}`;
+                  const gOpen = openGame === gKey;
+                  return (
+                    <div key={gKey} className="border-b border-[#f3eee4] last:border-b-0">
+                      <button onClick={() => setOpenGame(gOpen ? null : gKey)} className="w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-6 py-3 text-left hover:bg-[#faf7f1]">
+                        <span className="font-mono text-xs sm:text-sm text-[#a99d8c] w-28 sm:w-40 flex-shrink-0">{labelOf(g.h, g.i)}</span>
+                        <span className="flex-1 text-sm font-bold text-[#473f36]">{g.r.rank}着</span>
+                        <span className="text-sm text-[#82786b] tabular-nums">{(g.r.score * 100).toLocaleString()}点</span>
+                        <span className={`w-16 text-right font-black tabular-nums ${g.r.point > 0 ? 'text-emerald-700' : g.r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(g.r.point)}</span>
+                      </button>
+                      {gOpen && (
+                        <div className="px-3 sm:px-6 py-2 bg-[#faf7f1] space-y-1">
+                          {[...g.h.results].sort((x, y) => x.rank - y.rank).map((r, k) => (
+                            <div key={`${r.playerId}-${k}`} className={`flex items-center gap-2 text-xs ${r.playerId === st.playerId ? 'font-black text-[#2d2721]' : 'text-[#82786b]'}`}>
+                              <span className="w-8">{r.excluded ? '—' : `${r.rank}着`}</span>
+                              <PlayerLabel name={nameOf(r.playerId, r.name)} className="flex-1 truncate" />
+                              <span className="tabular-nums w-20 text-right">{(r.score * 100).toLocaleString()}</span>
+                              <span className={`tabular-nums w-14 text-right font-black ${r.point > 0 ? 'text-emerald-700' : r.point < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>{fmtPt(r.point)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 };
@@ -2909,6 +3045,7 @@ export default function Home() {
   const [openTotalPlayerId, setOpenTotalPlayerId] = useState<string | null>(null);
   const [detailModalPlayerId, setDetailModalPlayerId] = useState<string | null>(null);
   const [openArchiveId, setOpenArchiveId] = useState<string | null>(null);
+  const [previewArchiveId, setPreviewArchiveId] = useState<string | null>(null); // 「今大会の成績」に一時的に表示している過去大会（管理者のみ・この画面だけの表示で、データは変更しない）
   const [podiumScope, setPodiumScope] = useState<'season' | 'all'>('season'); // 大会別の表彰台: 表示する範囲（今季が初期値）
   const [penaltyDrafts, setPenaltyDrafts] = useState<Record<string, { playerId: string; point: string; reason: string }>>({});
   const [openArchivePlayerId, setOpenArchivePlayerId] = useState<string | null>(null);
@@ -3124,7 +3261,7 @@ export default function Home() {
   const [h2hB, setH2hB] = useState('');
   const [phA, setPhA] = useState(''); // 個人対決で選んだ選手（キー）
   const [phB, setPhB] = useState('');
-  const [drawReport, setDrawReport] = useState<{ windPenalty: number; maxPair: number; repeatPairs: number; attempts: number; rounds: number } | null>(null); // 直近の卓組抽選の結果の要約（管理者向け）
+  const [drawReport, setDrawReport] = useState<{ windPenalty: number; maxPair: number; repeatPairs: number; attempts: number; rounds: number; distSd: number | null; distSdBefore: number | null } | null>(null); // 直近の卓組抽選の結果の要約（管理者向け）
   const [nameDraft, setNameDraft] = useState(''); // 選手の名前の編集（新規登録タブ）
   const saveSchoolFor = async (playerId: string, school: string) => {
     if (!isAdmin) return;
@@ -3538,21 +3675,16 @@ export default function Home() {
       roundSitOut.push(out);
     }
 
-    // 過去の大会の同卓の偏り（期待値との差）。「ほんの少しだけ」参考にする（同じ条件の候補があるとき、よく同卓してきた組を避ける程度）
-    const histMap = new Map<string, CoSeatPair>();
+    // 過去の大会までの同卓数の分布（実際の同卓回数と期待値の差）。標準偏差が1（ランダムな卓組）に近づくよう、卓組づくりに使う
+    let history: CoSeatHistory[] = [];
     try {
-      buildCoSeatStats(buildTableGames(false), 'all').forEach(pr => histMap.set(coSeatKey(pr.ka, pr.kb), pr));
+      history = buildCoSeatStats(buildTableGames(false), 'all').map(pr => ({ a: pr.ka, b: pr.kb, d: pr.o - pr.e, v: pr.v, e: pr.e }));
     } catch (err) {
       console.error('過去の同卓データの集計に失敗（参考情報なので、そのまま卓組を作ります）:', err);
     }
-    const histBias = (a: string, b: string) => {
-      const pr = histMap.get(coSeatKey(a, b));
-      if (!pr || pr.e < 1) return 0;
-      return 0.4 * Math.max(-3, Math.min(3, pr.z));
-    };
 
-    // ① 席順（東南西北）を全員できるだけ公平に ② 同じ相手となるべく同卓しない、を最適化して卓組を作る
-    const plan = planSeating({ rounds: roundActive, specialIds, banPair: rainfId && tokuId ? [rainfId, tokuId] : null, histBias });
+    // ① 席順（東南西北）を全員できるだけ公平に ② 同じ相手となるべく同卓しない ③ 同卓数の分布の標準偏差を1に近づける、を最適化して卓組を作る
+    const plan = planSeating({ rounds: roundActive, specialIds, banPair: rainfId && tokuId ? [rainfId, tokuId] : null, history });
     const generatedRounds: Round[] = plan.tables.map((tablesIds, r) => ({
       round: r + 1,
       tables: tablesIds.map((ids, t) => ({
@@ -3565,7 +3697,7 @@ export default function Home() {
       isPending: false,
       sitOutIds: roundSitOut[r],
     }));
-    setDrawReport({ windPenalty: plan.windPenalty, maxPair: plan.maxPair, repeatPairs: plan.repeatPairs, attempts: plan.attempts, rounds: normalCount });
+    setDrawReport({ windPenalty: plan.windPenalty, maxPair: plan.maxPair, repeatPairs: plan.repeatPairs, attempts: plan.attempts, rounds: normalCount, distSd: plan.distSd, distSdBefore: plan.distSdBefore });
 
     // 後決めの回戦
     for (let k = 0; k < pendingCount; k++) {
@@ -6056,6 +6188,7 @@ export default function Home() {
       .sort((x, y) => x.rank - y.rank || y.totalPoint - x.totalPoint)
       .slice(0, 3)
       .map(st => ({ rank: st.rank, name: nameOf(st.playerId, st.name), point: st.totalPoint, gameCount: st.gameCount }));
+  const previewArchive = isAdmin && previewArchiveId ? archives.find(a => a.id === previewArchiveId) || null : null;
   const podiumArchives = [...archives]
     .filter(a => podiumScope === 'all' || !isPreviousSeasonArchive(a))
     .sort((x, y) => tournamentSortKey(x.name) - tournamentSortKey(y.name)); // 回数の若い大会から
@@ -6378,12 +6511,18 @@ export default function Home() {
                 <button onClick={() => signOut()} className="text-xs md:text-xs bg-white/[0.08] hover:bg-rose-500 ring-1 ring-white/15 text-[#f3eee4] hover:text-white px-3 md:px-3.5 py-2 md:py-1.5 rounded-full transition whitespace-nowrap">ログアウト</button>
               </>
             ) : (
-              <button onClick={() => signIn('google')} className="text-xs md:text-xs bg-gradient-to-r from-[#d9452b] via-[#42649a] to-[#b8892b] hover:brightness-110 shadow-[0_0_20px_rgba(217,70,239,0.55)] ring-1 ring-white/25 text-white px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">Googleログイン</button>
+              <button onClick={() => signIn('google')} className="flex items-center gap-2 text-xs bg-white hover:bg-[#f3eee4] text-[#2d2721] border border-[#d4c9b7] px-3 py-2 md:py-1.5 rounded-full font-bold transition whitespace-nowrap">
+                <svg width="14" height="14" viewBox="0 0 48 48" aria-hidden="true">
+                  <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                  <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                  <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                  <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                </svg>
+                Googleでログイン
+              </button>
             )}
           </div>
         </div>
-        {/* アクセントライン */}
-        <div className="h-[3px] bg-gradient-to-r from-[#d9452b] via-[#b8892b] to-amber-400 shadow-[0_0_18px_rgba(217,70,239,0.85)]" />
       </header>
 
       {/* ========== スマホ用 下部ナビ（親指で届く位置に画面切替を置く） ========== */}
@@ -7661,8 +7800,23 @@ export default function Home() {
         {activeTab === 'currentRanking' && (
           <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-[#e7dfd1] animate-in fade-in duration-300">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b pb-3 mb-5">
-              <h2 className="text-2xl font-black text-teal-800">🏆 今大会の成績</h2>
+              <h2 className="text-2xl font-black text-teal-800">{previewArchive ? `📼 ${previewArchive.name}の成績` : '🏆 今大会の成績'}</h2>
               <div className="flex flex-wrap gap-2 items-center">
+                {isAdmin && (
+                  <label className="inline-flex items-center gap-1.5 text-xs font-bold text-[#82786b]">
+                    表示する大会
+                    <select
+                      value={previewArchiveId || ''}
+                      onChange={e => setPreviewArchiveId(e.target.value || null)}
+                      className={`p-2 border rounded-lg bg-white text-xs font-bold ${previewArchive ? 'border-amber-400 text-amber-800' : ''}`}
+                      title="過去の大会を、この画面だけ一時的に「今大会の成績」として表示します（データは変更されません）"
+                    >
+                      <option value="">今大会（通常の表示）</option>
+                      {[...archives].sort((x, y) => tournamentSortKey(y.name) - tournamentSortKey(x.name)).map(a => <option key={a.id} value={a.id}>{a.name}（過去大会）</option>)}
+                    </select>
+                  </label>
+                )}
+                {!previewArchive && (<>
                 <button
                   onClick={() => setShowKuroko(!showKuroko)}
                   className={`px-3 py-2 rounded-lg text-xs font-bold border-2 transition ${showKuroko ? 'bg-[#2d2721] text-white border-[#2d2721]' : 'bg-white text-[#82786b] border-[#d4c9b7] hover:border-[#82786b]'}`}
@@ -7675,10 +7829,19 @@ export default function Home() {
                 <button onClick={handleExportRankingImage} className="px-3 py-2 rounded-lg text-xs font-bold bg-teal-600 hover:bg-teal-700 text-white transition shadow-sm" title="ランキングのみを画像(PNG)で保存します">
                   🖼️ ランキング画像を保存
                 </button>
+                </>)}
               </div>
             </div>
 
-            {tournamentPhase === 'entry' || hideSeating ? (
+            {previewArchive ? (
+              <>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+                  <p className="text-sm font-bold text-amber-900">📼 過去の大会（{previewArchive.name}）を、一時的に表示しています。データは変更されません。</p>
+                  <button onClick={() => setPreviewArchiveId(null)} className="px-3 py-1.5 rounded-lg text-xs font-bold bg-[#2d2721] text-white">今大会の表示に戻す</button>
+                </div>
+                <ArchivePreview key={previewArchive.id} archive={previewArchive} nameOf={nameOf} />
+              </>
+            ) : tournamentPhase === 'entry' || hideSeating ? (
               <p className="text-[#82786b]">{generalDrawingScreen ? '卓組抽選中です。大会が始まるまでお待ちください。' : '大会が始まっていません。'}</p>
             ) : (
               <>
@@ -7998,6 +8161,11 @@ export default function Home() {
                       <span className={`px-2 py-1 rounded-full border ${drawReport.repeatPairs === 0 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-sky-50 text-sky-700 border-sky-200'}`}>
                         {drawReport.repeatPairs === 0 ? '✅ 同卓: 通常回戦で同じ相手との同卓はありません' : `同卓: 2回以上同卓する組が${drawReport.repeatPairs}組（最大${drawReport.maxPair}回）`}
                       </span>
+                      {drawReport.distSd !== null && (
+                        <span className="px-2 py-1 rounded-full border bg-[#fffdf9] text-[#625a4f] border-[#e7dfd1] tabular-nums">
+                          同卓数の偏り（標準偏差）: {drawReport.distSdBefore !== null ? `${drawReport.distSdBefore.toFixed(2)} → ` : ''}{drawReport.distSd.toFixed(2)}（1に近いほど理想）
+                        </span>
+                      )}
                       <span className="px-2 py-1 rounded-full border bg-white text-[#82786b] border-[#e7dfd1]">{drawReport.rounds}回戦・{drawReport.attempts}パターンから最良を採用</span>
                     </div>
                   )}
