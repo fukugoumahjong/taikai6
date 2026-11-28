@@ -1782,6 +1782,28 @@ const ArchivePreview = ({ archive, nameOf }: { archive: TournamentArchive; nameO
   );
 };
 
+// 今季成績の「着順別回数」: 1〜4着の割合を積み上げ棒グラフで、回数を下に並べる
+const RankDistCell = ({ dist }: { dist: number[] }) => {
+  const total = dist.reduce((a, b) => a + b, 0);
+  if (total === 0) return <span className="text-[#d4c9b7]">-</span>;
+  return (
+    <div className="min-w-[136px]" title={dist.map((c, i) => `${i + 1}着 ${c}回（${Math.round((c / total) * 100)}%）`).join(' ／ ')}>
+      <div className="flex h-2.5 rounded-full overflow-hidden bg-[#f3eee4]">
+        {dist.map((c, i) => c > 0 ? <div key={i} className={SCHOOL_RANK_COLORS[i]} style={{ width: `${(c / total) * 100}%` }} /> : null)}
+      </div>
+      <div className="mt-1.5 grid grid-cols-4 gap-1 text-center text-[12px] tabular-nums">
+        {dist.map((c, i) => <span key={i} className={c > 0 ? 'font-black text-[#2d2721]' : 'text-[#d4c9b7]'}>{c}</span>)}
+      </div>
+    </div>
+  );
+};
+// 平均着順のバッジ（2.4以下は好成績、2.6以上は低調）
+const AvgRankBadge = ({ avg }: { avg: number | null }) => {
+  if (avg === null) return <span className="text-[#d4c9b7]">-</span>;
+  const cls = avg <= 2.4 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : avg >= 2.6 ? 'bg-red-50 text-red-600 border-red-200' : 'bg-[#f3eee4] text-[#625a4f] border-[#e7dfd1]';
+  return <span className={`inline-block min-w-[3.4rem] text-center font-black tabular-nums text-base px-2 py-0.5 rounded-md border ${cls}`}>{avg.toFixed(2)}</span>;
+};
+
 // 個人成績（モーダル）：通算成績・大会別成績・着順分布・半荘ごとの成績・対戦相性・ペナルティ履歴をまとめて表示
 type PlayerDetailTableRow = { playerId: string; name: string; rank: number; score: number; point: number; isMe?: boolean };
 type PlayerDetailHanchanRow = { rank: number; score: number; point: number; table: PlayerDetailTableRow[] };
@@ -7210,6 +7232,13 @@ export default function Home() {
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold">選手名</th>
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">今季対局数</th>
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">今季ポイント</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-right">平均着順</th>
+                    <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-center">
+                      着順別回数
+                      <div className="mt-1 grid grid-cols-4 gap-1 min-w-[136px] text-[10px] font-bold text-[#82786b]">
+                        {[0, 1, 2, 3].map(i => <span key={i} className="inline-flex items-center justify-center gap-0.5"><span className={`inline-block w-1.5 h-1.5 rounded-full ${SCHOOL_RANK_COLORS[i]}`} />{i + 1}着</span>)}
+                      </div>
+                    </th>
                     <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-center">年間CS</th>
                     {isAdmin && <th className="p-2 md:p-3 text-xs md:text-sm font-bold text-center">操作</th>}
                   </tr>
@@ -7220,8 +7249,10 @@ export default function Home() {
                     const granted = hasChampionshipRight(p);
                     const candidate = isChampionshipCandidate(p);
                     const isOpen = openTotalPlayerId === p.id;
-                    const colSpan = isAdmin ? 6 : 5;
+                    const colSpan = isAdmin ? 8 : 7;
                     const csPos = csEligibleIds.indexOf(p.id) + 1; // 0 = 対象外
+                    const rd = getRankDistribution(p.id);
+                    const avgR = rd.total > 0 ? (rd.dist[0] + rd.dist[1] * 2 + rd.dist[2] * 3 + rd.dist[3] * 4) / rd.total : null;
                     if (csOnly && csPos === 0) return null;
                     return (
                       <React.Fragment key={p.id}>
@@ -7238,6 +7269,8 @@ export default function Home() {
                               </td>
                               <td className="p-2 text-right text-[#a99d8c]">{getTotalGames(p.id)} 半荘<div className="text-[10px] font-normal">（自動計算・編集不可）</div></td>
                               <td className="p-2 text-right"><input type="number" step="0.1" value={editForm.totalPoint} onChange={e => setEditForm({...editForm, totalPoint: Number(e.target.value)})} className="border p-1 w-24 text-right rounded" /></td>
+                              <td className="p-2 text-right"><AvgRankBadge avg={avgR} /></td>
+                              <td className="p-2"><RankDistCell dist={rd.dist} /></td>
                               <td className="p-2 text-center">
                                 <label className={`inline-flex items-center gap-1 text-xs font-bold ${isPro(editForm.name) ? 'text-[#d4c9b7] cursor-not-allowed' : 'text-[#625a4f]'}`}>
                                   <input
@@ -7269,6 +7302,8 @@ export default function Home() {
                               <td className={`p-3 text-right font-black text-lg tabular-nums ${p.totalPoint > 0 ? 'text-blue-600' : p.totalPoint < 0 ? 'text-red-600' : 'text-[#a99d8c]'}`}>
                                 {fmtPt(p.totalPoint)}
                               </td>
+                              <td className="p-2 md:p-3 text-right"><AvgRankBadge avg={avgR} /></td>
+                              <td className="p-2 md:p-3"><RankDistCell dist={rd.dist} /></td>
                               <td className="p-2 md:p-3 text-center">
                                 {pro ? (
                                   <span className="inline-block text-[11px] font-bold px-2.5 py-1 rounded-full bg-[#f3eee4] text-[#a99d8c] border border-[#e7dfd1]">対象外（プロ）</span>
